@@ -1,0 +1,61 @@
+version: "3.9"
+
+services:
+  # PostgreSQL with pgvector
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: connectome_db
+    environment:
+      POSTGRES_USER: connectome
+      POSTGRES_PASSWORD: connectome
+      POSTGRES_DB: connectome
+    ports:
+      - "5432:5432"
+    volumes:
+      - connectome_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U connectome"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: connectome_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: connectome_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://connectome:connectome@db:5432/connectome
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production-32chars!!}
+      APP_ENV: ${APP_ENV:-development}
+      LOG_LEVEL: INFO
+      CORS_ORIGINS: '["http://localhost:3000","http://localhost:8081","exp://localhost:8081"]'
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  connectome_pg_data:
