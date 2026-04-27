@@ -1,8 +1,8 @@
 """
-Suggestions / Contributions Routes
+Suggestions Routes
 
 GET  /api/suggestions         — list recent community suggestions
-POST /api/suggestions         — submit a new suggestion
+POST /api/suggestions         — submit a new suggestion (content + category)
 POST /api/suggestions/{id}/vote — upvote a suggestion
 """
 
@@ -21,20 +21,13 @@ router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
 
 class SuggestionCreate(BaseModel):
-    title: Optional[str] = None
-    body: Optional[str] = None
-    content: Optional[str] = None   # alias sent by web frontend
+    content: Optional[str] = None
+    title: Optional[str] = None   # legacy field alias
+    body: Optional[str] = None    # legacy field alias
     category: Optional[str] = "general"
 
-    model_config = {"populate_by_name": True}
-
-    @model_validator(mode="after")
-    def resolve_fields(self) -> "SuggestionCreate":
-        if not self.title:
-            self.title = (self.content or "")[:80] or "Suggestion"
-        if not self.body:
-            self.body = self.content or self.title or ""
-        return self"
+    def get_content(self) -> str:
+        return self.content or self.body or self.title or ""
 
 
 @router.get("")
@@ -43,7 +36,7 @@ async def list_suggestions(limit: int = 20) -> List[Dict[str, Any]]:
     try:
         rows = await fetch(
             """
-            SELECT id, title, body, category, status, vote_count, created_at
+            SELECT id, content, category, status, vote_count, cp_earned, created_at
             FROM user_suggestions
             ORDER BY vote_count DESC, created_at DESC
             LIMIT $1
@@ -61,20 +54,28 @@ async def create_suggestion(
     payload: SuggestionCreate,
     user_id: str = Depends(get_current_user_id),
 ) -> Dict[str, Any]:
-    """Submit a new community suggestion."""
+    """Submit a new community suggestion. Awards 10 CP per submission."""
+    content = payload.get_content()
+    if not content:
+        raise HTTPException(status_code=422, detail="content is required")
     try:
         row = await fetchrow(
             """
-            INSERT INTO user_suggestions (user_id, title, body, category, status, vote_count)
-            VALUES ($1, $2, $3, $4, 'pending', 0)
-            RETURNING id, title, status, created_at
+            INSERT INTO user_suggestions (user_id, content, category, status, vote_count, cp_earned)
+            VALUES ($1, $2, $3, 'pending', 0, 10)
+            RETURNING id, content, category, status, cp_earned, created_at
             """,
-            user_id,
-            payload.resolved_title,
-            payload.resolved_body,
-            payload.category,
+            UUID(user_id),
+            content,
+            payload.category or "general",
         )
-        return dict(row) if row else {}
+        if not row:
+            raise HTTPException(status_code=500, detail="Could not create suggestion")
+        result = dict(row)
+        result["suggestion"] = result["content"]
+        return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Suggestion create failed: {e}")
         raise HTTPException(status_code=500, detail="Could not create suggestion")
@@ -92,7 +93,7 @@ async def vote_suggestion(
             UPDATE user_suggestions
             SET vote_count = vote_count + 1
             WHERE id = $1
-            RETURNING id, title, vote_count
+            RETURNING id, content, vote_count
             """,
             UUID(suggestion_id),
         )
