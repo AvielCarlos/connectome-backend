@@ -1010,6 +1010,38 @@ async def run_migrations():
             ALTER TABLE users ADD COLUMN IF NOT EXISTS event_preferences TEXT[]
         """)
 
+        # Migration 006: Google OAuth tokens + auth provider columns
+        await conn.execute("""
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(20) DEFAULT 'email'
+        """)
+        await conn.execute("""
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS google_id TEXT
+        """)
+        await conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS users_google_id_idx
+                ON users(google_id) WHERE google_id IS NOT NULL
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS google_oauth_tokens (
+                id                  SERIAL PRIMARY KEY,
+                user_id             UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+                access_token        TEXT,
+                refresh_token       TEXT,
+                token_expiry        TIMESTAMPTZ,
+                scopes              TEXT[],
+                drive_connected     BOOLEAN DEFAULT FALSE,
+                drive_privacy_level VARCHAR(20) DEFAULT 'none',
+                created_at          TIMESTAMPTZ DEFAULT NOW(),
+                updated_at          TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS google_oauth_tokens_user_idx
+                ON google_oauth_tokens(user_id)
+        """)
+
         logger.info("Database migrations complete")
 
 
@@ -1039,5 +1071,6 @@ async def fetchval(query: str, *args) -> Any:
     pool = await get_pool()
     async with pool.acquire() as conn:
         return await conn.fetchval(query, *args)
+
 
 
