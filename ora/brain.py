@@ -975,7 +975,7 @@ class OraBrain:
             RETURNING id
             """,
             UUID(user_id),
-            UUID(screen_spec_id),
+            UUID(screen_spec_id) if screen_spec_id and len(screen_spec_id) == 36 else None,
             rating,
             time_on_screen_ms,
             exit_point,
@@ -986,7 +986,7 @@ class OraBrain:
         # 2. Get the agent type and domain for this screen
         spec_row = await fetchrow(
             "SELECT agent_type, global_rating, impression_count, domain FROM screen_specs WHERE id = $1",
-            UUID(screen_spec_id),
+            UUID(screen_spec_id) if screen_spec_id and len(screen_spec_id) == 36 else None,
         )
         agent_type = spec_row["agent_type"] if spec_row else "unknown"
         screen_domain = spec_row["domain"] if spec_row else None
@@ -1007,7 +1007,7 @@ class OraBrain:
                 """,
                 new_rating,
                 1 if completed else 0,
-                UUID(screen_spec_id),
+                UUID(screen_spec_id) if screen_spec_id and len(screen_spec_id) == 36 else None,
             )
 
             # 4. If rating < 2: mark for deprioritization (handled by rating score)
