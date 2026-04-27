@@ -13,7 +13,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from api.routes.users import get_current_user
+from api.routes.users import get_current_user_id as get_current_user
 from core.database import fetch, fetchrow, execute
 
 logger = logging.getLogger(__name__)
@@ -48,7 +48,7 @@ async def list_suggestions(limit: int = 20) -> List[Dict[str, Any]]:
 @router.post("")
 async def create_suggestion(
     payload: SuggestionCreate,
-    current_user: Dict = Depends(get_current_user),
+    current_user_id: str = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Submit a new community suggestion."""
     user_id = current_user["id"]
@@ -73,7 +73,7 @@ async def create_suggestion(
 @router.post("/{suggestion_id}/vote")
 async def vote_suggestion(
     suggestion_id: str,
-    current_user: Dict = Depends(get_current_user),
+    current_user_id: str = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """Upvote a suggestion."""
     try:
