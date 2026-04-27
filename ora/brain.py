@@ -47,6 +47,7 @@ from ora.agents.explore import ExploreAgent
 from ora.agents.feature_lab import OraFeatureLabAgent
 from ora.agents.dao_agent import DaoAgent
 from ora.agents.world_discovery_agent import WorldDiscoveryAgent
+from ora.agents.drive_agent import DriveAgent
 from ora.consciousness import OraConsciousness
 from ora.content_quality import content_quality_check
 
@@ -95,6 +96,9 @@ class OraBrain:
         self.collective = CollectiveIntelligenceAgent(self._openai)
         self.discovery_interview = DiscoveryInterviewAgent(self._openai)
         self.ui_ab = UIABTestingAgent(self._openai)
+
+        # Drive indexer — Ora's long-term memory from personal writing
+        self.drive_agent = DriveAgent(self._openai)
 
         # Ora's self-awareness layer
         self.consciousness = OraConsciousness(self._openai)
@@ -1358,3 +1362,4 @@ async def init_brain():
     logger.info("OraFeatureLab run_lab_loop started")
 
     # NOTE: DaoAgent background loops are started in main.py lifespan (after brain init)
+
