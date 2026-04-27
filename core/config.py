@@ -44,6 +44,9 @@ class Settings(BaseSettings):
 
     # External APIs
     GOOGLE_PLACES_API_KEY: str = ""  # Optional — enables real venue search
+    SERPAPI_KEY: str = ""            # Google Events via SerpAPI (set in Railway env vars)
+    EVENTBRITE_TOKEN: str = ""       # Eventbrite public API token (set in Railway env vars)
+
 
     # Monetization
     FREE_TIER_DAILY_SCREENS: int = 10
@@ -58,6 +61,14 @@ class Settings(BaseSettings):
             except Exception:
                 return [v]
         return v
+
+    @property
+    def has_serpapi(self) -> bool:
+        return bool(self.SERPAPI_KEY)
+
+    @property
+    def has_eventbrite(self) -> bool:
+        return bool(self.EVENTBRITE_TOKEN)
 
     @property
     def is_production(self) -> bool:
@@ -78,3 +89,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
