@@ -31,6 +31,7 @@ from api.routes import world as world_routes
 from api.routes import suggestions as suggestions_routes
 from api.routes import drive as drive_routes
 from api.routes import ora_health as ora_health_routes
+from api.routes import events as events_routes
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
 # Configure logging
@@ -89,6 +90,8 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(dao_agent.run_weekly_leaderboard_loop())
     asyncio.create_task(dao_agent.run_monthly_ltv_loop())
     logger.info("✅ DaoAgent evaluation + leaderboard + LTV loops started")
+    # Initialize EventDiscoveryAgent (lazy — syncs cities on demand)
+    logger.info("✅ EventDiscoveryAgent ready (city syncs on demand)")
 
     # Start MetaAgent periodic self-improvement loop (every 6 hours)
     from ora.agents.meta_agent import MetaAgent
@@ -153,6 +156,7 @@ app.include_router(mood_routes.router)
 app.include_router(dao_routes.router)
 app.include_router(world_routes.router)
 app.include_router(suggestions_routes.router)
+app.include_router(events_routes.router)
 app.include_router(drive_routes.router)
 app.include_router(ora_health_routes.router)
 
@@ -305,4 +309,5 @@ if __name__ == "__main__":
         reload=not settings.is_production,
         log_level=settings.LOG_LEVEL.lower(),
     )
+
 
