@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     SERPAPI_KEY: str = ""            # Google Events via SerpAPI (set in Railway env vars)
     EVENTBRITE_TOKEN: str = ""       # Eventbrite public API token (set in Railway env vars)
 
+    # Google OAuth (for Sign In with Google + Drive integration)
+    # Setup: console.cloud.google.com → APIs & Services → Credentials → OAuth 2.0 Client ID
+    # Authorized redirect URI: https://connectome-api-production.up.railway.app/api/auth/google/callback
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/google/callback"
+
 
     # Monetization
     FREE_TIER_DAILY_SCREENS: int = 10
@@ -89,4 +96,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
 
