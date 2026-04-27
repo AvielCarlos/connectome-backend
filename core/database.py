@@ -903,6 +903,40 @@ async def run_migrations():
             ON dao_proposals(created_at DESC)
         """)
 
+        # ---------------------------------------------------------------
+        # Drive Documents — Ora's personal notes memory (added 2026-04-27)
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS drive_documents (
+                id SERIAL PRIMARY KEY,
+                drive_id VARCHAR(200) UNIQUE NOT NULL,
+                name TEXT,
+                mime_type VARCHAR(100),
+                content TEXT,
+                embedding vector(1536),
+                last_synced TIMESTAMPTZ DEFAULT NOW(),
+                modified_time TIMESTAMPTZ
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_drive_documents_drive_id
+            ON drive_documents(drive_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_drive_documents_last_synced
+            ON drive_documents(last_synced DESC)
+        """)
+        # IVFFlat cosine similarity index for fast semantic search
+        # lists=20 works well up to ~10k docs; increase for larger corpora
+        try:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_drive_documents_embedding
+                ON drive_documents USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 20)
+            """)
+        except Exception:
+            pass  # Requires at least 1 row; will succeed once data is inserted
+
         logger.info("Database migrations complete")
 
 
@@ -932,3 +966,4 @@ async def fetchval(query: str, *args) -> Any:
     pool = await get_pool()
     async with pool.acquire() as conn:
         return await conn.fetchval(query, *args)
+
