@@ -44,7 +44,7 @@ async def list_suggestions(limit: int = 20) -> List[Dict[str, Any]]:
         rows = await fetch(
             """
             SELECT id, title, body, category, status, vote_count, created_at
-            FROM contributions
+            FROM user_suggestions
             ORDER BY vote_count DESC, created_at DESC
             LIMIT $1
             """,
@@ -65,13 +65,13 @@ async def create_suggestion(
     try:
         row = await fetchrow(
             """
-            INSERT INTO contributions (user_id, title, body, category, status, vote_count)
+            INSERT INTO user_suggestions (user_id, title, body, category, status, vote_count)
             VALUES ($1, $2, $3, $4, 'pending', 0)
             RETURNING id, title, status, created_at
             """,
-            UUID(user_id),
-            payload.title,
-            payload.body,
+            user_id,
+            payload.resolved_title,
+            payload.resolved_body,
             payload.category,
         )
         return dict(row) if row else {}
@@ -89,7 +89,7 @@ async def vote_suggestion(
     try:
         row = await fetchrow(
             """
-            UPDATE contributions
+            UPDATE user_suggestions
             SET vote_count = vote_count + 1
             WHERE id = $1
             RETURNING id, title, vote_count
