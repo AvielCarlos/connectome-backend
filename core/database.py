@@ -881,6 +881,16 @@ async def run_migrations():
             CREATE INDEX IF NOT EXISTS idx_user_suggestions_status
             ON user_suggestions(status)
         """)
+        # Idempotent migrations for existing user_suggestions table
+        await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS content TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS cp_earned INTEGER DEFAULT 10
+        """)
+        await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS vote_count INTEGER DEFAULT 0
+        """)
 
         # Subscriptions — Stripe-managed subscription tiers
         await conn.execute("""
