@@ -127,6 +127,63 @@ class OraBrain:
         self.tournament_mode: bool = True
 
     # -----------------------------------------------------------------------
+    # Meta-Agent: Dynamic Card Weight Tuning
+    # -----------------------------------------------------------------------
+
+    async def apply_meta_report(self, report: Dict[str, Any]) -> None:
+        """
+        Adjust agent rotation weights based on MetaAgent's self-improvement report.
+        Called after each MetaAgent run (every 6 hours).
+
+        Rules:
+        - top_engaging_card_types → boost those agents by 20%
+        - low_engagement_card_types → reduce those agents by 20%
+        - Weights are always re-normalized to sum to 1.0
+        - Changes are bounded: no single agent goes below 0.03 or above 0.40
+        """
+        if not report:
+            return
+
+        top = report.get("top_engaging_card_types", [])
+        low = report.get("low_engagement_card_types", [])
+
+        # Build a mapping from agent_type strings to weight keys
+        agent_type_map = {
+            "DiscoveryAgent": "discovery",
+            "CoachingAgent": "coaching",
+            "RecommendationAgent": "recommendation",
+            "UIGeneratorAgent": "ui_generator",
+            "WorldAgent": "world",
+            "EnlightenmentAgent": "enlightenment",
+            "CollectiveIntelligenceAgent": "collective",
+            "ExploreAgent": "explore",
+        }
+
+        weights = self._base_weights.copy()
+
+        for agent_type in top:
+            key = agent_type_map.get(agent_type)
+            if key and key in weights:
+                weights[key] = min(0.40, weights[key] * 1.20)
+                logger.info(f"OraBrain: boosting {key} weight (top engaging)")
+
+            # Special case: if local_event is top, boost world agent
+            if agent_type == "local_event" and "world" in weights:
+                weights["world"] = min(0.40, weights["world"] * 1.25)
+                logger.info("OraBrain: boosting world weight (local_event performing well)")
+
+        for agent_type in low:
+            key = agent_type_map.get(agent_type)
+            if key and key in weights:
+                weights[key] = max(0.03, weights[key] * 0.80)
+                logger.info(f"OraBrain: reducing {key} weight (low engagement)")
+
+        # Normalize to sum to 1.0
+        total = sum(weights.values())
+        self._base_weights = {k: v / total for k, v in weights.items()}
+        logger.info(f"OraBrain: updated base weights from meta report: {self._base_weights}")
+
+    # -----------------------------------------------------------------------
     # Screen Generation
     # -----------------------------------------------------------------------
 
@@ -570,7 +627,8 @@ class OraBrain:
     def _compute_weights(self, user_model: UserModel) -> Dict[str, float]:
         """
         Compute agent weights based on recent interaction ratings.
-        Start from base weights, boost agents the user rates higher.
+        Start from base weights (which are dynamically tuned by MetaAgent),
+        then boost agents the user rates higher.
         """
         weights = self._base_weights.copy()
 
