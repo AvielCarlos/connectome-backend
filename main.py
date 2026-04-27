@@ -113,6 +113,55 @@ async def lifespan(app: FastAPI):
     logger.info("👋 Shutdown complete")
 
 
+async def _ora_error_recovery_middleware(request, call_next):
+    """
+    Track errors on /api/ora/* endpoints.
+    If an endpoint fails 3+ times in 60s, send a Telegram alert to Avi.
+    """
+    response = await call_next(request)
+    path = request.url.path
+
+    if path.startswith("/api/ora/") and response.status_code >= 500:
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            error_key = f"ora:errors:{path.replace('/', '_')}"
+            count = await r.incr(error_key)
+            if count == 1:
+                await r.expire(error_key, 60)  # reset window every 60s
+            if count >= 3:
+                import httpx as _httpx, os as _os
+                token = _os.environ.get("ORA_TELEGRAM_TOKEN", "")
+                if not token:
+                    try:
+                        with open("/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt") as f:
+                            token = f.read().strip()
+                    except Exception:
+                        pass
+                if token:
+                    from datetime import datetime as _dt, timezone as _tz
+                    msg = (
+                        f"⚠️ Ora Error Alert\n\n"
+                        f"Endpoint {path} has failed {count}x in the last 60s.\n"
+                        f"Status: {response.status_code}\n"
+                        f"Time: {_dt.now(_tz.utc).isoformat()}"
+                    )
+                    try:
+                        async with _httpx.AsyncClient(timeout=10) as client:
+                            await client.post(
+                                f"https://api.telegram.org/bot{token}/sendMessage",
+                                json={"chat_id": 5716959016, "text": msg},
+                            )
+                        logger.warning(f"Ora error alert sent for {path} (count={count})")
+                        await r.delete(error_key)
+                    except Exception as _te:
+                        logger.debug(f"Error alert send failed: {_te}")
+        except Exception as _e:
+            logger.debug(f"Error recovery middleware failed: {_e}")
+
+    return response
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Connectome API",
@@ -210,57 +259,6 @@ async def root():
         "tagline": "Living AI.OS for human fulfilment",
         "docs": "/docs",
     }
-
-
-async def _ora_error_recovery_middleware(request, call_next):
-    """
-    Track errors on /api/ora/* endpoints.
-    If an endpoint fails 3+ times in 60s, send a Telegram alert to Avi.
-    """
-    import time
-    response = await call_next(request)
-    path = request.url.path
-
-    if path.startswith("/api/ora/") and response.status_code >= 500:
-        try:
-            from core.redis_client import get_redis
-            r = await get_redis()
-            error_key = f"ora:errors:{path.replace('/', '_')}"
-            count = await r.incr(error_key)
-            if count == 1:
-                await r.expire(error_key, 60)  # reset window every 60s
-            if count >= 3:
-                # Send Telegram alert
-                import httpx, os
-                token = os.environ.get("ORA_TELEGRAM_TOKEN", "")
-                if not token:
-                    try:
-                        with open("/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt") as f:
-                            token = f.read().strip()
-                    except Exception:
-                        pass
-                if token:
-                    msg = (
-                        f"⚠️ Ora Error Alert\n\n"
-                        f"Endpoint {path} has failed {count}x in the last 60s.\n"
-                        f"Status: {response.status_code}\n"
-                        f"Time: {__import__('datetime').datetime.utcnow().isoformat()}Z"
-                    )
-                    try:
-                        async with httpx.AsyncClient(timeout=10) as client:
-                            await client.post(
-                                f"https://api.telegram.org/bot{token}/sendMessage",
-                                json={"chat_id": 5716959016, "text": msg},
-                            )
-                        logger.warning(f"Ora error alert sent for {path} (count={count})")
-                        # Reset counter after alerting
-                        await r.delete(error_key)
-                    except Exception as _te:
-                        logger.debug(f"Error alert send failed: {_te}")
-        except Exception as _e:
-            logger.debug(f"Error recovery middleware failed: {_e}")
-
-    return response
 
 
 async def _meta_agent_loop(meta_agent):
