@@ -49,14 +49,24 @@ async def get_pool() -> asyncpg.Pool:
 async def _init_connection(conn: asyncpg.Connection):
     """Called for each new connection — register pgvector codec."""
     await conn.execute("SET TIME ZONE 'UTC'")
+    # Install pgvector extension if not present
+    try:
+        await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    except Exception:
+        pass  # May not have superuser perms, skip
     # Register vector type as text so we can handle it manually
-    await conn.set_type_codec(
-        "vector",
-        encoder=lambda v: v,
-        decoder=lambda v: v,
-        schema="public",
-        format="text",
-    )
+    try:
+        await conn.set_type_codec(
+            "vector",
+            encoder=lambda v: v,
+            decoder=lambda v: v,
+            schema="public",
+            format="text",
+        )
+    except ValueError:
+        # pgvector not available on this connection, skip codec registration
+        logger.warning("pgvector type not found — vector features disabled")
+        pass
 
 
 async def close_pool():
