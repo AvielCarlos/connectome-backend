@@ -29,6 +29,7 @@ from api.routes import mood as mood_routes
 from api.routes import dao as dao_routes
 from api.routes import world as world_routes
 from api.routes import suggestions as suggestions_routes
+from api.routes import drive as drive_routes
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
 # Configure logging
@@ -141,6 +142,7 @@ app.include_router(mood_routes.router)
 app.include_router(dao_routes.router)
 app.include_router(world_routes.router)
 app.include_router(suggestions_routes.router)
+app.include_router(drive_routes.router)
 
 
 @app.get("/health")
@@ -209,3 +211,4 @@ if __name__ == "__main__":
         reload=not settings.is_production,
         log_level=settings.LOG_LEVEL.lower(),
     )
+
