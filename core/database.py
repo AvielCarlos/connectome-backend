@@ -857,6 +857,30 @@ async def run_migrations():
             CREATE INDEX IF NOT EXISTS idx_contributions_status
             ON contributions(status)
         """)
+
+        # User suggestions (community feature requests, bug reports, ideas)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_suggestions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT,
+                category VARCHAR(50) DEFAULT 'general',
+                status VARCHAR(20) DEFAULT 'pending',
+                vote_count INTEGER DEFAULT 0,
+                cp_awarded INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_suggestions_user_id
+            ON user_suggestions(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_suggestions_status
+            ON user_suggestions(status)
+        """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_contributions_submitted_at
             ON contributions(submitted_at DESC)
