@@ -16,6 +16,11 @@ from ora.data.activity_repository import get_activity_repository
 
 logger = logging.getLogger(__name__)
 
+# Similarity threshold for surfacing Drive notes as coaching context
+DRIVE_SIMILARITY_THRESHOLD = 0.75
+# Show from_your_notes cards when user has fewer than this many goals
+FROM_NOTES_GOAL_THRESHOLD = 3
+
 # Mock content pool for when OpenAI is unavailable
 MOCK_DISCOVERY_CARDS = [
     {
@@ -73,6 +78,18 @@ class DiscoveryAgent:
 
     def __init__(self, openai_client=None):
         self.openai = openai_client
+        self._drive_agent = None  # lazily resolved
+
+    def _get_drive_agent(self):
+        """Lazy-load DriveAgent from Ora brain to avoid circular imports."""
+        if self._drive_agent is None:
+            try:
+                from ora.brain import get_brain
+                brain = get_brain()
+                self._drive_agent = getattr(brain, 'drive_agent', None)
+            except Exception:
+                pass
+        return self._drive_agent
 
     async def generate_screen(
         self,
@@ -81,9 +98,16 @@ class DiscoveryAgent:
     ) -> Dict[str, Any]:
         """
         Generate a discovery card screen spec.
-        50% of the time, pulls from activity repository to ground content in reality.
-        Uses GPT-4o if available, else falls back to mock content.
+        - If user has < 3 goals, may surface a 'from_your_notes' card from Drive.
+        - 50% of the time, pulls from activity repository to ground content in reality.
+        - Uses GPT-4o if available, else falls back to mock content.
         """
+        # Drive notes card: surface when user has few goals (needs self-context)
+        goal_count = len(user_context.get("active_goals", []))
+        if goal_count < FROM_NOTES_GOAL_THRESHOLD and random.random() < 0.30:
+            notes_card = await self._generate_from_drive_notes(user_context, variant)
+            if notes_card:
+                return notes_card
         # Part 4: 50% chance to use activity repository as source material
         use_repo = random.random() < 0.50
         if use_repo:
@@ -111,6 +135,128 @@ class DiscoveryAgent:
             else:
                 result = self._generate_mock(user_context, variant)
         return result
+
+    async def _generate_from_drive_notes(
+        self,
+        user_context: Dict[str, Any],
+        variant: str,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Surface a relevant Drive doc as a 'from_your_notes' discovery card.
+        Triggered when the user has few goals — helps Ora understand them better.
+        """
+        drive = self._get_drive_agent()
+        if drive is None:
+            return None
+
+        try:
+            interests = user_context.get("interests", [])
+            goals = user_context.get("active_goals", [])
+            goal_titles = [g["title"] for g in goals if isinstance(g, dict)]
+            query_parts = interests[:3] + goal_titles[:2]
+            if not query_parts:
+                query_parts = ["goals", "values", "reflection"]
+            query = " ".join(query_parts)
+
+            results = await drive.semantic_search(
+                query=query,
+                limit=3,
+                min_similarity=DRIVE_SIMILARITY_THRESHOLD,
+            )
+            if not results:
+                return None
+
+            best = results[0]
+            doc_name = best["name"]
+            excerpt = best["excerpt"]
+
+            if self.openai and settings.has_openai:
+                prompt = f"""You are Ora, an AI dedicated to human fulfilment.
+A user's own note was found relevant to their current context:
+
+Document: {doc_name}
+Excerpt: {excerpt}
+
+Create a short coaching discovery card that references this personal note.
+JSON fields:
+- title: short, specific insight or question (max 8 words)
+- body: 2 sentences referencing their note; start with "From your notes:"
+- cta: short action label
+- category: one of [self-awareness, reflection, growth, values]
+
+Return ONLY valid JSON."""
+                response = await self.openai.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.7,
+                    max_tokens=250,
+                    response_format={"type": "json_object"},
+                )
+                card_data = json.loads(response.choices[0].message.content)
+            else:
+                card_data = {
+                    "title": doc_name[:60],
+                    "body": f"From your notes: {excerpt[:200]}",
+                    "cta": "Reflect on this",
+                    "category": "self-awareness",
+                }
+
+            card_data["drive_id"] = best["drive_id"]
+            card_data["card_type"] = "from_your_notes"
+            return self._build_notes_spec(card_data, variant)
+
+        except Exception as e:
+            logger.warning(f"DiscoveryAgent: from_drive_notes failed: {e}")
+            return None
+
+    def _build_notes_spec(
+        self,
+        card: Dict[str, Any],
+        variant: str,
+    ) -> Dict[str, Any]:
+        """Build a screen spec for a from_your_notes card."""
+        components = [
+            {
+                "type": "category_badge",
+                "text": "FROM YOUR NOTES",
+                "color": "#8b5cf6",
+            },
+            {
+                "type": "headline",
+                "text": card.get("title", "A note worth revisiting"),
+                "style": "large_bold",
+            },
+            {
+                "type": "body_text",
+                "text": card.get("body", ""),
+            },
+            {
+                "type": "action_button",
+                "label": card.get("cta", "Reflect"),
+                "action": {"type": "next_screen", "context": "notes_reflection"},
+            },
+        ]
+
+        return {
+            "type": "from_your_notes",
+            "layout": "card_stack",
+            "components": components,
+            "feedback_overlay": {
+                "type": "star_rating",
+                "position": "bottom_right",
+                "always_visible": True,
+            },
+            "metadata": {
+                "agent": self.AGENT_NAME,
+                "variant": variant,
+                "card_type": "from_your_notes",
+                "category": card.get("category", "self-awareness"),
+                "drive_id": card.get("drive_id"),
+                "domain": "iVive",
+                "is_mock": False,
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            },
+        }
 
     async def _generate_from_activity_repo(
         self,
@@ -201,13 +347,33 @@ Return ONLY valid JSON."""
         if time_of_day:
             geo_line += f" (it's {time_of_day} there)"
 
+        # Optionally inject relevant Drive notes as personal grounding context
+        drive_context_line = ""
+        drive = self._get_drive_agent()
+        if drive is not None:
+            try:
+                query_terms = " ".join(
+                    (interests or [])[:2]
+                    + [g["title"] for g in goals if isinstance(g, dict)][:2]
+                ) or "growth goals values"
+                drive_hits = await drive.semantic_search(
+                    query=query_terms, limit=2, min_similarity=DRIVE_SIMILARITY_THRESHOLD
+                )
+                if drive_hits:
+                    excerpts = " | ".join(
+                        f"{h['name']}: {h['excerpt'][:120]}" for h in drive_hits
+                    )
+                    drive_context_line = f"\n- Relevant personal notes: {excerpts}"
+            except Exception as _de:
+                logger.debug(f"DiscoveryAgent: drive context injection failed: {_de}")
+
         prompt = f"""You are Ora, an AI dedicated to human fulfilment.
 Generate a discovery card for a user with:
 - Interests: {interests or "not yet specified"}
 - Active goals: {[g["title"] for g in goals] or "none set"}
 - Fulfilment score: {fulfilment:.2f}/1.0
 - Recent ratings: {recent_ratings or "no history yet"}
-- Domain focus: {domain} — {domain_hint}{geo_line}
+- Domain focus: {domain} — {domain_hint}{geo_line}{drive_context_line}
 
 Create a JSON discovery card with:
 - title: compelling, specific (5-8 words)
@@ -325,3 +491,4 @@ Return ONLY valid JSON, no markdown."""
                 "generated_at": datetime.now(timezone.utc).isoformat(),
             },
         }
+
