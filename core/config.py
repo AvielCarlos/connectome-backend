@@ -55,9 +55,21 @@ class Settings(BaseSettings):
     GOOGLE_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/google/callback"
 
 
-    # Monetization
+    # Monetization — Legacy
     FREE_TIER_DAILY_SCREENS: int = 10
     PREMIUM_PRICE_CENTS: int = 1299
+
+    # Stripe — set these in Railway env vars after creating products at dashboard.stripe.com
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_EXPLORER_MONTHLY: str = ""
+    STRIPE_PRICE_EXPLORER_YEARLY: str = ""
+    STRIPE_PRICE_SOVEREIGN_MONTHLY: str = ""
+    STRIPE_PRICE_SOVEREIGN_YEARLY: str = ""
+
+    @property
+    def has_stripe(self) -> bool:
+        return bool(self.STRIPE_SECRET_KEY)
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

@@ -53,25 +53,32 @@ async def get_next_screen(
     Request the next screen from Ora.
     Respects freemium limits (10/day for free users).
     """
-    # Check subscription tier for rate limiting
-    user_row = await fetchrow(
-        "SELECT subscription_tier FROM users WHERE id = $1", UUID(user_id)
-    )
-    if not user_row:
-        raise HTTPException(status_code=404, detail="User not found")
+    # Check subscription tier via PricingAgent-backed tier guard
+    from api.tier_guard import check_tier_limit, get_user_tier, build_upgrade_card, get_current_usage
+    from ora.agents.pricing_agent import get_pricing_agent
 
-    tier = user_row["subscription_tier"]
-    is_free = tier == "free"
+    tier = await get_user_tier(user_id)
+    pricing_agent = get_pricing_agent()
+    limits = await pricing_agent.get_tier_limits(tier)
+    daily_limit = limits.get("daily_screens", 10)
 
     # Get current count BEFORE incrementing (brain will increment)
     current_count = await get_daily_screen_count(user_id)
-    daily_limit = settings.FREE_TIER_DAILY_SCREENS
 
-    if is_free and current_count >= daily_limit:
+    if daily_limit != -1 and current_count >= daily_limit:
+        # Return Ora's warm upgrade card instead of a cold 402
+        upgrade_card = await build_upgrade_card("daily_screens", daily_limit, tier)
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Daily limit of {daily_limit} screens reached. Upgrade to premium for unlimited access.",
-            headers={"X-Upgrade-URL": "/api/monetization/upgrade"},
+            detail={
+                "error": "daily_limit_reached",
+                "screens_today": current_count,
+                "daily_limit": daily_limit,
+                "tier": tier,
+                "upgrade_card": upgrade_card,
+                "upgrade_url": "/api/payments/checkout",
+            },
+            headers={"X-Upgrade-URL": "/api/payments/checkout"},
         )
 
     brain = get_brain()

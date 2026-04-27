@@ -19,6 +19,7 @@ from ora.agents.self_healing import SelfHealingAgent
 from ora.agents.model_evolution import ModelEvolutionAgent
 from api.middleware import timing_middleware
 from api.routes import users, screens, feedback, goals, monetization, sessions, notifications, ground_truth, admin
+from api.routes import payments as payments_routes
 from api.routes import ora_chat
 from api.routes import discovery as discovery_routes
 from api.routes import ab_testing as ab_testing_routes
@@ -101,6 +102,13 @@ async def lifespan(app: FastAPI):
     app.state.meta_agent = meta_agent
     asyncio.create_task(_meta_agent_loop(meta_agent))
     logger.info("✅ MetaAgent self-improvement loop started")
+
+    # Initialize PricingAgent — Ora manages her own pricing
+    from ora.agents.pricing_agent import get_pricing_agent
+    pricing_agent = get_pricing_agent(_ora_brain._openai)
+    app.state.pricing_agent = pricing_agent
+    asyncio.create_task(_pricing_agent_loop(pricing_agent))
+    logger.info("✅ PricingAgent initialized — Ora owns her monetization")
 
     logger.info("🚀 Connectome is live")
     yield
@@ -193,6 +201,7 @@ app.include_router(screens.router)
 app.include_router(feedback.router)
 app.include_router(goals.router)
 app.include_router(monetization.router)
+app.include_router(payments_routes.router)
 app.include_router(sessions.router)
 app.include_router(notifications.router)
 app.include_router(ground_truth.router)
@@ -284,6 +293,20 @@ async def _meta_agent_loop(meta_agent):
         except Exception as e:
             logger.error(f"MetaAgent loop failed: {e}")
         await _asyncio.sleep(6 * 3600)
+
+
+async def _pricing_agent_loop(pricing_agent):
+    """Run PricingAgent tier analysis once every 24 hours."""
+    import asyncio as _asyncio
+    # Initial delay: 10 minutes after startup (let MetaAgent run first)
+    await _asyncio.sleep(600)
+    while True:
+        try:
+            proposals = await pricing_agent.propose_tier_adjustment()
+            logger.info(f"PricingAgent: {len(proposals)} tier proposals generated")
+        except Exception as e:
+            logger.error(f"PricingAgent loop failed: {e}")
+        await _asyncio.sleep(24 * 3600)
 
 
 async def _daily_self_check_loop():
