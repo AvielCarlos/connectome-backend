@@ -144,9 +144,15 @@ class DiscoveryAgent:
         """
         Surface a relevant Drive doc as a 'from_your_notes' discovery card.
         Triggered when the user has few goals — helps Ora understand them better.
+        Only shows documents owned by the requesting user (owner_user_id isolation).
         """
         drive = self._get_drive_agent()
         if drive is None:
+            return None
+
+        # Privacy: only search docs owned by this user
+        owner_user_id = user_context.get("user_id")
+        if not owner_user_id:
             return None
 
         try:
@@ -160,6 +166,7 @@ class DiscoveryAgent:
 
             results = await drive.semantic_search(
                 query=query,
+                owner_user_id=owner_user_id,
                 limit=3,
                 min_similarity=DRIVE_SIMILARITY_THRESHOLD,
             )
@@ -347,17 +354,22 @@ Return ONLY valid JSON."""
         if time_of_day:
             geo_line += f" (it's {time_of_day} there)"
 
-        # Optionally inject relevant Drive notes as personal grounding context
+        # Optionally inject relevant Drive notes as personal grounding context.
+        # PRIVACY: only inject notes owned by the requesting user.
         drive_context_line = ""
+        owner_user_id = user_context.get("user_id")
         drive = self._get_drive_agent()
-        if drive is not None:
+        if drive is not None and owner_user_id:
             try:
                 query_terms = " ".join(
                     (interests or [])[:2]
                     + [g["title"] for g in goals if isinstance(g, dict)][:2]
                 ) or "growth goals values"
                 drive_hits = await drive.semantic_search(
-                    query=query_terms, limit=2, min_similarity=DRIVE_SIMILARITY_THRESHOLD
+                    query=query_terms,
+                    owner_user_id=owner_user_id,
+                    limit=2,
+                    min_similarity=DRIVE_SIMILARITY_THRESHOLD,
                 )
                 if drive_hits:
                     excerpts = " | ".join(

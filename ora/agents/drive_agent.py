@@ -63,9 +63,12 @@ class DriveAgent:
     # Public interface
     # ------------------------------------------------------------------
 
-    async def sync(self, max_files: int = 50) -> Dict[str, Any]:
+    async def sync(self, max_files: int = 50, owner_user_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Full Drive sync: list files → read content → embed → upsert.
+        owner_user_id: UUID string of the user who owns these documents.
+                       ALL indexed docs are tagged with this owner — other users
+                       will NEVER see them. Required for privacy isolation.
         Returns a summary dict with counts and any errors.
         """
         summary: Dict[str, Any] = {
@@ -128,6 +131,7 @@ class DriveAgent:
                     content=content_for_embed,
                     embedding=embedding,
                     modified_time=modified,
+                    owner_user_id=owner_user_id,
                 )
                 summary["files_indexed"] += 1
                 logger.debug(f"DriveAgent: indexed '{name}' ({drive_id})")
@@ -145,12 +149,23 @@ class DriveAgent:
         return summary
 
     async def semantic_search(
-        self, query: str, limit: int = 5, min_similarity: float = 0.70
+        self,
+        query: str,
+        owner_user_id: Optional[str] = None,
+        limit: int = 5,
+        min_similarity: float = 0.70,
     ) -> List[Dict[str, Any]]:
         """
         Semantic search over indexed Drive documents.
+        owner_user_id MUST be provided and is ALWAYS enforced — results are
+        strictly filtered to documents owned by that user. If None, returns [].
         Returns list of {drive_id, name, excerpt, similarity}.
         """
+        # Hard privacy guard: never search without an owner filter
+        if owner_user_id is None:
+            logger.warning("DriveAgent: semantic_search called without owner_user_id — refusing")
+            return []
+
         if not self.openai or not settings.has_openai:
             return []
 
@@ -166,10 +181,12 @@ class DriveAgent:
                        1 - (embedding <=> '{embedding_str}'::vector) AS similarity
                 FROM drive_documents
                 WHERE embedding IS NOT NULL
+                  AND owner_user_id = $2
                 ORDER BY embedding <=> '{embedding_str}'::vector
                 LIMIT $1
                 """,
                 limit,
+                owner_user_id,
             )
 
             results = []
@@ -191,13 +208,21 @@ class DriveAgent:
             logger.warning(f"DriveAgent: semantic search failed: {e}")
             return []
 
-    async def status(self) -> Dict[str, Any]:
-        """Return indexing status."""
+    async def status(self, owner_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Return indexing status, filtered to the given owner."""
         try:
-            count = await fetchval("SELECT COUNT(*) FROM drive_documents") or 0
-            last_sync = await fetchval(
-                "SELECT MAX(last_synced) FROM drive_documents"
-            )
+            if owner_user_id is not None:
+                count = await fetchval(
+                    "SELECT COUNT(*) FROM drive_documents WHERE owner_user_id = $1",
+                    owner_user_id,
+                ) or 0
+                last_sync = await fetchval(
+                    "SELECT MAX(last_synced) FROM drive_documents WHERE owner_user_id = $1",
+                    owner_user_id,
+                )
+            else:
+                count = 0
+                last_sync = None
             return {
                 "indexed_documents": int(count),
                 "last_sync": last_sync.isoformat() if last_sync else None,
@@ -342,8 +367,9 @@ class DriveAgent:
         content: str,
         embedding: List[float],
         modified_time: Optional[str],
+        owner_user_id: Optional[str] = None,
     ):
-        """Insert or update a drive_document row."""
+        """Insert or update a drive_document row, always stamping the owner."""
         mod_ts = None
         if modified_time:
             try:
@@ -354,21 +380,24 @@ class DriveAgent:
         embedding_str = _vector_to_pg(embedding)
         await execute(
             f"""
-            INSERT INTO drive_documents (drive_id, name, mime_type, content, embedding, last_synced, modified_time)
-            VALUES ($1, $2, $3, $4, '{embedding_str}'::vector, NOW(), $5)
+            INSERT INTO drive_documents
+                (drive_id, name, mime_type, content, embedding, last_synced, modified_time, owner_user_id)
+            VALUES ($1, $2, $3, $4, '{embedding_str}'::vector, NOW(), $5, $6)
             ON CONFLICT (drive_id) DO UPDATE SET
                 name          = EXCLUDED.name,
                 mime_type     = EXCLUDED.mime_type,
                 content       = EXCLUDED.content,
                 embedding     = EXCLUDED.embedding,
                 last_synced   = NOW(),
-                modified_time = EXCLUDED.modified_time
+                modified_time = EXCLUDED.modified_time,
+                owner_user_id = EXCLUDED.owner_user_id
             """,
             drive_id,
             name,
             mime_type,
             content,
             mod_ts,
+            owner_user_id,
         )
 
 

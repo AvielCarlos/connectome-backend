@@ -915,7 +915,8 @@ async def run_migrations():
                 content TEXT,
                 embedding vector(1536),
                 last_synced TIMESTAMPTZ DEFAULT NOW(),
-                modified_time TIMESTAMPTZ
+                modified_time TIMESTAMPTZ,
+                owner_user_id UUID REFERENCES users(id)
             )
         """)
         await conn.execute("""
@@ -926,6 +927,18 @@ async def run_migrations():
             CREATE INDEX IF NOT EXISTS idx_drive_documents_last_synced
             ON drive_documents(last_synced DESC)
         """)
+        # Migration 005: owner isolation (idempotent ALTER for existing deployments)
+        try:
+            await conn.execute("""
+                ALTER TABLE drive_documents
+                    ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES users(id)
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS drive_docs_owner_idx
+                    ON drive_documents(owner_user_id)
+            """)
+        except Exception:
+            pass  # Column may already exist
         # IVFFlat cosine similarity index for fast semantic search
         # lists=20 works well up to ~10k docs; increase for larger corpora
         try:
