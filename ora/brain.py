@@ -46,6 +46,7 @@ from ora.agents.ui_ab_testing import UIABTestingAgent
 from ora.agents.explore import ExploreAgent
 from ora.agents.feature_lab import OraFeatureLabAgent
 from ora.agents.dao_agent import DaoAgent
+from ora.agents.world_discovery_agent import WorldDiscoveryAgent
 from ora.consciousness import OraConsciousness
 from ora.content_quality import content_quality_check
 
@@ -88,6 +89,7 @@ class OraBrain:
         self.ui_generator = UIGeneratorAgent(self._openai)
         self.feedback_analyst = FeedbackAnalystAgent(self._openai, self.ui_generator)
         self.world = WorldAgent(self._openai)
+        self.world_discovery = WorldDiscoveryAgent(self._openai)
         self.feedback_experimenter = FeedbackExperimenter(self._openai)
         self.enlightenment = EnlightenmentAgent(self._openai)
         self.collective = CollectiveIntelligenceAgent(self._openai)
@@ -233,6 +235,15 @@ class OraBrain:
         except Exception as _abe:
             logger.debug(f"UIABTestingAgent: variant apply failed: {_abe}")
 
+        # --- World-Aware Serendipity Injection ---
+        # Replace or supplement with a world-aware card when:
+        #   1. User has no active goals (first-time or goal-less experience)
+        #   2. Serendipity roll passes threshold (~30%)
+        #   3. Ora's daily mood is exploratory
+        spec_dict = await self._maybe_inject_world_card(
+            spec_dict, user_model, user_context, variant
+        )
+
         # Tag domain on the spec
         spec_dict["domain"] = domain
 
@@ -292,9 +303,73 @@ class OraBrain:
 
         return spec_dict, db_id, screens_today
 
+    async def _maybe_inject_world_card(
+        self,
+        spec_dict: Dict[str, Any],
+        user_model: "UserModel",
+        user_context: Dict[str, Any],
+        variant: str,
+    ) -> Dict[str, Any]:
+        """
+        Decide whether to replace the current spec with a world-aware card.
+
+        Triggers when:
+          1. User has no active goals (no-goals or first session experience)
+          2. Random serendipity roll < 0.30 (30% chance per screen)
+          3. Ora's daily mood is exploratory (Redis flag 'ora_mood_exploratory')
+
+        World cards are tagged with metadata.is_world_aware=True.
+        """
+        try:
+            has_goals = bool(user_model.active_goals) if hasattr(user_model, 'active_goals') else bool(user_context.get('active_goals'))
+            serendipity_roll = random.random()
+            serendipity_threshold = 0.30
+
+            # Check Ora's daily exploratory mood toggle
+            ora_exploratory = False
+            try:
+                from core.redis_client import get_redis
+                r = await get_redis()
+                mood_flag = await r.get('ora_mood_exploratory')
+                if mood_flag and mood_flag.decode() == '1':
+                    ora_exploratory = True
+                    serendipity_threshold = 0.50  # boost to 50% when exploratory
+            except Exception:
+                pass
+
+            should_inject = (
+                not has_goals
+                or serendipity_roll < serendipity_threshold
+                or ora_exploratory
+            )
+
+            if not should_inject:
+                return spec_dict
+
+            logger.info(
+                f"Ora: injecting world-aware card "
+                f"(no_goals={not has_goals}, roll={serendipity_roll:.2f}, "
+                f"exploratory={ora_exploratory})"
+            )
+
+            world_spec = await self.world_discovery.generate_screen(
+                user_context=user_context,
+                variant=variant,
+            )
+
+            # Tag is_serendipity if user has goals (it's an injection, not the main card)
+            if has_goals:
+                world_spec.setdefault('metadata', {})['is_serendipity'] = True
+
+            return world_spec
+
+        except Exception as _we:
+            logger.warning(f"WorldDiscovery injection failed, using original spec: {_we}")
+            return spec_dict
+
     async def _select_agent(
         self,
-        user_model: UserModel,
+        user_model: "UserModel",
         context: Optional[str],
         goal_id: Optional[str],
     ) -> Tuple[str, Any, bool]:

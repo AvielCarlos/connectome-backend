@@ -27,6 +27,8 @@ from api.routes import journal as journal_routes
 from api.routes import feature_lab as feature_lab_routes
 from api.routes import mood as mood_routes
 from api.routes import dao as dao_routes
+from api.routes import world as world_routes
+from api.routes import suggestions as suggestions_routes
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
 # Configure logging
@@ -137,6 +139,8 @@ app.include_router(journal_routes.router)
 app.include_router(feature_lab_routes.router)
 app.include_router(mood_routes.router)
 app.include_router(dao_routes.router)
+app.include_router(world_routes.router)
+app.include_router(suggestions_routes.router)
 
 
 @app.get("/health")
