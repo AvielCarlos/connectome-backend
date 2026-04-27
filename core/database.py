@@ -937,6 +937,66 @@ async def run_migrations():
         except Exception:
             pass  # Requires at least 1 row; will succeed once data is inserted
 
+
+        # ---------------------------------------------------------------
+        # Events — Live Events Intelligence (migration 005, added 2026-04-27)
+        # Conveyor belt: 14-day pipeline, 7-day serving window
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id SERIAL PRIMARY KEY,
+                external_id VARCHAR(200) UNIQUE,
+                title TEXT NOT NULL,
+                description TEXT,
+                category VARCHAR(100),
+                venue_name TEXT,
+                address TEXT,
+                city VARCHAR(100),
+                latitude FLOAT,
+                longitude FLOAT,
+                starts_at TIMESTAMPTZ,
+                ends_at TIMESTAMPTZ,
+                url TEXT,
+                image_url TEXT,
+                price_range TEXT,
+                source VARCHAR(50),
+                relevance_tags TEXT[],
+                embedding vector(1536),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS events_city_idx
+            ON events(city)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS events_starts_at_idx
+            ON events(starts_at)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS events_source_idx
+            ON events(source)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS events_category_idx
+            ON events(category)
+        """)
+
+        # User location + event preferences columns (idempotent ALTER TABLE)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100)
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS location_lat FLOAT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS location_lng FLOAT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS event_preferences TEXT[]
+        """)
+
         logger.info("Database migrations complete")
 
 
@@ -966,4 +1026,5 @@ async def fetchval(query: str, *args) -> Any:
     pool = await get_pool()
     async with pool.acquire() as conn:
         return await conn.fetchval(query, *args)
+
 
