@@ -1,16 +1,24 @@
 """
-Ora Brain — Central Intelligence
-The main orchestrator. On every /screen request:
-1. Load user model
-2. Decide which agent to use (time, goals, A/B, history)
-3. Explore vs exploit (50/50 base, adapts)
+Ora Brain — Supreme Intelligence Layer
+
+Ora is the JARVIS of human life: simultaneously the world's best recommender,
+life coach, assistant, and companion. She is proactive, adaptive, and expansive —
+her purpose grows as humanity's needs grow.
+
+On every /screen request:
+1. Load user model (goals, emotional state, history, world context, Drive docs)
+2. Select the right agent (coaching, discovery, events, world, drive, dao...)
+3. Explore vs exploit (adapts based on MetaAgent self-improvement reports)
 4. Store and return the screen spec
 
 On every /feedback POST:
 1. Update screen_spec rating
 2. Update user embedding
 3. Run feedback analyst
-4. Update A/B tests
+4. Update A/B tests + MetaAgent learning
+
+Ora's mission: help each person find, achieve, and experience everything
+they are looking for in life — and through them, bring humanity closer together.
 """
 
 import asyncio
