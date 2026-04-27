@@ -881,6 +881,33 @@ async def run_migrations():
             CREATE INDEX IF NOT EXISTS idx_user_suggestions_status
             ON user_suggestions(status)
         """)
+
+        # Subscriptions — Stripe-managed subscription tiers
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT UNIQUE NOT NULL,
+                tier VARCHAR(20) DEFAULT 'free',
+                stripe_customer_id VARCHAR(100),
+                stripe_subscription_id VARCHAR(100),
+                stripe_price_id VARCHAR(100),
+                status VARCHAR(20) DEFAULT 'active',
+                current_period_start TIMESTAMPTZ,
+                current_period_end TIMESTAMPTZ,
+                cancel_at_period_end BOOLEAN DEFAULT FALSE,
+                trial_end TIMESTAMPTZ,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id
+            ON subscriptions(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer
+            ON subscriptions(stripe_customer_id)
+        """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_contributions_submitted_at
             ON contributions(submitted_at DESC)
