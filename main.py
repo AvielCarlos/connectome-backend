@@ -31,6 +31,8 @@ from api.routes import world as world_routes
 from api.routes import suggestions as suggestions_routes
 from api.routes import drive as drive_routes
 from api.routes import ora_health as ora_health_routes
+from api.routes import google_auth as google_auth_routes
+from api.routes import integrations as integrations_routes
 from api.routes import events as events_routes
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
@@ -159,6 +161,8 @@ app.include_router(suggestions_routes.router)
 app.include_router(events_routes.router)
 app.include_router(drive_routes.router)
 app.include_router(ora_health_routes.router)
+app.include_router(google_auth_routes.router)
+app.include_router(integrations_routes.router)
 
 
 @app.get("/api/schema")
@@ -309,5 +313,6 @@ if __name__ == "__main__":
         reload=not settings.is_production,
         log_level=settings.LOG_LEVEL.lower(),
     )
+
 
 
