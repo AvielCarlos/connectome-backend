@@ -17,9 +17,9 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def fix_postgres_url(cls, v: str) -> str:
-        """Railway uses postgres:// scheme; SQLAlchemy/asyncpg require postgresql://."""
+        """Railway uses postgres:// scheme; asyncpg requires postgresql://."""
         if isinstance(v, str) and v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql://", 1)
+            v = v.replace("postgres://", "postgresql://", 1)
         return v
 
     # Redis

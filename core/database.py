@@ -19,12 +19,28 @@ async def get_pool() -> asyncpg.Pool:
     """Return the global connection pool, initializing if needed."""
     global _pool
     if _pool is None:
+        db_url = settings.DATABASE_URL
+        # Mask password for logging
+        try:
+            from urllib.parse import urlparse
+            p = urlparse(db_url)
+            safe = db_url.replace(p.password or "", "***") if p.password else db_url
+        except Exception:
+            safe = "<unparseable>"
+        logger.info(f"Connecting to database: {safe}")
+
+        # Railway Postgres requires SSL; add sslmode=require if not already set
+        ssl = None
+        if "sslmode" not in db_url and "railway" in db_url.lower() or ".railway.app" in db_url:
+            ssl = "require"
+
         _pool = await asyncpg.create_pool(
-            settings.DATABASE_URL,
+            db_url,
             min_size=2,
             max_size=20,
             command_timeout=60,
             init=_init_connection,
+            ssl=ssl,
         )
         logger.info("Database pool created")
     return _pool
