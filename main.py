@@ -19,7 +19,13 @@ from ora.agents.self_healing import SelfHealingAgent
 from ora.agents.model_evolution import ModelEvolutionAgent
 from api.middleware import timing_middleware
 from api.routes import users, screens, feedback, goals, monetization, sessions, notifications, ground_truth, admin
-from api.routes import payments as payments_routes
+try:
+    from api.routes import payments as payments_routes
+    _payments_available = True
+except Exception as _payments_err:
+    payments_routes = None
+    _payments_available = False
+    logging.warning(f"Payments module unavailable: {_payments_err}")
 from api.routes import ora_chat
 from api.routes import discovery as discovery_routes
 from api.routes import ab_testing as ab_testing_routes
@@ -104,10 +110,13 @@ async def lifespan(app: FastAPI):
     logger.info("✅ MetaAgent self-improvement loop started")
 
     # Initialize PricingAgent — Ora manages her own pricing
-    from ora.agents.pricing_agent import get_pricing_agent
-    pricing_agent = get_pricing_agent(_ora_brain._openai)
-    app.state.pricing_agent = pricing_agent
-    asyncio.create_task(_pricing_agent_loop(pricing_agent))
+    try:
+        from ora.agents.pricing_agent import get_pricing_agent
+        pricing_agent = get_pricing_agent(getattr(_ora_brain, '_openai', None))
+        app.state.pricing_agent = pricing_agent
+        asyncio.create_task(_pricing_agent_loop(pricing_agent))
+    except Exception as _pe:
+        logging.warning(f"PricingAgent init failed (non-critical): {_pe}")
     logger.info("✅ PricingAgent initialized — Ora owns her monetization")
 
     logger.info("🚀 Connectome is live")
@@ -201,7 +210,8 @@ app.include_router(screens.router)
 app.include_router(feedback.router)
 app.include_router(goals.router)
 app.include_router(monetization.router)
-app.include_router(payments_routes.router)
+if _payments_available and payments_routes:
+    app.include_router(payments_routes.router)
 app.include_router(sessions.router)
 app.include_router(notifications.router)
 app.include_router(ground_truth.router)
