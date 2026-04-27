@@ -14,7 +14,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from core.config import settings
 from core.database import run_migrations, close_pool
 from core.redis_client import get_redis, close_redis
-from ora.brain import init_brain
+from ora.brain import init_brain, get_brain
 from ora.agents.self_healing import SelfHealingAgent
 from ora.agents.model_evolution import ModelEvolutionAgent
 from api.middleware import timing_middleware
