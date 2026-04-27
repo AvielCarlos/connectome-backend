@@ -21,9 +21,18 @@ router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
 
 class SuggestionCreate(BaseModel):
-    title: str
-    body: str
+    title: Optional[str] = None
+    body: Optional[str] = None
+    content: Optional[str] = None   # alias sent by web frontend
     category: Optional[str] = "general"
+
+    @property
+    def resolved_title(self) -> str:
+        return self.title or (self.content[:80] if self.content else "Suggestion")
+
+    @property
+    def resolved_body(self) -> str:
+        return self.body or self.content or """
 
 
 @router.get("")
