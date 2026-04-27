@@ -26,13 +26,15 @@ class SuggestionCreate(BaseModel):
     content: Optional[str] = None   # alias sent by web frontend
     category: Optional[str] = "general"
 
-    @property
-    def resolved_title(self) -> str:
-        return self.title or (self.content[:80] if self.content else "Suggestion")
+    model_config = {"populate_by_name": True}
 
-    @property
-    def resolved_body(self) -> str:
-        return self.body or self.content or """
+    @model_validator(mode="after")
+    def resolve_fields(self) -> "SuggestionCreate":
+        if not self.title:
+            self.title = (self.content or "")[:80] or "Suggestion"
+        if not self.body:
+            self.body = self.content or self.title or ""
+        return self"
 
 
 @router.get("")
