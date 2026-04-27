@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: connectome-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: GOOGLE_PLACES_API_KEY
+        value: AIzaSyAIqOEHEp_oxRBy50eESE7MQbcMFO9vK_A
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: connectome-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: connectome-redis
+          type: redis
+          property: connectionString
+
+databases:
+  - name: connectome-db
+    plan: free
+    databaseName: connectome
+    user: connectome
+
+  - name: connectome-redis
+    plan: free
+    type: redis
