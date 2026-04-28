@@ -119,6 +119,7 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
     return UserProfile(
         id=row["id"],
         email=row["email"],
+        is_admin=_is_admin,
         subscription_tier=row["subscription_tier"],
         fulfilment_score=row["fulfilment_score"] or 0.0,
         profile=profile_data,
