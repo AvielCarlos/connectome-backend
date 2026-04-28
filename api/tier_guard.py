@@ -47,7 +47,7 @@ async def get_user_tier(user_id: str) -> str:
         from core.config import settings
         from core.database import fetchrow as _fetchrow
         from uuid import UUID as _UUID
-        _row = await _fetchrow("SELECT email FROM users WHERE id = $1", _UUID(user_id))
+        _row = await _fetchrow("SELECT email FROM users WHERE id = $1", _str(user_id))
         if _row and (_row["email"] or "").lower() in settings.admin_email_list:
             return "sovereign"
     except Exception:
@@ -55,7 +55,7 @@ async def get_user_tier(user_id: str) -> str:
     # Check new subscriptions table first (Stripe-managed)
     sub_row = await fetchrow(
         "SELECT tier, status FROM subscriptions WHERE user_id = $1",
-        UUID(user_id),
+        str(user_id),
     )
     if sub_row and sub_row["status"] in ("active", "trialing"):
         return sub_row["tier"]
@@ -63,7 +63,7 @@ async def get_user_tier(user_id: str) -> str:
     # Fall back to legacy users.subscription_tier
     user_row = await fetchrow(
         "SELECT subscription_tier FROM users WHERE id = $1",
-        UUID(user_id),
+        str(user_id),
     )
     if user_row:
         tier = user_row["subscription_tier"]
@@ -88,7 +88,7 @@ async def get_current_usage(user_id: str, resource: str) -> int:
         elif resource == "goals":
             count = await fetchval(
                 "SELECT COUNT(*) FROM goals WHERE user_id = $1 AND status = 'active'",
-                UUID(user_id),
+                str(user_id),
             )
             return int(count or 0)
 
@@ -100,7 +100,7 @@ async def get_current_usage(user_id: str, resource: str) -> int:
                   AND interaction_type = 'ora_chat'
                   AND created_at > NOW() - INTERVAL '24 hours'
                 """,
-                UUID(user_id),
+                str(user_id),
             )
             return int(count or 0)
 
@@ -111,14 +111,14 @@ async def get_current_usage(user_id: str, resource: str) -> int:
                 WHERE user_id = $1
                   AND created_at > NOW() - INTERVAL '30 days'
                 """,
-                UUID(user_id),
+                str(user_id),
             )
             return int(count or 0)
 
         elif resource == "drive_docs_indexed":
             count = await fetchval(
                 "SELECT COUNT(*) FROM drive_documents WHERE user_id = $1",
-                UUID(user_id),
+                str(user_id),
             )
             return int(count or 0)
 
@@ -130,7 +130,7 @@ async def get_current_usage(user_id: str, resource: str) -> int:
                   AND interaction_type = 'event_recommendation'
                   AND created_at > NOW() - INTERVAL '7 days'
                 """,
-                UUID(user_id),
+                str(user_id),
             )
             return int(count or 0)
 
