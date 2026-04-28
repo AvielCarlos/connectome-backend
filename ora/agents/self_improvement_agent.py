@@ -41,6 +41,22 @@ INTERACTION_SAMPLE = 500
 # ---------------------------------------------------------------------------
 
 LOW_RISK_CHANGE_TYPES = {"prompt_text", "weight_adjustment", "category_blocklist"}
+
+
+def _infer_agent_type_from_file(target_file: str) -> str:
+    """Map a target file path to an agent_type string for eval queries."""
+    mapping = {
+        "discovery": "DiscoveryAgent",
+        "coaching": "CoachingAgent",
+        "recommendation": "RecommendationAgent",
+        "world": "WorldAgent",
+        "enlightenment": "EnlightenmentAgent",
+        "collective": "CollectiveIntelligenceAgent",
+    }
+    for key, agent_type in mapping.items():
+        if key in (target_file or ""):
+            return agent_type
+    return "DiscoveryAgent"  # default fallback
 HIGH_RISK_CHANGE_TYPES = {"logic_rewrite", "new_route", "db_change", "agent_restructure"}
 
 
@@ -701,6 +717,293 @@ Output ONLY the complete updated Python file content. No markdown, no explanatio
             )
         except Exception as e:
             logger.debug(f"SelfImprovement: lesson log failed: {e}")
+
+    # -----------------------------------------------------------------------
+    # Loop 2 — Eval loop
+    # -----------------------------------------------------------------------
+
+    async def run_eval_loop(self) -> Dict[str, Any]:
+        """
+        Loop 2: Evaluate whether previously applied self-improvements actually worked.
+
+        - Reads ora:si:pending_evals from Redis (list of pending evals)
+        - For each entry older than 24h: compare before/after ratings
+        - Logs result to ora_lessons
+        - Auto-reverts if ratings dropped >10%
+        """
+        logger.info("SelfImprovementAgent.run_eval_loop: starting")
+        result: Dict[str, Any] = {"evaluated": [], "reverted": [], "errors": []}
+
+        try:
+            from core.redis_client import get_redis
+            from core.database import fetch as db_fetch
+            import time as _time
+
+            r = await get_redis()
+            raw = await r.get("ora:si:pending_evals")
+            pending: List[Dict[str, Any]] = json.loads(raw) if raw else []
+
+            now_ts = datetime.now(timezone.utc).timestamp()
+            still_pending: List[Dict[str, Any]] = []
+
+            for entry in pending:
+                applied_at = entry.get("applied_at_ts", 0)
+                if now_ts - applied_at < 86400:  # wait 24h
+                    still_pending.append(entry)
+                    continue
+
+                agent_type = entry.get("agent_type", "")
+                before_rating = entry.get("before_avg_rating", 3.0)
+                title = entry.get("title", "?")
+
+                # Compute after-rating for this agent type in last 24h
+                try:
+                    rows = await db_fetch(
+                        """
+                        SELECT AVG(i.rating) as after_avg
+                        FROM interactions i
+                        JOIN screen_specs ss ON ss.id = i.screen_spec_id
+                        WHERE ss.agent_type = $1
+                          AND i.created_at >= NOW() - INTERVAL '24 hours'
+                          AND i.rating IS NOT NULL
+                        """,
+                        agent_type,
+                    )
+                    after_rating = float(rows[0]["after_avg"] or before_rating) if rows else before_rating
+                except Exception as _e:
+                    after_rating = before_rating
+
+                delta = after_rating - before_rating
+                if delta >= 0:
+                    outcome = "improved"
+                elif abs(delta) / max(before_rating, 0.1) < 0.10:
+                    outcome = "neutral"
+                else:
+                    outcome = "degraded"
+
+                description = entry.get("description", title)
+                applied_date = datetime.fromtimestamp(applied_at, tz=timezone.utc).strftime("%Y-%m-%d")
+                lesson = (
+                    f"Self-improvement applied on {applied_date}: {description}. "
+                    f"Result: ratings went from {before_rating:.2f} to {after_rating:.2f} ({outcome})"
+                )
+                await self._log_lesson(lesson, confidence=0.80, source="SelfImprovementAgent.eval_loop")
+                result["evaluated"].append({"title": title, "outcome": outcome, "delta": round(delta, 3)})
+                logger.info(f"SelfImprovement eval: '{title}' → {outcome} ({delta:+.2f})")
+
+                # Auto-revert if things got worse by >10%
+                if outcome == "degraded" and entry.get("target_file"):
+                    reverted = await self._auto_revert(entry)
+                    if reverted:
+                        result["reverted"].append(title)
+
+            # Write back still-pending items
+            await r.set("ora:si:pending_evals", json.dumps(still_pending), ex=30 * 24 * 3600)
+
+        except Exception as e:
+            logger.error(f"SelfImprovement.run_eval_loop: {e}")
+            result["errors"].append(str(e))
+
+        return result
+
+    async def _auto_revert(self, entry: Dict[str, Any]) -> bool:
+        """
+        Revert a degrading change by fetching the previous file version from
+        GitHub history and recommitting it.
+        """
+        token = os.environ.get("GITHUB_TOKEN")
+        if not token:
+            return False
+        target_file = entry.get("target_file", "")
+        if not target_file:
+            return False
+
+        try:
+            url = f"{GITHUB_API}/repos/{GITHUB_REPO}/commits"
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    url,
+                    params={"path": target_file, "per_page": 5},
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/vnd.github.v3+json",
+                    },
+                )
+                if resp.status_code != 200:
+                    return False
+                commits = resp.json()
+
+            if len(commits) < 2:
+                return False
+
+            # Get the parent commit's version of the file
+            prev_sha = commits[1]["sha"]
+            file_url = f"{GITHUB_API}/repos/{GITHUB_REPO}/contents/{target_file}"
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.get(
+                    f"{file_url}?ref={prev_sha}",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/vnd.github.v3+json",
+                    },
+                )
+                if resp.status_code != 200:
+                    return False
+                prev_file = resp.json()
+
+            prev_content = base64.b64decode(
+                prev_file["content"].replace("\n", "")
+            ).decode("utf-8")
+
+            # Get current SHA to overwrite
+            current_info = await self._github_get_file(token, target_file)
+            if not current_info:
+                return False
+            current_sha = current_info["sha"]
+
+            revert_msg = (
+                f"[Ora Auto-Revert] Reverting '{entry.get('title', '?')}' — "
+                f"ratings degraded after application\n\n"
+                f"Auto-reverted by SelfImprovementAgent eval_loop at "
+                f"{datetime.now(timezone.utc).isoformat()}"
+            )
+            committed = await self._github_commit_file(
+                token, target_file, prev_content, current_sha, revert_msg
+            )
+            if committed:
+                await self._log_lesson(
+                    f"Auto-reverted: '{entry.get('title', '?')}' — "
+                    f"ratings dropped {entry.get('before_avg_rating', 0):.2f} → "
+                    f"{entry.get('before_avg_rating', 0) * 0.9:.2f}",
+                    confidence=0.9,
+                    source="SelfImprovementAgent.auto_revert",
+                )
+                return True
+        except Exception as e:
+            logger.warning(f"SelfImprovement._auto_revert: {e}")
+        return False
+
+    # -----------------------------------------------------------------------
+    # Loop 3 — Meta loop
+    # -----------------------------------------------------------------------
+
+    async def run_meta_loop(self) -> Dict[str, Any]:
+        """
+        Loop 3: After 5+ eval cycles, analyze Ora's own improvement patterns
+        and update the proposal-generation prompt stored in Redis.
+
+        Redis keys:
+          ora:si:eval_history  — list of eval results
+          ora:si:proposal_prompt  — the meta-learned prompt override
+        """
+        logger.info("SelfImprovementAgent.run_meta_loop: starting")
+        result: Dict[str, Any] = {"updated_prompt": False, "insights": [], "errors": []}
+
+        if not self._openai:
+            return result
+
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+
+            # Load eval history
+            raw_history = await r.get("ora:si:eval_history")
+            eval_history: List[Dict[str, Any]] = json.loads(raw_history) if raw_history else []
+
+            if len(eval_history) < 5:
+                logger.info(f"SelfImprovement.run_meta_loop: only {len(eval_history)} evals — need 5+")
+                return result
+
+            # Summarize patterns
+            improved = [e for e in eval_history if e.get("outcome") == "improved"]
+            degraded = [e for e in eval_history if e.get("outcome") == "degraded"]
+            neutral = [e for e in eval_history if e.get("outcome") == "neutral"]
+
+            improved_types = [e.get("change_type", "") for e in improved]
+            degraded_types = [e.get("change_type", "") for e in degraded]
+
+            from collections import Counter
+            top_working = Counter(improved_types).most_common(3)
+            top_failing = Counter(degraded_types).most_common(3)
+
+            meta_prompt_request = f"""You are Ora's meta-improvement engine.
+You have analyzed {len(eval_history)} self-improvement evaluation cycles.
+
+Patterns that WORKED (ratings improved):
+{json.dumps(top_working, indent=2)}
+
+Patterns that FAILED (ratings degraded):
+{json.dumps(top_failing, indent=2)}
+
+Total: {len(improved)} improved, {len(neutral)} neutral, {len(degraded)} degraded.
+
+Based on these patterns, write an improved system prompt fragment (max 400 words) that
+should replace the proposals-generation section of Ora's self-improvement loop.
+
+Focus on:
+- Which types of changes actually help (based on the data above)
+- What makes a good proposal vs a bad one
+- Specific guidance for future proposal generation
+
+Return ONLY the prompt text, no JSON, no markdown."""
+
+            response = await self._openai.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": meta_prompt_request}],
+                temperature=0.4,
+                max_tokens=600,
+            )
+            meta_prompt = response.choices[0].message.content.strip()
+
+            # Store meta-learned prompt in Redis (30-day TTL)
+            await r.set("ora:si:proposal_prompt", meta_prompt, ex=30 * 24 * 3600)
+            result["updated_prompt"] = True
+            result["insights"] = [
+                f"{count}x {ctype}" for ctype, count in top_working[:3]
+            ]
+
+            await self._log_lesson(
+                f"Meta-improvement: updated proposal prompt based on {len(eval_history)} eval cycles. "
+                f"Top working change types: {[t for t, _ in top_working]}",
+                confidence=0.85,
+                source="SelfImprovementAgent.meta_loop",
+            )
+            logger.info("SelfImprovement.run_meta_loop: updated ora:si:proposal_prompt")
+
+        except Exception as e:
+            logger.error(f"SelfImprovement.run_meta_loop: {e}")
+            result["errors"].append(str(e))
+
+        return result
+
+    # -----------------------------------------------------------------------
+    # Helper: record an applied change to pending_evals for eval_loop
+    # -----------------------------------------------------------------------
+
+    async def _record_pending_eval(
+        self,
+        proposal: Dict[str, Any],
+        before_avg_rating: float,
+    ) -> None:
+        """Add an entry to ora:si:pending_evals so eval_loop can track it."""
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            raw = await r.get("ora:si:pending_evals")
+            pending: List[Dict[str, Any]] = json.loads(raw) if raw else []
+            pending.append({
+                "title": proposal.get("title", ""),
+                "description": proposal.get("patch_description", ""),
+                "target_file": proposal.get("target_file"),
+                "change_type": proposal.get("risk", ""),
+                "agent_type": _infer_agent_type_from_file(proposal.get("target_file", "")),
+                "before_avg_rating": before_avg_rating,
+                "applied_at_ts": datetime.now(timezone.utc).timestamp(),
+            })
+            pending = pending[-50:]
+            await r.set("ora:si:pending_evals", json.dumps(pending), ex=30 * 24 * 3600)
+        except Exception as e:
+            logger.debug(f"SelfImprovement._record_pending_eval: {e}")
 
     async def _send_telegram(self, message: str) -> None:
         token = self._telegram_token

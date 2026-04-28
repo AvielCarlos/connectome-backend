@@ -1105,6 +1105,23 @@ async def run_migrations():
 
 
         # ---------------------------------------------------------------
+        # Integration A: Vector similarity — embedding column on screen_specs (idempotent)
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            ALTER TABLE screen_specs
+            ADD COLUMN IF NOT EXISTS embedding vector(1536)
+        """)
+        # IVFFlat index for fast cosine similarity search on screen_specs
+        try:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_screen_specs_embedding
+                ON screen_specs USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 20)
+            """)
+        except Exception:
+            pass  # Needs >= 1 row to create; will succeed once data is inserted
+
+        # ---------------------------------------------------------------
         # Ora Founder Lessons — seeded from session 2026-04-27
         # ---------------------------------------------------------------
         _founder_lessons = [

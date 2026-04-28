@@ -193,6 +193,60 @@ async def update_user_embedding(user_id: str, rating: int, agent_type: str):
     logger.debug(f"Updated embedding for user {user_id}, rating={rating}")
 
 
+async def update_user_embedding_from_cards(user_id: str, openai_client=None) -> None:
+    """
+    Integration A: Update the user's embedding by averaging embeddings of recently
+    high-rated (>=4) screen_specs. Called fire-and-forget at the end of get_screen().
+    Uses actual semantic content similarity instead of synthetic dimension nudging.
+    """
+    try:
+        rows = await fetch(
+            """
+            SELECT ss.embedding
+            FROM interactions i
+            JOIN screen_specs ss ON ss.id = i.screen_spec_id
+            WHERE i.user_id = $1
+              AND i.rating >= 4
+              AND ss.embedding IS NOT NULL
+            ORDER BY i.created_at DESC
+            LIMIT 20
+            """,
+            UUID(user_id),
+        )
+        if not rows:
+            return
+
+        embeddings = []
+        for row in rows:
+            raw = row["embedding"]
+            if raw:
+                parsed = UserModel._parse_embedding(raw)
+                if parsed and len(parsed) == 1536:
+                    embeddings.append(np.array(parsed, dtype=np.float32))
+
+        if not embeddings:
+            return
+
+        avg_embedding = np.mean(embeddings, axis=0)
+        norm = np.linalg.norm(avg_embedding)
+        if norm > 0:
+            avg_embedding = avg_embedding / norm
+
+        embedding_str = "[" + ",".join(f"{v:.6f}" for v in avg_embedding.tolist()) + "]"
+
+        await execute(
+            "UPDATE users SET embedding = $1::vector WHERE id = $2",
+            embedding_str,
+            UUID(user_id),
+        )
+        await redis_delete(f"user_model:{user_id}")
+        logger.debug(
+            f"update_user_embedding_from_cards: user={user_id[:8]} averaged {len(embeddings)} card embeddings"
+        )
+    except Exception as e:
+        logger.debug(f"update_user_embedding_from_cards failed: {e}")
+
+
 async def update_domain_weights(
     user_id: str,
     domain: str,

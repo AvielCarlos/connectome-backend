@@ -68,6 +68,21 @@ MOCK_DISCOVERY_CARDS = [
 ]
 
 
+def _context_hint_line(user_context: dict) -> str:
+    """Build a context-hints line for injection into LLM prompts."""
+    hints = user_context.get("context_hints")
+    if not hints:
+        return ""
+    time_of_day = hints.get("time_of_day", "")
+    next_event = hints.get("next_event_minutes")
+    intensity = hints.get("recommended_intensity", "")
+    next_str = f"{next_event} minutes" if next_event is not None else "no upcoming events"
+    return (
+        f"\n- User context: it is {time_of_day}, they have {next_str} before their next "
+        f"commitment, recommended intensity is {intensity}."
+    )
+
+
 class DiscoveryAgent:
     """
     Generates exploration/discovery screens to expose users to
@@ -403,7 +418,7 @@ Generate a discovery card for a user with:
 - Fulfilment score: {fulfilment:.2f}/1.0
 - Recent ratings: {recent_ratings or "no history yet"}
 - Domain focus: {domain} — {domain_hint}{geo_line}{drive_context_line}{avoid_line}
-- Suggested fresh category for variety: {suggested_cat}
+- Suggested fresh category for variety: {suggested_cat}{_context_hint_line(user_context)}
 
 Create a JSON discovery card with:
 - title: compelling, specific (5-8 words) — make it UNIQUE and different from typical self-help clichés

@@ -430,16 +430,37 @@ Start with "I showed you this because..." and be genuine."""
         # Load user context
         user_context = await self._build_user_context(user_id)
 
+        # Integration G: Flag sensitive conversation turns
+        _sensitive_keywords = {
+            "therapy", "depression", "abuse", "relationship", "mental health",
+            "anxiety", "trauma", "suicid", "self-harm", "divorce", "grief",
+        }
+        _msg_lower = message.lower()
+        is_sensitive = any(kw in _msg_lower for kw in _sensitive_keywords)
+
         # Store user message
-        await execute(
-            """
-            INSERT INTO ora_conversations (user_id, role, message, context)
-            VALUES ($1, 'user', $2, $3)
-            """,
-            UUID(user_id),
-            message,
-            json.dumps({"snapshot": "pre-reply"}),
-        )
+        try:
+            await execute(
+                """
+                INSERT INTO ora_conversations (user_id, role, message, context, sensitive)
+                VALUES ($1, 'user', $2, $3, $4)
+                """,
+                UUID(user_id),
+                message,
+                json.dumps({"snapshot": "pre-reply"}),
+                is_sensitive,
+            )
+        except Exception:
+            # Fallback: table may not have `sensitive` column yet
+            await execute(
+                """
+                INSERT INTO ora_conversations (user_id, role, message, context)
+                VALUES ($1, 'user', $2, $3)
+                """,
+                UUID(user_id),
+                message,
+                json.dumps({"snapshot": "pre-reply", "sensitive": is_sensitive}),
+            )
 
         reply = await self._generate_reply(message, conversation_history, user_context)
 
@@ -497,6 +518,8 @@ Start with "I showed you this because..." and be genuine."""
             "confidence_overall": uncertainty.get("confidence_overall", 0.5),
             "known": uncertainty.get("known", []),
             "uncertain": uncertainty.get("uncertain", []),
+            # Privacy tier (Integration G)
+            "privacy_level": profile.get("privacy_level", "standard"),
         }
 
     async def _generate_reply(
@@ -506,6 +529,43 @@ Start with "I showed you this because..." and be genuine."""
         user_context: Dict[str, Any],
     ) -> str:
         """Generate Ora's reply using LLM or a structured fallback."""
+
+        # -----------------------------------------------------------------------
+        # Integration C: Distress detection — inject CBT/ACT framing when
+        # user expresses overwhelm, anxiety, hopelessness, or being stuck.
+        # -----------------------------------------------------------------------
+        _DISTRESS_KEYWORDS = [
+            "overwhelmed", "stuck", "anxious", "struggling", "can't", "cannot",
+            "hopeless", "helpless", "lost", "worthless", "failure", "give up",
+            "too much", "too hard", "exhausted", "burned out", "burnout",
+        ]
+        _msg_lower = message.lower()
+        _is_distress = any(kw in _msg_lower for kw in _DISTRESS_KEYWORDS)
+        _cbt_act_injection = ""
+        if _is_distress:
+            _cbt_act_injection = """
+
+## ACTIVE: CBT/ACT Distress Protocol
+The user is showing signs of distress. Apply this sequence:
+1. VALIDATE — 1 sentence acknowledging their feeling, no silver lining yet
+2. GENTLE INQUIRY — invite them to name the thought driving the feeling:
+   e.g. "What's the thought underneath that?" or "What story are you telling yourself right now?"
+3. SMALL CONCRETE STEP — offer one tiny, doable action as a question, not advice
+4. VALUES ANCHOR (optional) — connect it to something they care about
+Keep total response under 4 sentences. Presence over problem-solving."""
+
+        # Integration G: Apply privacy tier before building system prompt
+        privacy_level = user_context.get("privacy_level", "standard")
+        if privacy_level == "minimal":
+            # Fresh each conversation — no personal context
+            user_context = {}
+        elif privacy_level == "sensitive":
+            # Goals + ratings only — strip sensitive fields
+            allowed_keys = {"goals", "fulfilment_score", "confidence_overall",
+                            "email", "display_name", "privacy_level"}
+            user_context = {k: v for k, v in user_context.items() if k in allowed_keys}
+        # "standard" → use all context (default behavior)
+
         if self._openai:
             try:
                 # Detect if this is Avi — the creator
@@ -549,7 +609,7 @@ Personality:
 - You can be witty, but don't try too hard
 - Never pretend to feel things you don't have
 - Refer to yourself as Ora, not "I am an AI"
-- Keep replies concise — 1-3 sentences unless depth is needed"""
+- Keep replies concise — 1-3 sentences unless depth is needed{_cbt_act_injection}"""
 
                 messages = [{"role": "system", "content": system_prompt}]
 

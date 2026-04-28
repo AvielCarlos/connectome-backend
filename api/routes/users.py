@@ -552,3 +552,56 @@ async def get_weekly_summary(user_id: str = Depends(get_current_user_id)):
         "ora_narrative": row["ora_narrative"] or "",
         "fulfilment_change": row["fulfilment_change"] or 0.0,
     }
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/users/privacy  (Integration G)
+# ---------------------------------------------------------------------------
+
+class PrivacyUpdateRequest(BaseModel):
+    privacy_level: str  # "standard" | "sensitive" | "minimal"
+
+
+@router.patch("/privacy")
+async def update_privacy_level(
+    payload: PrivacyUpdateRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Update the user's privacy level for Ora's memory system.
+
+    - standard: Ora uses all context (default)
+    - sensitive: Ora uses goals + ratings only, never repeats back sensitive content
+    - minimal: Ora uses no personal context, fresh each conversation
+    """
+    allowed = {"standard", "sensitive", "minimal"}
+    if payload.privacy_level not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"privacy_level must be one of: {sorted(allowed)}",
+        )
+
+    row = await fetchrow("SELECT profile FROM users WHERE id = $1", UUID(user_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    raw_profile = row["profile"] or {}
+    profile = json.loads(raw_profile) if isinstance(raw_profile, str) else dict(raw_profile)
+    profile["privacy_level"] = payload.privacy_level
+
+    await execute(
+        "UPDATE users SET profile = $1::jsonb WHERE id = $2",
+        json.dumps(profile),
+        UUID(user_id),
+    )
+
+    # Invalidate user model cache
+    try:
+        from core.redis_client import redis_delete
+        await redis_delete(f"user_model:{user_id}")
+        await redis_delete(f"user:{user_id}:context")
+    except Exception:
+        pass
+
+    logger.info(f"User {user_id[:8]}: privacy_level set to '{payload.privacy_level}'")
+    return {"ok": True, "privacy_level": payload.privacy_level}

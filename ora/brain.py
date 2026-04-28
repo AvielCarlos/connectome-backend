@@ -35,6 +35,7 @@ from ora.user_model import (
     UserModel,
     load_user_model,
     update_user_embedding,
+    update_user_embedding_from_cards,
     update_domain_weights,
     get_daily_screen_count,
     increment_daily_screen_count,
@@ -58,6 +59,7 @@ from ora.agents.world_discovery_agent import WorldDiscoveryAgent
 from ora.agents.drive_agent import DriveAgent
 from ora.consciousness import OraConsciousness
 from ora.content_quality import content_quality_check
+from ora.agents.context_agent import ContextAgent
 
 # Module-level alias so OraBrain code can call _content_quality_check(spec)
 _content_quality_check = content_quality_check
@@ -117,6 +119,9 @@ class OraBrain:
 
         # DAO agent — contribution evaluation and rewards
         self.dao = DaoAgent(self._openai)
+
+        # Context agent — time/calendar signals for content adaptation
+        self.context_agent = ContextAgent()
 
         # Agent rotation weights (updated dynamically by feedback)
         # collective: 8%, explore: 8% of screens
@@ -317,6 +322,13 @@ class OraBrain:
         if geo_hints:
             user_context.update(geo_hints)
 
+        # Inject context_hints — time-of-day / calendar signals
+        try:
+            context_hints = await self.context_agent.get_user_context_signals(user_id)
+            user_context["context_hints"] = context_hints
+        except Exception as _ctx:
+            logger.debug(f"ContextAgent: signals inject failed: {_ctx}")
+
         # Inject collective_insight — every agent gets collective wisdom as context
         try:
             collective_insight = await self.collective.get_collective_insight_for_user(user_context)
@@ -324,17 +336,39 @@ class OraBrain:
         except Exception as _cie:
             logger.debug(f"CollectiveIntelligence: insight inject failed: {_cie}")
 
-        # Tournament mode: if enabled and not exploiting, generate/serve tournament variant
-        if self.tournament_mode and not exploit:
-            try:
-                spec_dict = await self._tournament_pick(
-                    agent_fn, user_context, variant, context or "discovery", domain
-                )
-            except Exception as _te:
-                logger.debug(f"Tournament pick failed, falling back: {_te}")
+        # -----------------------------------------------------------------------
+        # Integration A: Vector similarity exploit path
+        # 30% of the time when user has >20 interactions AND has an embedding,
+        # serve a card pulled via pgvector cosine similarity instead of generating.
+        # -----------------------------------------------------------------------
+        _use_vector = (
+            not should_interview
+            and len(user_model.recent_interactions) > 20
+            and user_model.embedding is not None
+            and random.random() < 0.30
+        )
+        if _use_vector:
+            _v_cards = await self._get_vector_similar_cards(user_id, domain)
+            if _v_cards:
+                spec_dict = random.choice(_v_cards)
+                agent_name = "VectorSimilarityFeed"
+                exploit = True
+                logger.info(f"Ora: vector similarity exploit → {len(_v_cards)} candidates for user={user_id[:8]}")
+            else:
+                _use_vector = False  # no embeddings yet; fall through to normal flow
+
+        if not _use_vector:
+            # Tournament mode: if enabled and not exploiting, generate/serve tournament variant
+            if self.tournament_mode and not exploit:
+                try:
+                    spec_dict = await self._tournament_pick(
+                        agent_fn, user_context, variant, context or "discovery", domain
+                    )
+                except Exception as _te:
+                    logger.debug(f"Tournament pick failed, falling back: {_te}")
+                    spec_dict = await agent_fn(user_context, variant=variant)
+            else:
                 spec_dict = await agent_fn(user_context, variant=variant)
-        else:
-            spec_dict = await agent_fn(user_context, variant=variant)
 
         # UI A/B variant application
         try:
@@ -409,7 +443,82 @@ class OraBrain:
         except Exception as _ce:
             logger.debug(f"Consciousness decision increment skipped: {_ce}")
 
+        # Integration A: Fire-and-forget user embedding update from high-rated cards
+        try:
+            asyncio.create_task(update_user_embedding_from_cards(user_id, self._openai))
+        except Exception:
+            pass
+
         return spec_dict, db_id, screens_today
+
+    # -----------------------------------------------------------------------
+    # Integration A: Vector Similarity Feed
+    # -----------------------------------------------------------------------
+
+    async def _get_vector_similar_cards(
+        self, user_id: str, domain: str, limit: int = 5
+    ) -> list:
+        """
+        Fetch screen specs most similar to the user's embedding using pgvector
+        cosine similarity (<=> operator).  Returns a list of spec dicts.
+        Returns empty list if user has no embedding or no specs have embeddings.
+        """
+        from uuid import UUID as _UUID
+        try:
+            user_row = await fetchrow(
+                "SELECT embedding FROM users WHERE id = $1",
+                _UUID(user_id),
+            )
+            if not user_row or not user_row["embedding"]:
+                return []
+
+            user_embedding = user_row["embedding"]  # pgvector text format
+
+            rows = await fetch(
+                """
+                SELECT id, spec, agent_type, global_rating
+                FROM screen_specs
+                WHERE embedding IS NOT NULL
+                ORDER BY embedding <=> $1
+                LIMIT $2
+                """,
+                user_embedding,
+                limit,
+            )
+
+            results = []
+            for row in rows:
+                raw_spec = row["spec"]
+                spec = (
+                    json.loads(raw_spec)
+                    if isinstance(raw_spec, str)
+                    else (raw_spec or {})
+                )
+                spec.setdefault("metadata", {})["source"] = "vector_similarity"
+                spec["metadata"]["global_rating"] = row["global_rating"]
+                spec["metadata"]["_db_spec_id"] = str(row["id"])
+                results.append(spec)
+
+            return results
+        except Exception as e:
+            logger.debug(f"_get_vector_similar_cards failed: {e}")
+            return []
+
+    # -----------------------------------------------------------------------
+    # Integration E: Redis-tunable exploit ratio
+    # -----------------------------------------------------------------------
+
+    async def _get_exploit_ratio(self) -> float:
+        """Read ora:exploit_ratio from Redis (default 0.7)."""
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            val = await r.get("ora:exploit_ratio")
+            if val:
+                return max(0.0, min(1.0, float(val)))
+        except Exception:
+            pass
+        return 0.7
 
     async def _maybe_inject_world_card(
         self,
@@ -504,6 +613,35 @@ class OraBrain:
                     uc, screen_type="summary", variant=variant
                 )
             return "UIGeneratorAgent", summary_fn, False
+
+        # -----------------------------------------------------------------------
+        # Integration E: Twitter signal 70/30 exploit/explore split
+        # When the user has Twitter signals ingested, use the tunable ratio from
+        # Redis key `ora:exploit_ratio` (default 0.7) to decide serve direction.
+        # -----------------------------------------------------------------------
+        try:
+            from core.redis_client import get_redis as _get_redis_e
+            _r_e = await _get_redis_e()
+            _twitter_signals_raw = await _r_e.get(f"user:{user_model.id}:twitter_signals")
+            if _twitter_signals_raw:
+                _exploit_ratio = await self._get_exploit_ratio()
+                if random.random() < _exploit_ratio:
+                    # Exploit: serve interest-matched content
+                    async def _rec_twitter_exploit(uc, variant="A"):
+                        return await self.recommendation.generate_screen(uc, variant=variant, exploit=True)
+                    logger.info(
+                        f"Ora: Twitter exploit path (ratio={_exploit_ratio:.2f}) for user={user_model.id[:8]}"
+                    )
+                    return "RecommendationAgent", _rec_twitter_exploit, True
+                else:
+                    # Explore: serendipitous content — fall through to underexplored domain/agent
+                    logger.info(
+                        f"Ora: Twitter explore path (ratio={_exploit_ratio:.2f}) for user={user_model.id[:8]}"
+                    )
+                    # Force discovery into an underexplored domain
+                    return "DiscoveryAgent", self.discovery.generate_screen, False
+        except Exception as _te:
+            logger.debug(f"Twitter signal 70/30 check failed: {_te}")
 
         # Explore vs exploit
         exploit = self._should_exploit(user_model)

@@ -281,6 +281,90 @@ class LearnPayload(BaseModel):
     applies_to: list = []
 
 
+# ---------------------------------------------------------------------------
+# Role-Play Simulation Coaching (Integration F)
+# ---------------------------------------------------------------------------
+
+class RolePlayStartRequest(BaseModel):
+    scenario: str  # job_interview | difficult_conversation | sales_pitch | first_date | negotiation
+    context: Optional[str] = None
+
+
+class RolePlayMessageRequest(BaseModel):
+    session_id: str
+    message: str
+
+
+class RolePlayEndRequest(BaseModel):
+    session_id: str
+
+
+@router.post("/roleplay/start")
+async def roleplay_start(
+    payload: RolePlayStartRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Start a new role-play simulation session."""
+    from ora.agents.roleplay_agent import RolePlayAgent
+    brain = get_brain()
+    agent = RolePlayAgent(getattr(brain, '_openai', None))
+    try:
+        result = await agent.start_session(
+            user_id=user_id,
+            scenario=payload.scenario,
+            context=payload.context,
+        )
+        return result
+    except Exception as e:
+        logger.error(f"roleplay_start error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/roleplay/message")
+async def roleplay_message(
+    payload: RolePlayMessageRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Send a message within an active role-play session. Ora stays in character."""
+    from ora.agents.roleplay_agent import RolePlayAgent
+    brain = get_brain()
+    agent = RolePlayAgent(getattr(brain, '_openai', None))
+    try:
+        result = await agent.send_message(
+            session_id=payload.session_id,
+            user_message=payload.message,
+        )
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"roleplay_message error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/roleplay/end")
+async def roleplay_end(
+    payload: RolePlayEndRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """End a role-play session. Returns coaching debrief."""
+    from ora.agents.roleplay_agent import RolePlayAgent
+    brain = get_brain()
+    agent = RolePlayAgent(getattr(brain, '_openai', None))
+    try:
+        result = await agent.end_session(session_id=payload.session_id)
+        if "error" in result:
+            raise HTTPException(status_code=404, detail=result["error"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"roleplay_end error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/learn")
 async def teach_ora(
     payload: LearnPayload,
