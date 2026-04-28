@@ -175,6 +175,72 @@ class OraAutonomyAgent:
             logger.error(f"OraAutonomy product design cycle failed: {e}")
             report["product_design"] = {"error": str(e)}
 
+        # J. Home choice analytics — learn from the directed vs exploratory split
+        try:
+            from core.redis_client import get_redis as _get_redis
+            _r = await _get_redis()
+
+            async def _fetch_ab_events(experiment_id: str, variant: str, days: int = 7) -> list:
+                """Pull all events for a variant from Redis."""
+                from datetime import timedelta
+                key = f"ab:events:{experiment_id}:{variant}"
+                raw_events = await _r.lrange(key, 0, -1)
+                events = []
+                for raw in raw_events:
+                    try:
+                        events.append(json.loads(raw))
+                    except Exception:
+                        pass
+                return events
+
+            # Home choice data
+            know_events   = await _fetch_ab_events("home_session_v1", "know",    days=7)
+            explore_events = await _fetch_ab_events("home_session_v1", "explore", days=7)
+
+            # Intake depth variants
+            deep_events    = await _fetch_ab_events("home_intake_v1", "deep",    days=7)
+            instant_events = await _fetch_ab_events("home_intake_v1", "instant", days=7)
+            one_q_events   = await _fetch_ab_events("home_intake_v1", "one_q",   days=7)
+
+            # Know path A/B
+            know_immediate_events  = await _fetch_ab_events("home_know_v1", "immediate",  days=7)
+            know_clarifying_events = await _fetch_ab_events("home_know_v1", "clarifying", days=7)
+
+            home_lesson = (
+                f"Home choice data (last 7 days): "
+                f"{len(know_events)} directed ('I know') sessions, "
+                f"{len(explore_events)} exploratory ('Show me') sessions. "
+                f"Intake depth breakdown — deep: {len(deep_events)}, "
+                f"instant: {len(instant_events)}, one_q: {len(one_q_events)}. "
+                f"'I know' path variants — immediate: {len(know_immediate_events)}, "
+                f"clarifying: {len(know_clarifying_events)}. "
+                f"Use this split to calibrate recommendation depth and goal-context weighting."
+            )
+
+            # Teach Ora the findings
+            from core.database import execute as _execute
+            await _execute(
+                """
+                INSERT INTO ora_lessons (source, lesson, confidence, applies_to, created_at)
+                VALUES ($1, $2, $3, $4::jsonb, NOW())
+                """,
+                "autonomy_home_analytics",
+                home_lesson,
+                0.80,
+                json.dumps(["home", "feed", "goals", "ab_testing"]),
+            )
+            report["home_analytics"] = {
+                "know": len(know_events),
+                "explore": len(explore_events),
+                "intake_deep": len(deep_events),
+                "intake_instant": len(instant_events),
+                "intake_one_q": len(one_q_events),
+            }
+            logger.info(f"OraAutonomy J: home analytics logged — {home_lesson[:120]}")
+        except Exception as e:
+            logger.error(f"OraAutonomy home analytics failed: {e}")
+            report["home_analytics"] = {"error": str(e)}
+
         # Persist last run metadata to Redis
         try:
             from core.redis_client import get_redis
