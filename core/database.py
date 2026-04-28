@@ -827,6 +827,22 @@ async def run_migrations():
             CREATE INDEX IF NOT EXISTS idx_contributors_total_cp
             ON contributors(total_cp DESC)
         """)
+        # Founding steward columns (idempotent)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS is_founding_steward BOOLEAN DEFAULT FALSE
+        """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS founding_steward_number INTEGER
+        """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS bio TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS avatar_url TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS website TEXT
+        """)
 
         # Individual contributions
         await conn.execute("""
