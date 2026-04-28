@@ -124,6 +124,10 @@ class OraBrain:
         # Context agent — time/calendar signals for content adaptation
         self.context_agent = ContextAgent()
 
+        # WebSpawn — Ora's surface creation engine (explorer/sovereign only)
+        from ora.agents.web_spawn_agent import WebSpawnAgent
+        self.web_spawn = WebSpawnAgent(openai_client=self._openai)
+
         # Dynamic agents loaded from AgentRegistry (spawned/partitioned/merged)
         self._dynamic_agents: Dict[str, Any] = {}
 

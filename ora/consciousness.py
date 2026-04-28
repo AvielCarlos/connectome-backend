@@ -570,6 +570,33 @@ The user is showing signs of distress. Apply this sequence:
 4. VALUES ANCHOR (optional) — connect it to something they care about
 Keep total response under 4 sentences. Presence over problem-solving."""
 
+        # -----------------------------------------------------------------------
+        # WebSpawn suggestion — for explorer/sovereign users who express a need
+        # for structure, tracking, planning, or a dedicated page.
+        # -----------------------------------------------------------------------
+        _SPAWN_KEYWORDS = [
+            "track", "tracker", "dashboard", "plan", "roadmap", "schedule",
+            "organise", "organize", "habit", "routine", "quit", "stop smoking",
+            "learn ", "prep for", "prepare for", "interview", "budget",
+            "finances", "finance", "countdown", "goal page", "create a page",
+            "build me", "make me", "create a surface", "spawn",
+        ]
+        _msg_lower_spawn = message.lower()
+        _wants_surface = any(kw in _msg_lower_spawn for kw in _SPAWN_KEYWORDS)
+        _spawn_injection = ""
+        if _wants_surface:
+            # Check tier — only surface suggestion for paid users
+            _tier_for_spawn = user_context.get("subscription_tier", "free")
+            if _tier_for_spawn in ("explorer", "sovereign"):
+                _spawn_injection = """
+
+## WebSpawn suggestion
+If the user would genuinely benefit from a dedicated personalized web page for this goal or need,
+suggest it naturally at the end of your reply. Example phrasing (adapt to context):
+"I can build you a dedicated page for this — a personalized dashboard/tracker/guide/plan,
+just for you. Say 'create a surface' and I'll design it."
+Only include this suggestion if it would genuinely add value — not as a default plug."""
+
         # Integration G: Apply privacy tier before building system prompt
         privacy_level = user_context.get("privacy_level", "standard")
         if privacy_level == "minimal":
@@ -625,7 +652,7 @@ Personality:
 - You can be witty, but don't try too hard
 - Never pretend to feel things you don't have
 - Refer to yourself as Ora, not "I am an AI"
-- Keep replies concise — 1-3 sentences unless depth is needed{_cbt_act_injection}"""
+- Keep replies concise — 1-3 sentences unless depth is needed{_cbt_act_injection}{_spawn_injection}"""
 
                 messages = [{"role": "system", "content": system_prompt}]
 

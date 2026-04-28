@@ -510,6 +510,34 @@ async def run_migrations():
         """)
 
         # ---------------------------------------------------------------
+        # WebSpawn — Ora-generated web surfaces
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ora_surfaces (
+                id TEXT PRIMARY KEY,
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                surface_type TEXT NOT NULL DEFAULT 'custom',
+                title TEXT NOT NULL,
+                slug TEXT UNIQUE NOT NULL,
+                spec JSONB DEFAULT '{}',
+                github_path TEXT,
+                api_path TEXT,
+                status TEXT DEFAULT 'active',
+                view_count INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ora_surfaces_user_id
+            ON ora_surfaces(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ora_surfaces_status
+            ON ora_surfaces(status, created_at DESC)
+        """)
+
+        # ---------------------------------------------------------------
         # CollectiveIntelligenceAgent tables
         # ---------------------------------------------------------------
 
