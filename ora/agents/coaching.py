@@ -369,7 +369,7 @@ Your coaching is grounded in evidence-based psychology, not motivational fluff.
 
 ### User Context
 - Emotional state: {emotional_state} — {tone_hint}
-- Active goals: {goal_summary}{focus_goal_hint}{streak_hint}{celebration_hint}
+- What they want (I want to...): {goal_summary}{focus_goal_hint}{streak_hint}{celebration_hint}
 - Fulfilment score: {fulfilment:.2f}/1.0
 - Recent screen ratings: {recent_ratings[-5:] if recent_ratings else "no history"}
 - Domain: {domain} — {domain_hint}
