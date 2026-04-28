@@ -530,6 +530,27 @@ async def create_full_backup(identity_only: bool = False) -> str:
     with open(manifest_path, "w") as f:
         json.dump(stats, f, indent=2)
 
+    # Upload identity pack + manifest to Google Drive (best-effort)
+    try:
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from ora.agents.drive_storage import drive as _drive
+        # Upload identity pack
+        identity_pack_path = os.path.join(backup_dir, "ora_identity_pack.json")
+        if os.path.exists(identity_pack_path):
+            with open(identity_pack_path) as _f:
+                _pack = json.load(_f)
+            _drive_id = _drive.save_backup(_pack, "ora_identity")
+            if _drive_id:
+                stats["drive_backup_id"] = _drive_id
+                logger.info(f"create_full_backup: identity pack uploaded to Drive (id={_drive_id})")
+        # Upload manifest
+        with open(manifest_path) as _f:
+            _manifest = json.load(_f)
+        _drive.upload_json(_manifest, f"backup_manifest_{timestamp}.json", "backups")
+    except Exception as _e:
+        logger.warning(f"create_full_backup: Drive upload skipped: {_e}")
+
     # Prune old backups
     prune_old_backups(BACKUP_BASE)
 

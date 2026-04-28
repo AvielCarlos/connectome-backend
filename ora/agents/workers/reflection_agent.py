@@ -71,7 +71,19 @@ class ReflectionAgent(BaseWorkerAgent):
         with open(filepath, "w") as f:
             f.write(reflection)
 
-        # 4. Teach Ora the synthesis as a meta-lesson
+        # 4a. Upload reflection to Google Drive knowledge folder (best-effort)
+        try:
+            import sys as _sys
+            import os as _os
+            _sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))))
+            from ora.agents.drive_storage import drive as _drive
+            _drive_id = _drive.save_reflection(reflection, week)
+            if _drive_id:
+                logger.info(f"ReflectionAgent: reflection uploaded to Drive/knowledge (id={_drive_id})")
+        except Exception as _e:
+            logger.warning(f"ReflectionAgent: Drive upload skipped: {_e}")
+
+        # 4b. Teach Ora the synthesis as a meta-lesson
         await self.teach_ora(
             f"Weekly self-reflection ({week}): I processed {len(lesson_texts)} lessons this week. "
             f"{synthesis} "
