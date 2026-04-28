@@ -413,6 +413,13 @@ Create a JSON discovery card with:
 - category: one of [mindfulness, productivity, relationships, wellness, creativity, learning, finance, health, adventure, social, career, nutrition] — prefer the suggested fresh category
 - affiliate_hint: optional product/service that naturally fits (or null)
 - domain: "{domain}"
+- deep_dive: object with:
+  - why_it_matters: 2-3 sentences on why this matters for human fulfilment
+  - steps: array of 3-4 concrete action steps (strings)
+  - resources: array of 2-3 objects with {{"label": "...", "url": "https://...", "type": "article|book|app|video|tool"}}
+  - stat: one compelling real statistic about this topic (string)
+  - time_to_start: "5 minutes" / "this weekend" / "today" etc.
+  - difficulty: "easy" | "medium" | "challenging"
 
 Return ONLY valid JSON, no markdown."""
 
@@ -421,7 +428,7 @@ Return ONLY valid JSON, no markdown."""
                 model="gpt-4o",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.8,
-                max_tokens=400,
+                max_tokens=900,
                 response_format={"type": "json_object"},
             )
             card_data = json.loads(response.choices[0].message.content)
@@ -511,6 +518,13 @@ Return ONLY valid JSON, no markdown."""
                 "type": "star_rating",
                 "position": "bottom_right",
                 "always_visible": True,
+            },
+            "deep_dive": card.get("deep_dive"),  # rich detail for tap-to-expand
+            "card_data": {
+                "title": card.get("title"),
+                "body": card.get("body"),
+                "category": card.get("category"),
+                "deep_dive": card.get("deep_dive"),
             },
             "metadata": {
                 "agent": self.AGENT_NAME,
