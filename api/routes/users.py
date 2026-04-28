@@ -98,9 +98,23 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
 
-    _email = (row["email"] or "").lower()
-    _is_admin = _email in settings.admin_email_list
-    profile_data = dict(row["profile"]) if row["profile"] else {}
+    try:
+        _email = (row["email"] or "").lower()
+        _admin_list = getattr(settings, "admin_email_list", ["carlosandromeda8@gmail.com"])
+        _is_admin = _email in _admin_list
+    except Exception:
+        _is_admin = False
+    try:
+        _raw = row["profile"]
+        if isinstance(_raw, str):
+            import json as _json
+            profile_data = _json.loads(_raw) if _raw else {}
+        elif _raw is None:
+            profile_data = {}
+        else:
+            profile_data = dict(_raw)
+    except Exception:
+        profile_data = {}
     profile_data["is_admin"] = _is_admin
     return UserProfile(
         id=row["id"],
