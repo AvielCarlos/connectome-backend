@@ -158,7 +158,7 @@ async def get_screen_batch(
 
     # Check subscription tier once
     user_row = await fetchrow(
-        "SELECT subscription_tier FROM users WHERE id = $1", UUID(user_id)
+        "SELECT subscription_tier FROM users WHERE id = $1", str(user_id)
     )
     if not user_row:
         raise HTTPException(status_code=404, detail="User not found")
@@ -264,7 +264,7 @@ async def save_screen_for_later(
             ON CONFLICT (user_id, screen_spec_id)
             DO UPDATE SET saved = TRUE
             """,
-            UUID(user_id),
+            str(user_id),
             screen_uuid,
         )
     except Exception as e:
