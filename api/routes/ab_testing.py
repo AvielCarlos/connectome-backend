@@ -205,3 +205,22 @@ async def get_results(
                 pass
         results[variant] = counts
     return {"experiment_id": experiment_id, "results": results}
+
+
+@router.post("/set-winner/{experiment_id}")
+async def set_winner(experiment_id: str, body: dict, user_id: str = Depends(get_current_user_id)):
+    """Force a specific variant as the winner (admin only)."""
+    r = await get_redis()
+    winner = body.get("winner", "A")
+    if r:
+        await r.set(f"ab:winner:{experiment_id}", winner, ex=7 * 86400)
+    return {"ok": True, "winner": winner}
+
+
+@router.delete("/winner/{experiment_id}")
+async def clear_winner(experiment_id: str, user_id: str = Depends(get_current_user_id)):
+    """Clear forced winner — revert to random assignment."""
+    r = await get_redis()
+    if r:
+        await r.delete(f"ab:winner:{experiment_id}")
+    return {"ok": True}
