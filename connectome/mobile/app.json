@@ -1,13 +1,28 @@
 {
-  "android": {
-    "package": "com.avielandromeda.connectome"
-  },
   "expo": {
+    "name": "Connectome",
+    "slug": "connectome",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "android": {
+      "package": "com.avielandromeda.connectome",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0a"
+      }
+    },
+    "owner": "avielandromeda",
     "extra": {
       "eas": {
         "projectId": "4db51cdf-f373-4043-a073-0dfa67bee34f"
       }
-    },
-    "owner": "avielandromeda"
+    }
   }
 }
