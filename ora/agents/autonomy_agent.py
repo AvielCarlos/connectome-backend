@@ -112,6 +112,16 @@ class OraAutonomyAgent:
         except Exception as e:
             logger.error(f"OraAutonomy daily report failed: {e}")
 
+        # E. Self-improvement cycle
+        try:
+            from ora.agents.self_improvement_agent import SelfImprovementAgent
+            self_agent = SelfImprovementAgent(self._openai, self._telegram_token)
+            improvement_result = await self_agent.run()
+            result["self_improvement"] = improvement_result
+        except Exception as e:
+            logger.error(f"OraAutonomy self-improvement cycle failed: {e}")
+            result["self_improvement"] = {"error": str(e)}
+
         # Persist last run metadata to Redis
         try:
             from core.redis_client import get_redis

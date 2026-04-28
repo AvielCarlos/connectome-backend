@@ -1,8 +1,11 @@
 """
 Ora Autonomy API Routes
 
-POST /api/ora/autonomy/run    — trigger full autonomy cycle (admin only)
-GET  /api/ora/autonomy/status — last run info, current winner, current weights
+POST /api/ora/autonomy/run                      — trigger full autonomy cycle (admin only)
+GET  /api/ora/autonomy/status                   — last run info, current winner, current weights
+GET  /api/ora/autonomy/proposals                — list pending self-improvement proposals (admin only)
+POST /api/ora/autonomy/proposals/{id}/approve   — approve and apply a high-risk proposal
+POST /api/ora/autonomy/proposals/{id}/reject    — reject a proposal
 """
 
 import json
@@ -16,6 +19,8 @@ from api.middleware import get_current_user_id
 from core.database import fetchrow
 from core.redis_client import get_redis
 from uuid import UUID
+
+PROPOSALS_REDIS_KEY = "ora:self_improvement:proposals"
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ora/autonomy", tags=["ora_autonomy"])
@@ -56,6 +61,98 @@ async def trigger_autonomy_run(
     except Exception as e:
         logger.error(f"OraAutonomy: run failed: {e}")
         raise HTTPException(status_code=500, detail=f"Autonomy run failed: {str(e)}")
+
+
+@router.get("/proposals")
+async def list_proposals(
+    user_id: str = Depends(_require_admin),
+) -> Dict[str, Any]:
+    """
+    List all pending self-improvement proposals Ora has generated.
+    High-risk changes (logic rewrites, new routes, DB changes) land here
+    awaiting admin review.
+    """
+    try:
+        r = await get_redis()
+        raw = await r.get(PROPOSALS_REDIS_KEY)
+        proposals = json.loads(raw) if raw else []
+        return {"proposals": list(reversed(proposals)), "count": len(proposals)}
+    except Exception as e:
+        logger.error(f"OraAutonomy: proposals list failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proposals/{proposal_id}/approve")
+async def approve_proposal(
+    proposal_id: str,
+    user_id: str = Depends(_require_admin),
+) -> Dict[str, Any]:
+    """
+    Approve a high-risk proposal — attempts to apply the change via GitHub.
+    """
+    try:
+        r = await get_redis()
+        raw = await r.get(PROPOSALS_REDIS_KEY)
+        proposals: list = json.loads(raw) if raw else []
+
+        target = next((p for p in proposals if p.get("id") == proposal_id), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+
+        from ora.brain import get_brain
+        brain = get_brain()
+        from ora.agents.self_improvement_agent import SelfImprovementAgent
+        agent = SelfImprovementAgent(getattr(brain, "_openai", None))
+
+        # Force to prompt_text for the apply path (admin-approved)
+        target_copy = {**target, "risk": "prompt_text"}
+        applied = await agent._auto_apply(target_copy) if target.get("target_file") else False
+
+        for p in proposals:
+            if p.get("id") == proposal_id:
+                p["status"] = "applied" if applied else "approved_pending"
+                p["approved_by"] = user_id
+                p["approved_at"] = datetime.now(timezone.utc).isoformat()
+
+        await r.set(PROPOSALS_REDIS_KEY, json.dumps(proposals), ex=30 * 24 * 3600)
+        return {"ok": True, "applied": applied, "proposal": target}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"OraAutonomy: approve failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/proposals/{proposal_id}/reject")
+async def reject_proposal(
+    proposal_id: str,
+    user_id: str = Depends(_require_admin),
+) -> Dict[str, Any]:
+    """
+    Reject a self-improvement proposal (removes it from the list).
+    """
+    try:
+        r = await get_redis()
+        raw = await r.get(PROPOSALS_REDIS_KEY)
+        proposals: list = json.loads(raw) if raw else []
+
+        target = next((p for p in proposals if p.get("id") == proposal_id), None)
+        if not target:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+
+        for p in proposals:
+            if p.get("id") == proposal_id:
+                p["status"] = "rejected"
+                p["rejected_by"] = user_id
+                p["rejected_at"] = datetime.now(timezone.utc).isoformat()
+
+        await r.set(PROPOSALS_REDIS_KEY, json.dumps(proposals), ex=30 * 24 * 3600)
+        return {"ok": True, "proposal": target}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"OraAutonomy: reject failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/status")
