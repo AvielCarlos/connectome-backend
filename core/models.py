@@ -46,6 +46,11 @@ class UserProfile(BaseModel):
     created_at: datetime
     last_active: Optional[datetime]
     domain: Optional[DomainType] = None  # active domain focus
+    # DAO / CP fields
+    cp_balance: int = 0
+    total_dao_cp: int = 0
+    contributor_tier: str = "observer"
+    is_founding_steward: bool = False
 
 
 class UserUpdate(BaseModel):

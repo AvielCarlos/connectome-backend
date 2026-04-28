@@ -89,9 +89,13 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
     """Get the current user's profile."""
     row = await fetchrow(
         """
-        SELECT id, email, subscription_tier, fulfilment_score,
-               profile, created_at, last_active
-        FROM users WHERE id = $1
+        SELECT u.id, u.email, u.subscription_tier, u.fulfilment_score,
+               u.profile, u.created_at, u.last_active,
+               c.cp_balance, c.total_dao_cp, c.tier as contributor_tier,
+               c.is_founding_steward
+        FROM users u
+        LEFT JOIN contributors c ON c.user_id = u.id
+        WHERE u.id = $1
         """,
         UUID(user_id),
     )
@@ -116,6 +120,13 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
     except Exception:
         profile_data = {}
     profile_data["is_admin"] = _is_admin
+    
+    # Build contributor data
+    cp_balance = row.get("cp_balance") or 0
+    total_dao_cp = row.get("total_dao_cp") or 0
+    contributor_tier = row.get("contributor_tier") or "observer"
+    is_founding_steward = row.get("is_founding_steward") or False
+    
     return UserProfile(
         id=row["id"],
         email=row["email"],
@@ -125,6 +136,10 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
         profile=profile_data,
         created_at=row["created_at"],
         last_active=row["last_active"],
+        cp_balance=cp_balance,
+        total_dao_cp=total_dao_cp,
+        contributor_tier=contributor_tier,
+        is_founding_steward=is_founding_steward,
     )
 
 
