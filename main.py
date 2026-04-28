@@ -44,7 +44,13 @@ from api.routes import events as events_routes
 from api.routes import ora_autonomy as ora_autonomy_routes
 from api.routes import onboarding as onboarding_routes
 from api.routes import surfaces as surfaces_routes
-from api.routes import services as services_routes
+try:
+    from api.routes import services as services_routes
+    _services_available = True
+except Exception as _services_err:
+    services_routes = None
+    _services_available = False
+    logging.warning(f"Services module unavailable: {_services_err}")
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
 # Configure logging
@@ -238,7 +244,8 @@ app.include_router(integrations_routes.router)
 app.include_router(ora_autonomy_routes.router)
 app.include_router(onboarding_routes.router)
 app.include_router(surfaces_routes.router)
-app.include_router(services_routes.router)
+if _services_available and services_routes:
+    app.include_router(services_routes.router)
 
 
 @app.get("/api/schema")

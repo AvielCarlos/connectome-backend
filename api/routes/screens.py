@@ -130,7 +130,7 @@ async def get_next_screen(
         screen_spec_db_id=db_id,
         screens_today=screens_today,
         daily_limit=daily_limit,
-        is_limited=is_free,
+        is_limited=(tier == "free"),
     )
 
 
