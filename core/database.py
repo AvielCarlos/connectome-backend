@@ -1210,6 +1210,38 @@ async def run_migrations():
                 ON service_orders(user_id)
         """)
 
+        # ---------------------------------------------------------------
+        # Evolutionary A/B Experiments registry (added 2026-04-28)
+        # Tracks experiment lineage, winners, and AI-generated variants
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ab_experiments (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                page TEXT NOT NULL,
+                metric TEXT NOT NULL,
+                variants JSONB NOT NULL,
+                variant_content JSONB,
+                status TEXT DEFAULT 'active',
+                winner TEXT,
+                winner_reason TEXT,
+                confidence FLOAT DEFAULT 0,
+                source TEXT DEFAULT 'manual',
+                parent_experiment TEXT,
+                generation INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                concluded_at TIMESTAMPTZ
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ab_experiments_status
+            ON ab_experiments(status)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ab_experiments_page
+            ON ab_experiments(page)
+        """)
+
         logger.info("Database migrations complete")
 
 

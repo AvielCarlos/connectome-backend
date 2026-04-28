@@ -715,3 +715,87 @@ async def set_experiment_winner(
 
     logger.info(f"Experiment winner set: {experiment} → {winner} (by user {user_id[:8]})")
     return {"ok": True, "experiment": experiment, "winner": winner}
+
+
+# ─── Evolutionary A/B Experiments (DB-backed) ─────────────────────────────────
+
+from ora.agents.experiment_generator import ExperimentGeneratorAgent
+from core.database import fetchrow as db_fetchrow, fetch as db_fetch, execute as db_execute
+
+
+@router.get("/experiments")
+async def list_experiments():
+    """All experiments from DB (evolutionary registry)."""
+    try:
+        rows = await db_fetch("SELECT * FROM ab_experiments ORDER BY created_at DESC LIMIT 100")
+        return {"experiments": [dict(r) for r in rows]}
+    except Exception as e:
+        # Fall back gracefully if DB not ready
+        return {"experiments": [], "error": str(e)}
+
+
+@router.post("/experiments")
+async def create_experiment_endpoint(
+    body: dict,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Dynamically create a new experiment (admin only)."""
+    user = await db_fetchrow("SELECT is_admin FROM users WHERE id = $1", str(user_id))
+    if not user or not user.get('is_admin'):
+        raise HTTPException(403, "Admin required")
+
+    generator = ExperimentGeneratorAgent()
+    exp_id = await generator._create_experiment(
+        name=body.get("name"),
+        page=body.get("page", "global"),
+        metric=body.get("metric", "engagement_rate"),
+        variants=body.get("variants", {}),
+        source="manual"
+    )
+    return {"experiment_id": exp_id}
+
+
+@router.get("/experiments/{experiment_id}/evolution")
+async def get_evolution_tree(experiment_id: str):
+    """Show experiment lineage — walk the parent chain."""
+    chain = []
+    current_id = experiment_id
+    for _ in range(10):  # max 10 generations
+        exp = await db_fetchrow(
+            "SELECT id, name, winner, generation, parent_experiment FROM ab_experiments WHERE id = $1",
+            current_id
+        )
+        if not exp:
+            break
+        chain.append(dict(exp))
+        if not exp['parent_experiment']:
+            break
+        current_id = exp['parent_experiment']
+    return {"evolution_chain": list(reversed(chain))}
+
+
+@router.get("/insights")
+async def get_learned_insights(user_id: str = Depends(get_current_user_id)):
+    """Cross-experiment learned patterns (admin only)."""
+    user = await db_fetchrow("SELECT is_admin FROM users WHERE id = $1", str(user_id))
+    if not user or not user.get('is_admin'):
+        raise HTTPException(403, "Admin required")
+
+    concluded = await db_fetch("""
+        SELECT name, winner, variants, metric, generation
+        FROM ab_experiments WHERE status = 'concluded' AND winner IS NOT NULL
+        ORDER BY concluded_at DESC LIMIT 50
+    """)
+
+    active = await db_fetch("SELECT COUNT(*) as cnt FROM ab_experiments WHERE status = 'active'")
+    generations = await db_fetch("SELECT MAX(generation) as max_gen FROM ab_experiments")
+
+    return {
+        "total_concluded": len(concluded),
+        "active_experiments": active[0]['cnt'] if active else 0,
+        "max_generation_reached": generations[0]['max_gen'] if generations else 0,
+        "recent_winners": [
+            {"name": r['name'], "winner": r['winner'], "metric": r['metric']}
+            for r in concluded[:10]
+        ]
+    }
