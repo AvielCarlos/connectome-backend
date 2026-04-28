@@ -1,0 +1,42 @@
+{
+  "sent": [
+    {
+      "email": "hoangsonww@gmail.com",
+      "name": "Developer",
+      "github": "hoangsonww",
+      "role": "Agentic AI Pipeline Engineer",
+      "subject": "Building an AI that helps people live better \u2014 want in?",
+      "date": "2026-04-27T19:23:03.292248+00:00",
+      "status": "sent"
+    },
+    {
+      "email": "contact@ryjox.com",
+      "name": "Developer",
+      "github": "RyjoxTechnologies",
+      "role": "AI Memory Systems Engineer",
+      "subject": "Open source AI + DAO rewards \u2014 Ascension Technologies",
+      "date": "2026-04-27T19:23:04.526344+00:00",
+      "status": "sent"
+    },
+    {
+      "email": "shibing624@gmail.com",
+      "name": "Developer",
+      "github": "shibing624",
+      "role": "Python AI Framework Engineer",
+      "subject": "Open source AI + DAO rewards \u2014 Ascension Technologies",
+      "date": "2026-04-27T19:23:05.862400+00:00",
+      "status": "sent"
+    },
+    {
+      "email": "rma.mun@proton.me",
+      "name": "Developer",
+      "github": "RMA-MUN",
+      "role": "RAG + FastAPI Engineer",
+      "subject": "We're building Ora \u2014 an AI OS for human fulfilment. Join us.",
+      "date": "2026-04-27T19:23:07.061311+00:00",
+      "status": "sent"
+    }
+  ],
+  "last_run": "2026-04-27T19:23:07.061453+00:00",
+  "total_sent": 4
+}

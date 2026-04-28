@@ -1,0 +1,26 @@
+[
+  {
+    "github_handle": "RMA-MUN",
+    "name": "N.zip",
+    "location": "China",
+    "email_provided": "n3032747608@163.com",
+    "source_thread": "https://github.com/RMA-MUN/LangChain-RAG-FastAPI-Service/issues/2",
+    "first_contact_date": "2026-04-27",
+    "last_interaction": "2026-04-28",
+    "project": "LangChain-RAG-FastAPI-Service + oa-brain",
+    "stack": ["LangChain", "LangGraph", "FastAPI", "Django", "pgvector", "LoRA", "Qwen"],
+    "repo_stars": 88,
+    "top_repos": [
+      "LangChain-RAG-FastAPI-Service (88⭐) — production RAG pipeline",
+      "oa-brain (6⭐) — semantic OA automation with LangGraph + FastAPI + Django",
+      "OnmyojiAuto (22⭐) — automation scripting",
+      "LoRA_Learning — fine-tuning Qwen models"
+    ],
+    "alignment_with_connectome": "HIGH — RAG/memory layer expertise, multi-agent orchestration (LangGraph), FastAPI production patterns. Has shipped exactly the stack Connectome's ContextAgent uses.",
+    "potential_role": ["contributor", "backend engineer", "RAG/memory layer specialist"],
+    "notes": "Based in China — cannot access Telegram (Great Firewall). Prefers email. Expressed strong interest in RAG memory layer and FastAPI backend work. Responded thoughtfully twice. Student. Technically exceptional for their stage.",
+    "follow_up_action": "Avi to email n3032747608@163.com with private access or contribution onboarding info",
+    "dao_fit": true,
+    "flag_to_avi": true
+  }
+]

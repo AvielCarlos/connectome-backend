@@ -1,0 +1,29 @@
+[
+  {
+    "date": "2026-04-27",
+    "funder_id": 1,
+    "funder": "Patrick J. McGovern Foundation",
+    "email_to": "grants@mcgovern.org",
+    "message_id": "19dd144c965170aa",
+    "status": "sent",
+    "follow_up_due": "2026-05-11"
+  },
+  {
+    "date": "2026-04-27",
+    "funder_id": 2,
+    "funder": "Survival and Flourishing Fund",
+    "email_to": "grants@survivalandflourishing.com",
+    "message_id": "19dd144f571cf8dc",
+    "status": "sent",
+    "follow_up_due": "2026-05-11"
+  },
+  {
+    "date": "2026-04-27",
+    "funder_id": 3,
+    "funder": "Bill & Melinda Gates Foundation",
+    "email_to": "gcgh@gatesfoundation.org",
+    "message_id": "19dd145200a36ff5",
+    "status": "sent",
+    "follow_up_due": "2026-05-11"
+  }
+]

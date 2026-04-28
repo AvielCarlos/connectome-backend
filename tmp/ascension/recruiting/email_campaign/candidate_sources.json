@@ -1,0 +1,24 @@
+{
+  "candidates": [
+    {
+      "name": "Aryan Bhardwaj",
+      "email": "aryan.bhardwaj@example.com",
+      "role": "AI/ML Engineer",
+      "source": "GitHub - LangChain contributor",
+      "context": "Built production RAG pipelines with FastAPI",
+      "sent": false
+    }
+  ],
+  "sources_to_search": [
+    "GitHub AI/ML repos with FastAPI + pgvector",
+    "LinkedIn AI engineers open to work",
+    "HackerNews 'Who is hiring' / 'Who wants to be hired'",
+    "Dev.to Python/AI authors",
+    "Twitter/X #buildinpublic AI devs"
+  ],
+  "search_queries": [
+    "site:github.com fastapi pgvector python AI contributor",
+    "site:linkedin.com/in AI engineer open to work Python FastAPI",
+    "site:news.ycombinator.com 'who wants to be hired' AI engineer python"
+  ]
+}

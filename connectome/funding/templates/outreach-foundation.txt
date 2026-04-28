@@ -1,0 +1,42 @@
+Subject: Grant Inquiry — Connectome: AI.OS for Human Fulfilment
+
+Dear [Foundation Name] Team,
+
+I'm writing to introduce Connectome, an AI operating system for human fulfilment that I believe aligns closely with [Foundation Name]'s mission around [SPECIFIC FOCUS AREA].
+
+**The Problem**
+
+Despite unprecedented access to information and technology, rates of purposelessness, anxiety, and disconnection are at historic highs. The missing layer isn't more content — it's a system that genuinely learns who you are and actively guides you toward your own flourishing.
+
+**What We're Building**
+
+Connectome is a personalized AI brain called Ora that learns your goals, values, and engagement patterns, then generates adaptive daily experiences that move you measurably toward fulfilment. Unlike engagement-maximizing apps, we optimize for genuine wellbeing — tracked via a continuous, evolving fulfilment score.
+
+Five specialized agents work in concert: Discovery, Coaching, Recommendation, UI Generator, and Feedback Analyst. The system runs a 50/50 explore/exploit feedback loop, always balancing expanding your horizon with reinforcing what works.
+
+**Why Nonprofit**
+
+When revenue comes from engagement, the incentive is to keep people scrolling — not flourishing. As a nonprofit (currently filing for 501(c)(3) and Canadian charitable status), we are structurally bound to serve user wellbeing. Revenue from a freemium model ($12.99/mo) and aggregate research data funds the mission, not returns.
+
+**Current Status**
+
+The platform is live on Railway with full backend (FastAPI + PostgreSQL + Redis), mobile app in development (Expo/React Native), and all 5 AI agents integrated. We're targeting beta launch Q3 2026.
+
+**The Ask**
+
+We're seeking $250,000–$750,000 in seed grant funding to support:
+- Engineering (2 developers, 12 months)
+- Research and clinical validation
+- Community pilots with 3 cohorts of 500 users each
+- Nonprofit operations and legal setup
+
+I would welcome the opportunity to share our full pitch deck and discuss how Connectome fits within [Foundation Name]'s current funding priorities.
+
+Would you be open to a 20-minute call at your convenience?
+
+Warm regards,
+
+Aviel Carlos Neo Andromeda
+Founder, Connectome
+avi@atdao.org
+Vancouver, BC, Canada
