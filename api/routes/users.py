@@ -8,6 +8,7 @@ import json
 from uuid import UUID
 from datetime import datetime, timezone
 
+from core.config import settings
 from fastapi import APIRouter, HTTPException, status, Depends
 
 from typing import Optional, List
@@ -97,12 +98,16 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
 
+    _email = (row["email"] or "").lower()
+    _is_admin = _email in settings.admin_email_list
+    profile_data = dict(row["profile"]) if row["profile"] else {}
+    profile_data["is_admin"] = _is_admin
     return UserProfile(
         id=row["id"],
         email=row["email"],
         subscription_tier=row["subscription_tier"],
         fulfilment_score=row["fulfilment_score"] or 0.0,
-        profile=dict(row["profile"]) if row["profile"] else {},
+        profile=profile_data,
         created_at=row["created_at"],
         last_active=row["last_active"],
     )
