@@ -268,3 +268,53 @@ async def get_collective_voice(
             "total_users_analyzed": 0,
             "computed_at": None,
         }
+
+
+# ---------------------------------------------------------------------------
+# POST /api/ora/learn — teach Ora a lesson (admin only)
+# ---------------------------------------------------------------------------
+
+class LearnPayload(BaseModel):
+    source: str = "manual"
+    lesson: str
+    confidence: float = 0.85
+    applies_to: list = []
+
+
+@router.post("/learn")
+async def teach_ora(
+    payload: LearnPayload,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Inject a lesson directly into Ora's long-term memory (ora_lessons table)."""
+    import json as _json
+    from core.database import execute as _execute
+    from uuid import UUID as _UUID
+    try:
+        await _execute(
+            """
+            INSERT INTO ora_lessons (source, lesson, confidence, applies_to, created_at)
+            VALUES ($1, $2, $3, $4::jsonb, NOW())
+            """,
+            payload.source,
+            payload.lesson,
+            payload.confidence,
+            _json.dumps(payload.applies_to),
+        )
+        return {"ok": True, "lesson": payload.lesson[:80]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/lessons")
+async def get_ora_lessons(
+    limit: int = 20,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Return Ora's most recent lessons — what she knows and why."""
+    from core.database import fetch as _fetch
+    rows = await _fetch(
+        "SELECT source, lesson, confidence, applies_to, created_at FROM ora_lessons ORDER BY created_at DESC LIMIT $1",
+        limit
+    )
+    return [dict(r) for r in rows]
