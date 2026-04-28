@@ -51,6 +51,13 @@ except Exception as _services_err:
     services_routes = None
     _services_available = False
     logging.warning(f"Services module unavailable: {_services_err}")
+try:
+    from api.routes import executive as executive_routes
+    _executive_available = True
+except Exception as _executive_err:
+    executive_routes = None
+    _executive_available = False
+    logging.warning(f"Executive routes unavailable: {_executive_err}")
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
 # Configure logging
@@ -246,6 +253,8 @@ app.include_router(onboarding_routes.router)
 app.include_router(surfaces_routes.router)
 if _services_available and services_routes:
     app.include_router(services_routes.router)
+if _executive_available and executive_routes:
+    app.include_router(executive_routes.router)
 
 
 @app.get("/api/schema")

@@ -403,3 +403,97 @@ async def get_model_candidates(
         ],
         "total_candidates": len(candidates),
     }
+
+
+@router.get("/growth-metrics")
+async def get_growth_metrics(
+    x_admin_token: str = Header(default=""),
+) -> Dict[str, Any]:
+    """
+    Ora's admin growth metrics endpoint.
+    Used by ora_outreach/sales_optimizer.py to measure app growth
+    and inform Ora's self-improvement loop.
+
+    Returns:
+    - new_users_7d: count of signups in last 7 days
+    - new_paid_7d: count of new paid users in last 7 days
+    - active_users_7d: users with activity in last 7 days
+    - top_goals: most common goal themes (sampled, privacy-safe)
+    - churn_risk: users with no activity in 5+ days (count only)
+    - upgrade_candidates: free users with high engagement (count)
+    """
+    _require_admin(x_admin_token)
+
+    # New signups last 7 days
+    new_users_row = await fetchrow(
+        "SELECT COUNT(*) as count FROM users WHERE created_at > NOW() - INTERVAL '7 days'"
+    )
+    new_users_7d = int(new_users_row["count"]) if new_users_row else 0
+
+    # New paid users last 7 days
+    new_paid_row = await fetchrow(
+        """
+        SELECT COUNT(*) as count FROM users
+        WHERE subscription_tier IN ('explorer', 'sovereign', 'premium', 'paid')
+          AND updated_at > NOW() - INTERVAL '7 days'
+        """
+    )
+    new_paid_7d = int(new_paid_row["count"]) if new_paid_row else 0
+
+    # Active users last 7 days
+    active_row = await fetchrow(
+        "SELECT COUNT(*) as count FROM users WHERE last_active > NOW() - INTERVAL '7 days'"
+    )
+    active_users_7d = int(active_row["count"]) if active_row else 0
+
+    # Top goal themes (title words, privacy-safe aggregate)
+    goal_rows = await fetch(
+        """
+        SELECT title, COUNT(*) as cnt
+        FROM goals
+        WHERE created_at > NOW() - INTERVAL '30 days'
+          AND status = 'active'
+        GROUP BY title
+        ORDER BY cnt DESC
+        LIMIT 10
+        """
+    )
+    top_goals = [
+        {"theme": row["title"][:50], "count": row["cnt"]}
+        for row in goal_rows
+    ]
+
+    # Churn risk: users with no activity in 5+ days but active in last 30
+    churn_row = await fetchrow(
+        """
+        SELECT COUNT(*) as count FROM users
+        WHERE last_active < NOW() - INTERVAL '5 days'
+          AND last_active > NOW() - INTERVAL '30 days'
+        """
+    )
+    churn_risk_count = int(churn_row["count"]) if churn_row else 0
+
+    # Upgrade candidates: free users with >5 feedback entries, active last 7 days
+    upgrade_row = await fetchrow(
+        """
+        SELECT COUNT(DISTINCT u.id) as count
+        FROM users u
+        JOIN feedback f ON f.user_id = u.id
+        WHERE u.subscription_tier NOT IN ('explorer', 'sovereign', 'premium', 'paid')
+          AND u.last_active > NOW() - INTERVAL '7 days'
+        GROUP BY u.id
+        HAVING COUNT(f.id) > 5
+        """
+    )
+    upgrade_candidates = int(upgrade_row["count"]) if upgrade_row else 0
+
+    return {
+        "new_users_7d": new_users_7d,
+        "new_paid_7d": new_paid_7d,
+        "active_users_7d": active_users_7d,
+        "top_goals": top_goals,
+        "churn_risk": churn_risk_count,
+        "upgrade_candidates": upgrade_candidates,
+        "generated_at": __import__('datetime').datetime.utcnow().isoformat(),
+        "note": "All metrics are aggregate counts. No individual user data is returned.",
+    }

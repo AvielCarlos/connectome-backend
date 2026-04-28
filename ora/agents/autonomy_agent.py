@@ -241,6 +241,23 @@ class OraAutonomyAgent:
             logger.error(f"OraAutonomy home analytics failed: {e}")
             report["home_analytics"] = {"error": str(e)}
 
+        # K. Executive Council — CTO health pulse (runs every 6h alongside autonomy)
+        try:
+            from ora.agents.cto_agent import CTOAgent
+            cto = CTOAgent()
+            health = await cto.run_health_check()
+            report["cto_health"] = health
+            if not health.get("healthy"):
+                logger.warning(
+                    f"OraAutonomy K: CTO health check FAILED — "
+                    f"status={health.get('status_code')}, "
+                    f"time={health.get('response_time_s')}s"
+                )
+                # CTO agent will have already alerted Avi via its own send_telegram
+        except Exception as e:
+            logger.error(f"OraAutonomy K: CTO health check failed: {e}")
+            report["cto_health"] = {"healthy": None, "error": str(e)}
+
         # Persist last run metadata to Redis
         try:
             from core.redis_client import get_redis
@@ -250,6 +267,7 @@ class OraAutonomyAgent:
                 "ab_winner": report["ab_winner"],
                 "weight_changes_count": len(report["weight_changes"]),
                 "bugs_fixed_count": len(report["bugs_fixed"]),
+                "cto_health": report.get("cto_health", {}),
             }), ex=7 * 24 * 3600)
         except Exception as e:
             logger.debug(f"OraAutonomy: could not persist last_run: {e}")
