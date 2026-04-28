@@ -101,7 +101,11 @@ class DriveStorage:
             if result.returncode == 0:
                 try:
                     data = json.loads(result.stdout)
-                    file_id = data.get("id", result.stdout.strip())
+                    # gog returns {"file": {"id": ...}} or {"id": ...}
+                    if "file" in data:
+                        file_id = data["file"].get("id", result.stdout.strip())
+                    else:
+                        file_id = data.get("id", result.stdout.strip())
                 except Exception:
                     file_id = result.stdout.strip()
                 logger.info(
@@ -150,7 +154,11 @@ class DriveStorage:
             )
             if result.returncode == 0:
                 try:
-                    file_id = json.loads(result.stdout).get("id", result.stdout.strip())
+                    data = json.loads(result.stdout)
+                    if "file" in data:
+                        file_id = data["file"].get("id", result.stdout.strip())
+                    else:
+                        file_id = data.get("id", result.stdout.strip())
                 except Exception:
                     file_id = result.stdout.strip()
                 logger.info(
