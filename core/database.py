@@ -1189,6 +1189,27 @@ async def run_migrations():
             except Exception:
                 pass
 
+        # ---------------------------------------------------------------
+        # Nea Services — service_orders table
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS service_orders (
+                id TEXT PRIMARY KEY,
+                user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                service_id TEXT NOT NULL,
+                description TEXT NOT NULL,
+                status TEXT DEFAULT 'pending_payment',
+                stripe_session_id TEXT,
+                result TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                delivered_at TIMESTAMPTZ
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_service_orders_user_id
+                ON service_orders(user_id)
+        """)
+
         logger.info("Database migrations complete")
 
 
