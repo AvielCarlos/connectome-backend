@@ -60,7 +60,7 @@ async def _ensure_subscription_row(user_id: str) -> dict:
     """
     row = await fetchrow(
         "SELECT * FROM subscriptions WHERE user_id = $1",
-        UUID(user_id),
+        str(user_id),
     )
     if not row:
         await execute(
@@ -69,11 +69,11 @@ async def _ensure_subscription_row(user_id: str) -> dict:
             VALUES ($1, 'free', 'active')
             ON CONFLICT (user_id) DO NOTHING
             """,
-            UUID(user_id),
+            str(user_id),
         )
         row = await fetchrow(
             "SELECT * FROM subscriptions WHERE user_id = $1",
-            UUID(user_id),
+            str(user_id),
         )
     return dict(row) if row else {"user_id": user_id, "tier": "free", "status": "active"}
 
