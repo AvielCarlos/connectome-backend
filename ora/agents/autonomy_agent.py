@@ -152,6 +152,29 @@ class OraAutonomyAgent:
             logger.error(f"OraAutonomy evolution cycle failed: {e}")
             report["evolution"] = {"error": str(e)}
 
+        # I. Product design cycle (UX research → UI evolution → feature spawn)
+        try:
+            from ora.agents.ux_research_agent import UXResearchAgent
+            from ora.agents.ui_evolution_agent import UIEvolutionAgent
+            from ora.agents.feature_spawn_agent import FeatureSpawnAgent
+
+            ux_agent = UXResearchAgent(self._openai)
+            ui_agent = UIEvolutionAgent(self._openai, self._telegram_token)
+            feature_agent = FeatureSpawnAgent(self._openai, self._telegram_token)
+
+            ux_insights = await ux_agent.analyze()
+            ui_result = await ui_agent.run()
+            feature_result = await feature_agent.run()
+
+            report["product_design"] = {
+                "ux_insights": ux_insights.get("insights", [])[:3],
+                "ui_changes": ui_result.get("applied", []),
+                "feature_proposals": feature_result.get("proposals", []),
+            }
+        except Exception as e:
+            logger.error(f"OraAutonomy product design cycle failed: {e}")
+            report["product_design"] = {"error": str(e)}
+
         # Persist last run metadata to Redis
         try:
             from core.redis_client import get_redis

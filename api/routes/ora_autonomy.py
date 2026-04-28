@@ -467,3 +467,44 @@ async def get_autonomy_status(
     except Exception as e:
         logger.error(f"OraAutonomy: status check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/onboarding/results")
+async def get_onboarding_results(
+    user_id: str = Depends(_require_admin),
+) -> Dict[str, Any]:
+    """Get onboarding A/B test retention results."""
+    try:
+        from ora.agents.onboarding_agent_v2 import OnboardingOptimizationAgent
+        agent = OnboardingOptimizationAgent()
+        results = await agent.analyze_retention()
+        return {"ok": True, "results": results}
+    except Exception as e:
+        logger.error(f"OraAutonomy: onboarding results failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/product/proposals")
+async def get_product_proposals(
+    user_id: str = Depends(_require_admin),
+) -> Dict[str, Any]:
+    """Get pending UI + feature proposals from Ora."""
+    try:
+        r = await get_redis()
+        ui_raw = await r.get("ora:ui_proposals")
+        feature_raw = await r.get("ora:feature_proposals")
+
+        ui_data = json.loads(ui_raw) if ui_raw else {}
+        feature_data = json.loads(feature_raw) if feature_raw else {}
+
+        return {
+            "ok": True,
+            "ui_proposals": ui_data.get("proposals", []),
+            "ui_applied": ui_data.get("applied", []),
+            "ui_issues": ui_data.get("issues", []),
+            "feature_proposals": feature_data.get("proposals", []),
+            "fetched_at": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"OraAutonomy: product proposals failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
