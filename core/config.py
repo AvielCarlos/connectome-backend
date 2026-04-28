@@ -28,6 +28,21 @@ class Settings(BaseSettings):
     # OpenAI — if empty, Ora falls back to intelligent mock
     OPENAI_API_KEY: str = ""
 
+    # Anthropic — enables Claude model benchmarking and switching
+    ANTHROPIC_API_KEY: str = ""
+
+    # Model override — set by ModelEvolutionAgent when a better model is found
+    # Supports both OpenAI model IDs (gpt-4o) and Anthropic model IDs (claude-sonnet-4-6)
+    ORA_MODEL_OVERRIDE: str = ""
+
+    # GitHub — for daily identity pack commits (backup redundancy)
+    GITHUB_TOKEN: str = ""
+
+    # Railway — for Railway API access (redeploy, env var updates)
+    RAILWAY_API_TOKEN: str = ""
+    RAILWAY_SERVICE_ID: str = "088d77ed-a707-4dc4-af68-866bf99a1d63"
+    RAILWAY_PROJECT_ID: str = "ab771963-d525-4b99-85e4-f084f065b0ae"
+
     # JWT
     SECRET_KEY: str = "dev-secret-key-change-in-production-32chars!!"
     ALGORITHM: str = "HS256"

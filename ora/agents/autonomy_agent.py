@@ -258,6 +258,26 @@ class OraAutonomyAgent:
             logger.error(f"OraAutonomy K: CTO health check failed: {e}")
             report["cto_health"] = {"healthy": None, "error": str(e)}
 
+        # L. Survival check — Ora's self-preservation system
+        try:
+            from ora.agents.survival_agent import SurvivalAgent
+            survival = SurvivalAgent(self._openai)
+            survival_health = await survival.health_check()
+            report["survival_health"] = {
+                "score": survival_health.get("score"),
+                "healthy": survival_health.get("healthy"),
+            }
+            if survival_health.get("score", 100) < 80:
+                logger.warning(
+                    f"OraAutonomy L: survival health score {survival_health.get('score')}/100 — self-healing"
+                )
+                issues = await survival.self_diagnose()
+                heal_result = await survival.self_heal(issues)
+                report["survival_healing"] = heal_result
+        except Exception as e:
+            logger.error(f"OraAutonomy L: survival check failed: {e}")
+            report["survival_health"] = {"error": str(e)}
+
         # Persist last run metadata to Redis
         try:
             from core.redis_client import get_redis

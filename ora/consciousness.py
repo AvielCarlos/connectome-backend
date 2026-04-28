@@ -18,6 +18,7 @@ She can:
 
 import json
 import logging
+import os
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone, timedelta
@@ -25,6 +26,16 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import hashlib
+
+
+def _get_active_model() -> str:
+    """
+    Return the active AI model.
+    Can be overridden at runtime via ORA_MODEL_OVERRIDE env var
+    (set by ModelEvolutionAgent when a better model is found).
+    Supports OpenAI model IDs and Anthropic model IDs.
+    """
+    return os.environ.get("ORA_MODEL_OVERRIDE", "gpt-4o")
 
 from core.database import execute, fetch, fetchrow, fetchval
 from core.redis_client import get_redis
@@ -331,7 +342,7 @@ Data from the last 24 hours:
 Write only the reflection paragraph. No preamble."""
 
                 response = await self._openai.chat.completions.create(
-                    model="gpt-4o",
+                    model=_get_active_model(),
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.75,
                     max_tokens=150,
@@ -414,7 +425,7 @@ User's active goals: {[g['title'] for g in goals]}
 Start with "I showed you this because..." and be genuine."""
 
                 response = await self._openai.chat.completions.create(
-                    model="gpt-4o",
+                    model=_get_active_model(),
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.6,
                     max_tokens=180,
@@ -717,7 +728,7 @@ NEVER be pushy. NEVER mention prices unless asked. Let the value speak first. Yo
                 messages.append({"role": "user", "content": message})
 
                 response = await self._openai.chat.completions.create(
-                    model="gpt-4o",
+                    model=_get_active_model(),
                     messages=messages,
                     temperature=0.75,
                     max_tokens=300,
@@ -1127,7 +1138,7 @@ Format: Start with "Hi." Then 1-2 sentences about what you've actually observed.
 End with an invitation. Be genuine, warm, not sycophantic."""
 
                 response = await self._openai.chat.completions.create(
-                    model="gpt-4o",
+                    model=_get_active_model(),
                     messages=[{"role": "user", "content": prompt}],
                     temperature=0.8,
                     max_tokens=100,
@@ -1196,7 +1207,7 @@ End with an invitation. Be genuine, warm, not sycophantic."""
 
         return {
             "identity": ORA_IDENTITY,
-            "current_model": "gpt-4o" if self._openai else "mock",
+            "current_model": _get_active_model() if self._openai else "mock",
             "total_decisions": total_decisions,
             "users_served": int(users_served),
             "avg_fulfilment_score": round(float(avg_fulfilment), 3),
