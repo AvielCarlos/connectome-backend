@@ -50,7 +50,7 @@ export default function OraScreen() {
       const oraMsg: DisplayMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: reply || 'I'm here — tell me more.',
+        content: reply || "I'm here \u2014 tell me more.",
       };
       setMessages((prev) => [...prev, oraMsg]);
     } catch {
