@@ -10,11 +10,13 @@ Endpoints:
   DELETE /api/users/integrations/drive         — disconnect Drive (revoke + delete docs)
 """
 
+import asyncio
+import json
 import logging
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from api.middleware import get_current_user_id
@@ -31,6 +33,10 @@ class DrivePrivacyUpdate(BaseModel):
 
 
 VALID_PRIVACY_LEVELS = {"none", "goals_only", "full"}
+
+
+class TwitterIngestRequest(BaseModel):
+    twitter_handle: str  # e.g. "@elonmusk" or "elonmusk"
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
@@ -170,3 +176,74 @@ async def disconnect_drive(
     # Delegate to google_auth route logic
     from api.routes.google_auth import drive_disconnect as _disconnect
     return await _disconnect(user_id=user_id)
+
+
+# ─── Twitter/X Signal Ingestion (Integration E) ──────────────────────────────────
+
+
+@router.post("/integrations/twitter")
+async def ingest_twitter(
+    body: TwitterIngestRequest,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Trigger Twitter/X likes ingestion for the current user.
+    Runs as a background task — returns immediately with a 202 Accepted.
+    Poll GET /api/users/integrations/twitter/status to check completion.
+
+    Body: {"twitter_handle": "@username"}
+    """
+    handle = body.twitter_handle.strip()
+    if not handle:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="twitter_handle is required",
+        )
+
+    async def _run_ingestion():
+        try:
+            from ora.brain import get_brain
+            from ora.agents.twitter_agent import TwitterSignalAgent
+            brain = get_brain()
+            agent = TwitterSignalAgent(openai_client=brain._openai)
+            await agent.ingest_twitter_signals(user_id=user_id, twitter_handle=handle)
+        except Exception as e:
+            logger.error(f"Twitter ingestion background task failed for user {user_id[:8]}: {e}", exc_info=True)
+
+    background_tasks.add_task(_run_ingestion)
+
+    return {
+        "ok": True,
+        "status": "ingestion_started",
+        "twitter_handle": handle,
+        "message": "Twitter signals are being ingested in the background. Poll /status to check.",
+    }
+
+
+@router.get("/integrations/twitter/status")
+async def twitter_status(
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Return the Twitter signal ingestion status for the current user.
+    Also surfaces the discovered topics + interests if ingestion is complete.
+    """
+    try:
+        from core.redis_client import get_redis
+        r = await get_redis()
+
+        status_raw = await r.get(f"user:{user_id}:twitter_ingestion_status")
+        signals_raw = await r.get(f"user:{user_id}:twitter_signals")
+
+        ingestion_status = json.loads(status_raw) if status_raw else {"status": "not_started"}
+        signals = json.loads(signals_raw) if signals_raw else None
+
+        return {
+            "ok": True,
+            "ingestion": ingestion_status,
+            "signals": signals,
+        }
+    except Exception as e:
+        logger.warning(f"Twitter status check failed for user {user_id[:8]}: {e}")
+        return {"ok": True, "ingestion": {"status": "unknown"}, "signals": None}
