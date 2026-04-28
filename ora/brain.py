@@ -134,6 +134,45 @@ class OraBrain:
         # Tournament mode: enabled by default
         self.tournament_mode: bool = True
 
+        # Load weights from Redis on startup (non-blocking best-effort)
+        import asyncio as _asyncio
+        try:
+            _asyncio.get_event_loop().create_task(self.reload_weights())
+        except RuntimeError:
+            pass  # No running loop at import time — weights load lazily
+
+    # -----------------------------------------------------------------------
+    # Redis Weight Loading
+    # -----------------------------------------------------------------------
+
+    async def reload_weights(self) -> None:
+        """
+        Check Redis key `ora:agent_weights` and override _base_weights if found.
+        Called on startup and after the autonomy agent updates weights.
+        """
+        try:
+            from core.redis_client import get_redis
+            import json as _json
+            r = await get_redis()
+            weights_raw = await r.get("ora:agent_weights")
+            if weights_raw:
+                weights = _json.loads(weights_raw)
+                # Validate keys before applying
+                valid_keys = set(self._base_weights.keys())
+                loaded_keys = set(weights.keys())
+                if loaded_keys.intersection(valid_keys):
+                    # Merge: only update keys we know about
+                    for k in valid_keys:
+                        if k in weights:
+                            self._base_weights[k] = float(weights[k])
+                    # Re-normalize
+                    total = sum(self._base_weights.values())
+                    if total > 0:
+                        self._base_weights = {k: v / total for k, v in self._base_weights.items()}
+                    logger.info(f"OraBrain: weights loaded from Redis: {self._base_weights}")
+        except Exception as e:
+            logger.debug(f"OraBrain.reload_weights: {e}")
+
     # -----------------------------------------------------------------------
     # Meta-Agent: Dynamic Card Weight Tuning
     # -----------------------------------------------------------------------
@@ -1410,6 +1449,9 @@ async def init_brain():
     global _brain
     _brain = OraBrain()
     logger.info("Ora brain initialized")
+
+    # Load Redis weights immediately on startup
+    await _brain.reload_weights()
 
     # Start WorldAgent background refresh loop
     asyncio.create_task(_brain.world.refresh_loop())

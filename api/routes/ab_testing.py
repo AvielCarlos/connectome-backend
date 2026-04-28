@@ -153,6 +153,30 @@ async def track_event(
     return {"ok": True}
 
 
+@router.get("/winner/{experiment_id}")
+async def get_experiment_winner(
+    experiment_id: str,
+):
+    """
+    Return the server-side winner for an experiment, if one has been promoted.
+    Returns {"winner": "B"} or {"winner": null}.
+    No auth required — read-only, used by LandingRouter on the frontend.
+    """
+    redis = await get_redis()
+    try:
+        winner_raw = await redis.get(f"ab:winner:{experiment_id}")
+        winner = winner_raw if isinstance(winner_raw, str) else (
+            winner_raw.decode() if winner_raw else None
+        )
+        # Validate it's a known variant
+        if winner and winner not in VARIANTS:
+            winner = None
+        return {"winner": winner}
+    except Exception as e:
+        logger.warning(f"get_experiment_winner failed for {experiment_id}: {e}")
+        return {"winner": None}
+
+
 @router.get("/results/{experiment_id}")
 async def get_results(
     experiment_id: str,

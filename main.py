@@ -41,6 +41,7 @@ from api.routes import ora_health as ora_health_routes
 from api.routes import google_auth as google_auth_routes
 from api.routes import integrations as integrations_routes
 from api.routes import events as events_routes
+from api.routes import ora_autonomy as ora_autonomy_routes
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
 # Configure logging
@@ -231,6 +232,7 @@ app.include_router(drive_routes.router)
 app.include_router(ora_health_routes.router)
 app.include_router(google_auth_routes.router)
 app.include_router(integrations_routes.router)
+app.include_router(ora_autonomy_routes.router)
 
 
 @app.get("/api/schema")
