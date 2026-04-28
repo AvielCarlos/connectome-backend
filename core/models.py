@@ -39,6 +39,7 @@ class TokenResponse(BaseModel):
 class UserProfile(BaseModel):
     id: UUID
     email: Optional[str]
+    is_admin: bool = False
     subscription_tier: str
     fulfilment_score: float
     profile: Dict[str, Any]
