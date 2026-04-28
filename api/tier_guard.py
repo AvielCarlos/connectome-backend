@@ -42,6 +42,16 @@ class TierLimitExceeded(Exception):
 
 async def get_user_tier(user_id: str) -> str:
     """Return the user's current subscription tier."""
+    # Admin bypass — admins get sovereign tier unlimited
+    try:
+        from core.config import settings
+        from core.database import fetchrow as _fetchrow
+        from uuid import UUID as _UUID
+        _row = await _fetchrow("SELECT email FROM users WHERE id = $1", _UUID(user_id))
+        if _row and (_row["email"] or "").lower() in settings.admin_email_list:
+            return "sovereign"
+    except Exception:
+        pass
     # Check new subscriptions table first (Stripe-managed)
     sub_row = await fetchrow(
         "SELECT tier, status FROM subscriptions WHERE user_id = $1",
