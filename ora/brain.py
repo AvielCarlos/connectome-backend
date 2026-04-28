@@ -61,6 +61,8 @@ from ora.consciousness import OraConsciousness
 from ora.content_quality import content_quality_check
 from ora.agents.context_agent import ContextAgent
 from ora.agent_registry import AgentRegistry
+from ora.agents.goal_flow_agent import GoalFlowAgent, get_goal_flow_agent
+from ora.agents.recommendation_engine import RecommendationEngine, get_recommendation_engine
 
 # Module-level alias so OraBrain code can call _content_quality_check(spec)
 _content_quality_check = content_quality_check
@@ -127,6 +129,12 @@ class OraBrain:
         # WebSpawn — Ora's surface creation engine (explorer/sovereign only)
         from ora.agents.web_spawn_agent import WebSpawnAgent
         self.web_spawn = WebSpawnAgent(openai_client=self._openai)
+
+        # Goal Flow Engine — dynamic, adaptive goal achievement cards
+        self.goal_flow = GoalFlowAgent(openai_client=self._openai)
+
+        # Vector Recommendation Engine — TikTok-style two-tower recommendation
+        self.rec_engine = RecommendationEngine(openai_client=self._openai)
 
         # Dynamic agents loaded from AgentRegistry (spawned/partitioned/merged)
         self._dynamic_agents: Dict[str, Any] = {}
@@ -468,12 +476,72 @@ class OraBrain:
             except Exception:
                 break
 
+        # -----------------------------------------------------------------------
+        # Goal Flow Injection: every 5th screen, inject a goal-flow card if user
+        # has an active goal. The dice roll decides:
+        #   20% chance → goal flow card (requires active goal)
+        #   60% chance → vector-recommended card (requires user embedding)
+        #   20% chance → freshly generated card (normal path, already done above)
+        # -----------------------------------------------------------------------
+        _goal_dice = random.random()
+        _goal_injection_active = screens_today > 0 and (screens_today % 5 == 0)
+
+        if _goal_injection_active and _goal_dice < 0.20:
+            try:
+                goal_card = await self.goal_flow.inject_into_feed(user_id, user_context)
+                if goal_card:
+                    spec_dict = goal_card
+                    agent_name = "GoalFlowAgent"
+                    logger.info(f"Ora: goal flow injection for user={user_id[:8]} screen#{screens_today}")
+            except Exception as _gfe:
+                logger.debug(f"Ora: goal flow injection failed: {_gfe}")
+
+        elif not _use_vector and not should_interview and _goal_dice < 0.80:
+            # Vector recommendation: pull top-K card IDs and try to serve one
+            try:
+                location = (user_context or {}).get("city", "")
+                _rec_ids = await self.rec_engine.get_recommended_cards(
+                    user_id, count=5, location=location or None
+                )
+                if _rec_ids:
+                    # Try to fetch the first recommended card spec from DB
+                    from uuid import UUID as _RUUID
+                    for _rec_id in _rec_ids:
+                        try:
+                            _rec_row = await fetchrow(
+                                "SELECT spec, agent_type FROM screen_specs WHERE id = $1::uuid",
+                                _RUUID(_rec_id),
+                            )
+                            if _rec_row and _rec_row["spec"]:
+                                _rec_spec = _rec_row["spec"]
+                                if isinstance(_rec_spec, str):
+                                    import json as _json
+                                    _rec_spec = _json.loads(_rec_spec)
+                                # Give it a fresh screen_id to avoid dedup collision
+                                _rec_spec["screen_id"] = str(uuid.uuid4())
+                                _rec_spec["domain"] = domain
+                                spec_dict = _rec_spec
+                                agent_name = f"VectorRec:{_rec_row['agent_type']}"
+                                logger.debug(f"Ora: vector rec served card {_rec_id[:8]} for user={user_id[:8]}")
+                                break
+                        except Exception:
+                            continue
+            except Exception as _vre:
+                logger.debug(f"Ora: vector recommendation failed: {_vre}")
+
         # Track shown screen to user (duplicate prevention)
         spec_id_key = spec_dict.get("screen_id", screen_id)
         await self._mark_screen_shown(user_id, spec_id_key)
 
         # Store in DB (with domain)
         db_id = await self._store_screen_spec(spec_dict, agent_name, domain)
+
+        # Fire-and-forget: embed new card into card_popularity (explore pool)
+        try:
+            _embed_card_id = db_id or spec_id_key
+            asyncio.create_task(self.rec_engine.embed_new_card(_embed_card_id, spec_dict))
+        except Exception:
+            pass
 
         # Increment consciousness decision counter; reflect every 100 decisions
         try:
@@ -1275,6 +1343,22 @@ class OraBrain:
                     await update_domain_weights(user_id, screen_domain, rating)
                 except Exception as _de:
                     logger.debug(f"Domain weight update failed: {_de}")
+
+        # 5b. Vector recommendation engine: update card popularity + user interest vector
+        if rating and screen_spec_id:
+            try:
+                asyncio.create_task(
+                    self.rec_engine.update_card_popularity(screen_spec_id, float(rating), user_id)
+                )
+            except Exception as _cpe:
+                logger.debug(f"Card popularity update failed: {_cpe}")
+            if rating >= 4:
+                try:
+                    asyncio.create_task(
+                        self.rec_engine.update_user_embedding(user_id, screen_spec_id, float(rating))
+                    )
+                except Exception as _uee:
+                    logger.debug(f"User vector embedding update failed: {_uee}")
 
         # 6. Run feedback analyst
         insight = await self.feedback_analyst.process_feedback(

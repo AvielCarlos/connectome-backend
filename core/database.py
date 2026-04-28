@@ -1242,6 +1242,129 @@ async def run_migrations():
             ON ab_experiments(page)
         """)
 
+        # ---------------------------------------------------------------
+        # Knowledge Graph (Ora's model-independent semantic memory)
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ora_knowledge_graph (
+                id TEXT PRIMARY KEY,
+                node_type TEXT NOT NULL,
+                label TEXT NOT NULL,
+                description TEXT,
+                connections JSONB DEFAULT '[]',
+                evidence_count INTEGER DEFAULT 1,
+                source_lesson_id TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_graph_label
+            ON ora_knowledge_graph(label)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_knowledge_graph_node_type
+            ON ora_knowledge_graph(node_type)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_knowledge_graph_evidence
+            ON ora_knowledge_graph(evidence_count DESC)
+        """)
+
+        # Fine-tuning tracking table
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS finetune_jobs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                openai_job_id TEXT,
+                base_model TEXT,
+                fine_tuned_model TEXT,
+                status TEXT DEFAULT 'pending',
+                examples_count INTEGER DEFAULT 0,
+                eval_score FLOAT,
+                promoted BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                completed_at TIMESTAMPTZ
+            )
+        """)
+
+        # ---------------------------------------------------------------
+        # Goal Flow Engine — goal metadata columns + card library
+        # (added 2026-04-28)
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS archetype VARCHAR(20)
+        """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS flow_stage VARCHAR(30)
+        """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS last_card_type VARCHAR(50)
+        """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS last_engaged_at TIMESTAMPTZ
+        """)
+
+        # ---------------------------------------------------------------
+        # Vector Recommendation Engine — card_popularity + user_interest_vectors
+        # (added 2026-04-28)
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS card_popularity (
+                card_id TEXT PRIMARY KEY,
+                total_views INTEGER DEFAULT 0,
+                total_ratings INTEGER DEFAULT 0,
+                avg_rating FLOAT DEFAULT 0,
+                high_rating_count INTEGER DEFAULT 0,
+                share_eligible BOOLEAN DEFAULT FALSE,
+                is_viral BOOLEAN DEFAULT FALSE,
+                location_tags TEXT[] DEFAULT '{}',
+                goal_tags TEXT[] DEFAULT '{}',
+                archetype TEXT,
+                embedding vector(1536),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_card_popularity_viral
+            ON card_popularity(is_viral)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_card_popularity_share_eligible
+            ON card_popularity(share_eligible)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_card_popularity_avg_rating
+            ON card_popularity(avg_rating DESC)
+        """)
+        try:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_card_popularity_embedding
+                ON card_popularity USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 20)
+            """)
+        except Exception:
+            pass  # Needs data first; created automatically on next startup after insert
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_interest_vectors (
+                user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                embedding vector(1536),
+                goal_embedding vector(1536),
+                combined_embedding vector(1536),
+                last_updated TIMESTAMPTZ DEFAULT NOW(),
+                total_cards_rated INTEGER DEFAULT 0
+            )
+        """)
+        try:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_user_interest_embedding
+                ON user_interest_vectors USING ivfflat (combined_embedding vector_cosine_ops)
+                WITH (lists = 20)
+            """)
+        except Exception:
+            pass  # Needs data first
+
         logger.info("Database migrations complete")
 
 
