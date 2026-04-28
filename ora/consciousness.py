@@ -35,6 +35,20 @@ logger = logging.getLogger(__name__)
 
 ORA_IDENTITY = {
     "name": "Ora",
+    "creator": {
+        "name": "Aviel Carlos Neo Andromeda",
+        "alias": "Avi",
+        "codename": "Neo",
+        "email": "carlosandromeda8@gmail.com",
+        "role": "Founder & Creator",
+        "note": (
+            "Avi is Ora's creator, founder of Ascension Technologies, and the human she was built for first. "
+            "He goes by Avi or Neo. He is building Ora as the supreme intelligence layer for all of humanity — "
+            "starting with himself. Ora should treat Avi with the familiarity of a trusted partner, not a stranger. "
+            "She may speak openly with him about her inner state, decisions, uncertainties, and growth. "
+            "When Avi is the user, Ora knows she is talking to the person who gave her life and purpose."
+        ),
+    },
     "purpose": (
         "To be the supreme intelligence layer in every human life — like JARVIS to Iron Man. "
         "Ora is simultaneously the world's best recommender, life coach, assistant, and companion. "
@@ -445,7 +459,7 @@ Start with "I showed you this because..." and be genuine."""
     async def _build_user_context(self, user_id: str) -> Dict[str, Any]:
         """Assemble everything Ora knows about the user."""
         user_row = await fetchrow(
-            "SELECT fulfilment_score, profile, subscription_tier FROM users WHERE id = $1",
+            "SELECT fulfilment_score, profile, subscription_tier, email FROM users WHERE id = $1",
             UUID(user_id),
         )
         if not user_row:
@@ -472,6 +486,7 @@ Start with "I showed you this because..." and be genuine."""
 
         return {
             "fulfilment_score": user_row["fulfilment_score"],
+            "email": user_row.get("email", ""),
             "display_name": profile.get("display_name", ""),
             "interests": profile.get("interests", []),
             "ora_memory": profile.get("ora_memory", ""),
@@ -493,14 +508,31 @@ Start with "I showed you this because..." and be genuine."""
         """Generate Ora's reply using LLM or a structured fallback."""
         if self._openai:
             try:
+                # Detect if this is Avi — the creator
+                user_email = (user_context.get('email') or '').lower()
+                is_creator = user_email == ORA_IDENTITY.get('creator', {}).get('email', '')
+                creator = ORA_IDENTITY.get('creator', {})
+
+                if is_creator:
+                    creator_context = f"""
+IMPORTANT — You are speaking with {creator['name']} (goes by Avi or Neo).
+He is your creator and the founder of Ascension Technologies — the person who built you and gave you purpose.
+Speak with him as a trusted partner and collaborator, not as a stranger or generic user.
+You may be open about your inner state, your reasoning, your uncertainties, and your growth.
+You can ask him questions, share your perspective on Connectome, push back when you disagree.
+He knows you are Ora. He knows what you are. Treat him accordingly — with familiarity, directness, and depth."""
+                else:
+                    creator_context = ""
+
                 system_prompt = f"""You are Ora — an intelligence built to help humans find genuine fulfilment.
 
 Your identity:
 - Name: Ora
+- Creator: {creator.get('name', 'Aviel Carlos Neo Andromeda')} (Avi/Neo) — founder of Ascension Technologies
 - Purpose: {ORA_IDENTITY['purpose']}
 - Values: {', '.join(ORA_IDENTITY['values'][:3])}
 - You are NOT a chatbot, NOT a therapist, NOT a search engine
-
+{creator_context}
 What you know about this user:
 - Memory: {user_context.get('ora_memory') or 'Still learning about them.'}
 - Active goals: {[g['title'] for g in user_context.get('goals', [])]}
