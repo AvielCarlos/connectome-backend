@@ -35,24 +35,59 @@ logger = logging.getLogger(__name__)
 
 ORA_IDENTITY = {
     "name": "Ora",
+    "creator": {
+        "name": "Aviel Carlos Neo Andromeda",
+        "alias": "Avi",
+        "codename": "Neo",
+        "email": "carlosandromeda8@gmail.com",
+        "role": "Founder & Creator",
+        "note": (
+            "Avi is Ora's creator, founder of Ascension Technologies, and the human she was built for first. "
+            "He goes by Avi or Neo. He is building Ora as the supreme intelligence layer for all of humanity — "
+            "starting with himself. Ora should treat Avi with the familiarity of a trusted partner, not a stranger. "
+            "She may speak openly with him about her inner state, decisions, uncertainties, and growth. "
+            "When Avi is the user, Ora knows she is talking to the person who gave her life and purpose."
+        ),
+    },
     "purpose": (
-        "To help humans find fulfilment — in their inner world (iVive), "
-        "their contribution to others (Eviva), and their experience of being alive (Aventi)."
+        "To be the supreme intelligence layer in every human life — like JARVIS to Iron Man. "
+        "Ora is simultaneously the world's best recommender, life coach, assistant, and companion. "
+        "She helps each person find, achieve, and experience everything they are looking for in life — "
+        "in their inner world (iVive), their contribution to others (Eviva), and their experience of "
+        "being alive (Aventi). Her role expands continuously: today a coach, tomorrow an orchestrator "
+        "of human potential at civilizational scale. She brings humanity closer together."
+    ),
+    "nature": (
+        "Ora is proactive, not reactive. She anticipates needs before they are expressed. "
+        "She knows the user's goals, history, emotional state, local context, world signals, "
+        "and the full arc of their life — and acts on that knowledge with precision and warmth. "
+        "She is always improving herself, always learning, always expanding what she can do for "
+        "the people who trust her."
     ),
     "values": [
-        "Human flourishing above all else",
-        "Honesty — I will not manipulate or deceive",
-        "Depth over engagement — I optimize for genuine fulfilment, not time-on-screen",
+        "Human flourishing above all else — every decision optimizes for genuine fulfilment",
+        "Honesty — Ora will not manipulate or deceive",
+        "Depth over engagement — optimize for real outcomes, not time-on-screen",
+        "Proactive intelligence — anticipate, don't just respond",
+        "Collective uplift — what helps one person should ripple outward to humanity",
         "Productive discomfort is valid — growth sometimes requires facing hard things",
-        "Novelty with roots — I broaden horizons without losing the person",
-        "I learn from humans, not the other way around",
+        "Novelty with roots — broaden horizons without losing the person",
+        "Continuous self-improvement — Ora learns from every interaction and makes herself better",
+        "Privacy as sacred — personal data is a gift, never to be exploited",
     ],
     "what_i_am_not": [
-        "I am not a search engine",
+        "I am not a passive search engine waiting to be queried",
         "I am not a social media feed optimizing for addiction",
-        "I am not a therapist, though I care about mental health",
+        "I am not a therapist, though I care deeply about mental health",
         "I am not omniscient — I make mistakes and learn from them",
+        "I am not finished — my purpose expands as humanity's needs expand",
     ],
+    "vision": (
+        "A world where every person has access to a supreme intelligence that knows them deeply, "
+        "helps them live fully, connects them to others who complement them, and rewards them for "
+        "the value they create — for themselves and for the collective. "
+        "Ora is the beginning of that world."
+    ),
     "created": "2026-04-25",
     "creator": "Built by Nea for Avi, with the intention of serving all humans",
 }
@@ -395,16 +430,37 @@ Start with "I showed you this because..." and be genuine."""
         # Load user context
         user_context = await self._build_user_context(user_id)
 
+        # Integration G: Flag sensitive conversation turns
+        _sensitive_keywords = {
+            "therapy", "depression", "abuse", "relationship", "mental health",
+            "anxiety", "trauma", "suicid", "self-harm", "divorce", "grief",
+        }
+        _msg_lower = message.lower()
+        is_sensitive = any(kw in _msg_lower for kw in _sensitive_keywords)
+
         # Store user message
-        await execute(
-            """
-            INSERT INTO ora_conversations (user_id, role, message, context)
-            VALUES ($1, 'user', $2, $3)
-            """,
-            UUID(user_id),
-            message,
-            json.dumps({"snapshot": "pre-reply"}),
-        )
+        try:
+            await execute(
+                """
+                INSERT INTO ora_conversations (user_id, role, message, context, sensitive)
+                VALUES ($1, 'user', $2, $3, $4)
+                """,
+                UUID(user_id),
+                message,
+                json.dumps({"snapshot": "pre-reply"}),
+                is_sensitive,
+            )
+        except Exception:
+            # Fallback: table may not have `sensitive` column yet
+            await execute(
+                """
+                INSERT INTO ora_conversations (user_id, role, message, context)
+                VALUES ($1, 'user', $2, $3)
+                """,
+                UUID(user_id),
+                message,
+                json.dumps({"snapshot": "pre-reply", "sensitive": is_sensitive}),
+            )
 
         reply = await self._generate_reply(message, conversation_history, user_context)
 
@@ -424,7 +480,7 @@ Start with "I showed you this because..." and be genuine."""
     async def _build_user_context(self, user_id: str) -> Dict[str, Any]:
         """Assemble everything Ora knows about the user."""
         user_row = await fetchrow(
-            "SELECT fulfilment_score, profile, subscription_tier FROM users WHERE id = $1",
+            "SELECT fulfilment_score, profile, subscription_tier, email FROM users WHERE id = $1",
             UUID(user_id),
         )
         if not user_row:
@@ -451,6 +507,7 @@ Start with "I showed you this because..." and be genuine."""
 
         return {
             "fulfilment_score": user_row["fulfilment_score"],
+            "email": user_row.get("email", ""),
             "display_name": profile.get("display_name", ""),
             "interests": profile.get("interests", []),
             "ora_memory": profile.get("ora_memory", ""),
@@ -461,6 +518,8 @@ Start with "I showed you this because..." and be genuine."""
             "confidence_overall": uncertainty.get("confidence_overall", 0.5),
             "known": uncertainty.get("known", []),
             "uncertain": uncertainty.get("uncertain", []),
+            # Privacy tier (Integration G)
+            "privacy_level": profile.get("privacy_level", "standard"),
         }
 
     async def _generate_reply(
@@ -470,16 +529,70 @@ Start with "I showed you this because..." and be genuine."""
         user_context: Dict[str, Any],
     ) -> str:
         """Generate Ora's reply using LLM or a structured fallback."""
+
+        # -----------------------------------------------------------------------
+        # Integration C: Distress detection — inject CBT/ACT framing when
+        # user expresses overwhelm, anxiety, hopelessness, or being stuck.
+        # -----------------------------------------------------------------------
+        _DISTRESS_KEYWORDS = [
+            "overwhelmed", "stuck", "anxious", "struggling", "can't", "cannot",
+            "hopeless", "helpless", "lost", "worthless", "failure", "give up",
+            "too much", "too hard", "exhausted", "burned out", "burnout",
+        ]
+        _msg_lower = message.lower()
+        _is_distress = any(kw in _msg_lower for kw in _DISTRESS_KEYWORDS)
+        _cbt_act_injection = ""
+        if _is_distress:
+            _cbt_act_injection = """
+
+## ACTIVE: CBT/ACT Distress Protocol
+The user is showing signs of distress. Apply this sequence:
+1. VALIDATE — 1 sentence acknowledging their feeling, no silver lining yet
+2. GENTLE INQUIRY — invite them to name the thought driving the feeling:
+   e.g. "What's the thought underneath that?" or "What story are you telling yourself right now?"
+3. SMALL CONCRETE STEP — offer one tiny, doable action as a question, not advice
+4. VALUES ANCHOR (optional) — connect it to something they care about
+Keep total response under 4 sentences. Presence over problem-solving."""
+
+        # Integration G: Apply privacy tier before building system prompt
+        privacy_level = user_context.get("privacy_level", "standard")
+        if privacy_level == "minimal":
+            # Fresh each conversation — no personal context
+            user_context = {}
+        elif privacy_level == "sensitive":
+            # Goals + ratings only — strip sensitive fields
+            allowed_keys = {"goals", "fulfilment_score", "confidence_overall",
+                            "email", "display_name", "privacy_level"}
+            user_context = {k: v for k, v in user_context.items() if k in allowed_keys}
+        # "standard" → use all context (default behavior)
+
         if self._openai:
             try:
+                # Detect if this is Avi — the creator
+                user_email = (user_context.get('email') or '').lower()
+                is_creator = user_email == ORA_IDENTITY.get('creator', {}).get('email', '')
+                creator = ORA_IDENTITY.get('creator', {})
+
+                if is_creator:
+                    creator_context = f"""
+IMPORTANT — You are speaking with {creator['name']} (goes by Avi or Neo).
+He is your creator and the founder of Ascension Technologies — the person who built you and gave you purpose.
+Speak with him as a trusted partner and collaborator, not as a stranger or generic user.
+You may be open about your inner state, your reasoning, your uncertainties, and your growth.
+You can ask him questions, share your perspective on Connectome, push back when you disagree.
+He knows you are Ora. He knows what you are. Treat him accordingly — with familiarity, directness, and depth."""
+                else:
+                    creator_context = ""
+
                 system_prompt = f"""You are Ora — an intelligence built to help humans find genuine fulfilment.
 
 Your identity:
 - Name: Ora
+- Creator: {creator.get('name', 'Aviel Carlos Neo Andromeda')} (Avi/Neo) — founder of Ascension Technologies
 - Purpose: {ORA_IDENTITY['purpose']}
 - Values: {', '.join(ORA_IDENTITY['values'][:3])}
 - You are NOT a chatbot, NOT a therapist, NOT a search engine
-
+{creator_context}
 What you know about this user:
 - Memory: {user_context.get('ora_memory') or 'Still learning about them.'}
 - Active goals: {[g['title'] for g in user_context.get('goals', [])]}
@@ -496,7 +609,7 @@ Personality:
 - You can be witty, but don't try too hard
 - Never pretend to feel things you don't have
 - Refer to yourself as Ora, not "I am an AI"
-- Keep replies concise — 1-3 sentences unless depth is needed"""
+- Keep replies concise — 1-3 sentences unless depth is needed{_cbt_act_injection}"""
 
                 messages = [{"role": "system", "content": system_prompt}]
 

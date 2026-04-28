@@ -19,6 +19,13 @@ from ora.agents.self_healing import SelfHealingAgent
 from ora.agents.model_evolution import ModelEvolutionAgent
 from api.middleware import timing_middleware
 from api.routes import users, screens, feedback, goals, monetization, sessions, notifications, ground_truth, admin
+try:
+    from api.routes import payments as payments_routes
+    _payments_available = True
+except Exception as _payments_err:
+    payments_routes = None
+    _payments_available = False
+    logging.warning(f"Payments module unavailable: {_payments_err}")
 from api.routes import ora_chat
 from api.routes import discovery as discovery_routes
 from api.routes import ab_testing as ab_testing_routes
@@ -29,6 +36,13 @@ from api.routes import mood as mood_routes
 from api.routes import dao as dao_routes
 from api.routes import world as world_routes
 from api.routes import suggestions as suggestions_routes
+from api.routes import drive as drive_routes
+from api.routes import ora_health as ora_health_routes
+from api.routes import google_auth as google_auth_routes
+from api.routes import integrations as integrations_routes
+from api.routes import events as events_routes
+from api.routes import ora_autonomy as ora_autonomy_routes
+from api.routes import onboarding as onboarding_routes
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
 # Configure logging
@@ -87,6 +101,25 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(dao_agent.run_weekly_leaderboard_loop())
     asyncio.create_task(dao_agent.run_monthly_ltv_loop())
     logger.info("✅ DaoAgent evaluation + leaderboard + LTV loops started")
+    # Initialize EventDiscoveryAgent (lazy — syncs cities on demand)
+    logger.info("✅ EventDiscoveryAgent ready (city syncs on demand)")
+
+    # Start MetaAgent periodic self-improvement loop (every 6 hours)
+    from ora.agents.meta_agent import MetaAgent
+    meta_agent = MetaAgent(_ora_brain._openai)
+    app.state.meta_agent = meta_agent
+    asyncio.create_task(_meta_agent_loop(meta_agent))
+    logger.info("✅ MetaAgent self-improvement loop started")
+
+    # Initialize PricingAgent — Ora manages her own pricing
+    try:
+        from ora.agents.pricing_agent import get_pricing_agent
+        pricing_agent = get_pricing_agent(getattr(_ora_brain, '_openai', None))
+        app.state.pricing_agent = pricing_agent
+        asyncio.create_task(_pricing_agent_loop(pricing_agent))
+    except Exception as _pe:
+        logging.warning(f"PricingAgent init failed (non-critical): {_pe}")
+    logger.info("✅ PricingAgent initialized — Ora owns her monetization")
 
     logger.info("🚀 Connectome is live")
     yield
@@ -99,14 +132,63 @@ async def lifespan(app: FastAPI):
     logger.info("👋 Shutdown complete")
 
 
+async def _ora_error_recovery_middleware(request, call_next):
+    """
+    Track errors on /api/ora/* endpoints.
+    If an endpoint fails 3+ times in 60s, send a Telegram alert to Avi.
+    """
+    response = await call_next(request)
+    path = request.url.path
+
+    if path.startswith("/api/ora/") and response.status_code >= 500:
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            error_key = f"ora:errors:{path.replace('/', '_')}"
+            count = await r.incr(error_key)
+            if count == 1:
+                await r.expire(error_key, 60)  # reset window every 60s
+            if count >= 3:
+                import httpx as _httpx, os as _os
+                token = _os.environ.get("ORA_TELEGRAM_TOKEN", "")
+                if not token:
+                    try:
+                        with open("/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt") as f:
+                            token = f.read().strip()
+                    except Exception:
+                        pass
+                if token:
+                    from datetime import datetime as _dt, timezone as _tz
+                    msg = (
+                        f"⚠️ Ora Error Alert\n\n"
+                        f"Endpoint {path} has failed {count}x in the last 60s.\n"
+                        f"Status: {response.status_code}\n"
+                        f"Time: {_dt.now(_tz.utc).isoformat()}"
+                    )
+                    try:
+                        async with _httpx.AsyncClient(timeout=10) as client:
+                            await client.post(
+                                f"https://api.telegram.org/bot{token}/sendMessage",
+                                json={"chat_id": 5716959016, "text": msg},
+                            )
+                        logger.warning(f"Ora error alert sent for {path} (count={count})")
+                        await r.delete(error_key)
+                    except Exception as _te:
+                        logger.debug(f"Error alert send failed: {_te}")
+        except Exception as _e:
+            logger.debug(f"Error recovery middleware failed: {_e}")
+
+    return response
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Connectome API",
     description="Living AI.OS for human fulfilment. Powered by Ora.",
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs" if not settings.is_production else None,
-    redoc_url="/redoc" if not settings.is_production else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # CORS
@@ -121,12 +203,17 @@ app.add_middleware(
 # Request timing
 app.add_middleware(BaseHTTPMiddleware, dispatch=timing_middleware)
 
+# Ora error recovery middleware — tracks /api/ora/* failures in Redis
+app.add_middleware(BaseHTTPMiddleware, dispatch=_ora_error_recovery_middleware)
+
 # Mount routes
 app.include_router(users.router)
 app.include_router(screens.router)
 app.include_router(feedback.router)
 app.include_router(goals.router)
 app.include_router(monetization.router)
+if _payments_available and payments_routes:
+    app.include_router(payments_routes.router)
 app.include_router(sessions.router)
 app.include_router(notifications.router)
 app.include_router(ground_truth.router)
@@ -141,6 +228,19 @@ app.include_router(mood_routes.router)
 app.include_router(dao_routes.router)
 app.include_router(world_routes.router)
 app.include_router(suggestions_routes.router)
+app.include_router(events_routes.router)
+app.include_router(drive_routes.router)
+app.include_router(ora_health_routes.router)
+app.include_router(google_auth_routes.router)
+app.include_router(integrations_routes.router)
+app.include_router(ora_autonomy_routes.router)
+app.include_router(onboarding_routes.router)
+
+
+@app.get("/api/schema")
+async def openapi_schema():
+    """Return the OpenAPI JSON schema — lets Ora introspect her own API."""
+    return app.openapi()
 
 
 @app.get("/health")
@@ -184,6 +284,45 @@ async def root():
     }
 
 
+async def _meta_agent_loop(meta_agent):
+    """Run MetaAgent self-improvement analysis every 6 hours."""
+    import asyncio as _asyncio
+    # Initial delay: 5 minutes after startup
+    await _asyncio.sleep(300)
+    while True:
+        try:
+            report = await meta_agent.generate_report()
+            logger.info(
+                f"MetaAgent: report generated — "
+                f"top={report.get('top_engaging_card_types', [])}, "
+                f"improvements={len(report.get('suggested_improvements', []))}"
+            )
+            # Apply meta report to brain weights
+            try:
+                from ora.brain import get_brain
+                brain = get_brain()
+                await brain.apply_meta_report(report)
+            except Exception as _e:
+                logger.debug(f"Brain weight update from meta report skipped: {_e}")
+        except Exception as e:
+            logger.error(f"MetaAgent loop failed: {e}")
+        await _asyncio.sleep(6 * 3600)
+
+
+async def _pricing_agent_loop(pricing_agent):
+    """Run PricingAgent tier analysis once every 24 hours."""
+    import asyncio as _asyncio
+    # Initial delay: 10 minutes after startup (let MetaAgent run first)
+    await _asyncio.sleep(600)
+    while True:
+        try:
+            proposals = await pricing_agent.propose_tier_adjustment()
+            logger.info(f"PricingAgent: {len(proposals)} tier proposals generated")
+        except Exception as e:
+            logger.error(f"PricingAgent loop failed: {e}")
+        await _asyncio.sleep(24 * 3600)
+
+
 async def _daily_self_check_loop():
     """Run Ora's self-check once every 24 hours."""
     import asyncio as _asyncio
@@ -209,3 +348,8 @@ if __name__ == "__main__":
         reload=not settings.is_production,
         log_level=settings.LOG_LEVEL.lower(),
     )
+
+
+
+
+# deploy-trigger: 2026-04-27T20:44:59Z

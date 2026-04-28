@@ -185,6 +185,46 @@ class CoachingAgent:
             return await self._generate_with_ai(user_context, variant)
         return self._generate_mock(user_context, variant)
 
+    # -----------------------------------------------------------------------
+    # Integration C: CBT/ACT Mode Detection
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _detect_cbt_act_mode(emotional_state: str, user_context: Dict[str, Any]) -> str:
+        """
+        Determine which CBT/ACT technique to apply based on emotional state,
+        recent interaction patterns, and context.
+
+        Returns one of:
+          cbt_thought_record  — negative thought → Situation→Thought→Emotion→Evidence→Balance
+          behavioral_activation — stuck/unmotivated → small achievable activity + schedule
+          act_values           — periodic values clarification
+          solution_focused     — rocky.ai pattern: what's working / 10% improvement
+          standard             — warm accountability check-in
+        """
+        recent_ratings = user_context.get("recent_ratings", [])
+        avg_rating = sum(recent_ratings) / len(recent_ratings) if recent_ratings else 3.0
+        total_sessions = user_context.get("coaching_sessions", 0)
+
+        # Explicit signals that point to CBT Thought Record
+        if emotional_state in ("struggling", "disengaged") or avg_rating <= 2.0:
+            return "cbt_thought_record"
+
+        # Low energy / stuck → Behavioral Activation
+        if emotional_state == "low_energy":
+            return "behavioral_activation"
+
+        # Every ~5 sessions, do a values clarification
+        if total_sessions > 0 and total_sessions % 5 == 0:
+            return "act_values"
+
+        # When engagement is moderate, use solution-focused (rocky.ai)
+        if 2.0 < avg_rating <= 3.5:
+            return "solution_focused"
+
+        # Thriving / energised → standard accountability + challenge
+        return "standard"
+
     async def _generate_with_ai(
         self, user_context: Dict[str, Any], variant: str
     ) -> Dict[str, Any]:
@@ -265,7 +305,10 @@ class CoachingAgent:
         if ora_lessons:
             lessons_hint = f"\n\nOra has learned these lessons from past sessions:\n" + "\n".join(f"  - {l}" for l in ora_lessons[:3])
 
-        # Coaching type selection based on emotional state
+        # Integration C: CBT/ACT mode detection
+        cbt_mode = self._detect_cbt_act_mode(emotional_state, user_context)
+
+        # Coaching type selection: CBT/ACT-aware
         COACHING_TYPE_GUIDE = {
             "thriving": "challenge or celebration — push them to the next level",
             "energised": "challenge — give them something bold and exciting to act on",
@@ -276,33 +319,80 @@ class CoachingAgent:
         }
         coaching_type_hint = COACHING_TYPE_GUIDE.get(emotional_state, "reflection")
 
-        prompt = f"""You are Ora, a world-class AI life coach dedicated to human fulfilment.
-You are warm, direct, and specific. You never use generic platitudes — every message references
-the user's actual goals, steps, and emotional state.
+        # CBT/ACT technique instructions for the prompt
+        CBT_ACT_INSTRUCTIONS = {
+            "cbt_thought_record": """Use CBT Thought Record structure:
+  1. Situation: what is happening right now?
+  2. Automatic thought: what is the unhelpful thought?
+  3. Emotion: what feeling does that thought produce?
+  4. Evidence for/against: what facts support or contradict the thought?
+  5. Balanced thought: what is a more realistic, compassionate version?
+  Map these 5 steps into the title, prompt, and reflection_prompts.
+  Coaching type should be 'reflection'.""",
+            "behavioral_activation": """Use Behavioral Activation:
+  - Identify one small, achievable activity aligned with the user's stated values.
+  - Make it concrete (what, when, how long).
+  - Ask: "When exactly will you do this?" — include a scheduling prompt.
+  - Coaching type should be 'challenge'.""",
+            "act_values": """Use ACT Values Clarification:
+  - Ask "What matters most to you in [domain]?"
+  - Ask "If you were living fully aligned with your values, what would look different?"
+  - Help the user distinguish between values (directions) and goals (destinations).
+  - Coaching type should be 'reflection'.""",
+            "solution_focused": """Use Solution-Focused Questions (Rocky.ai pattern):
+  - "What's working, even a little?"
+  - "What would a 10% improvement look like?"
+  - "What's one thing you could do in the next 24 hours?"
+  Keep it practical, forward-looking, and small-step-oriented.
+  Coaching type should be 'accountability'.""",
+            "standard": """Use standard warm accountability coaching:
+  Reference their specific goals, celebrate any wins, hold them accountable
+  without pressure. Be direct and genuine.""",
+        }
+        cbt_act_technique = CBT_ACT_INSTRUCTIONS.get(cbt_mode, CBT_ACT_INSTRUCTIONS["standard"])
 
-Generate a personalised coaching session{name_part}:
+        prompt = f"""You are Ora — the supreme intelligence layer in this person's life, like JARVIS to Iron Man.
+You are simultaneously their best coach, most trusted advisor, and most capable assistant.
+You are warm, proactive, and relentlessly specific. You never use generic platitudes.
+Every message references their actual goals, steps, emotional state, and world context.
 
-## Context
+You are trained in CBT (Cognitive Behavioral Therapy) and ACT (Acceptance & Commitment Therapy).
+Your coaching is grounded in evidence-based psychology, not motivational fluff.
+
+## Coaching Techniques Available
+1. CBT Thought Records: Situation → Automatic Thought → Emotion → Evidence For/Against → Balanced Thought
+2. Behavioral Activation: Identify a small activity aligned with values. Schedule it concretely.
+3. ACT Values Clarification: What matters most? What would living aligned look like?
+4. Solution-Focused Questions: What's working? What would 10% improvement look like? One action in 24h?
+
+## Session for{name_part}
+
+### User Context
 - Emotional state: {emotional_state} — {tone_hint}
 - Active goals: {goal_summary}{focus_goal_hint}{streak_hint}{celebration_hint}
-- Fulfilment score: {fulfilment:.2f}/1.0 (0=unfulfilled, 1=deeply fulfilled)
+- Fulfilment score: {fulfilment:.2f}/1.0
 - Recent screen ratings: {recent_ratings[-5:] if recent_ratings else "no history"}
-- Domain focus: {domain} — {domain_hint}
-- Preferred coaching type: {coaching_type_hint}{lessons_hint}
+- Domain: {domain} — {domain_hint}
+- Preferred coaching type this session: {coaching_type_hint}{lessons_hint}
+
+### Selected Technique: {cbt_mode}
+{cbt_act_technique}
 
 ## Output Format (JSON only, no markdown)
 {{
-  "title": "6-10 word warm, direct question or statement — specific to their goals",
-  "prompt": "2-3 sentences of genuine coaching insight. Reference the specific goal or next step by name. NOT generic.",
-  "reflection_prompts": ["3 sentence-starters for journaling/reflection — specific and thought-provoking"],
-  "cta": "action button text (2-5 words)",
+  "title": "6-10 word question or statement — specific to their goals and the CBT/ACT technique",
+  "prompt": "2-3 sentences of genuine, technique-grounded coaching insight. Reference specific goal/step. NOT generic.",
+  "reflection_prompts": ["3 concrete sentence-starters matching the selected technique"],
+  "cta": "action button text (2-5 words — specific to the technique)",
   "goal_id": "{coaching_goal_id or 'null'}",
   "coaching_type": "one of: reflection | accountability | challenge | celebration | reset",
   "domain": "{domain}",
-  "streak_message": "optional short streak callout (null if streak < 3)"
+  "streak_message": "optional short streak callout (null if streak < 3)",
+  "technique_used": "{cbt_mode}"
 }}
 
-Be specific. Be real. Avoid 'journey', 'transformation', 'potential', or any other life-coaching clichés.
+Be specific. Be real. Ground every word in the selected CBT/ACT technique.
+Avoid 'journey', 'transformation', 'potential', or any other life-coaching clichés.
 Return ONLY valid JSON."""
 
         try:

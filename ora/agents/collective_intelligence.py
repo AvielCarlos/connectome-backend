@@ -683,6 +683,140 @@ Do NOT reveal individual data. Always speak in aggregates."""
         return cards[:count]
 
     # -----------------------------------------------------------------------
+    # 3c. Collaborative Filtering (Integration H)
+    # -----------------------------------------------------------------------
+
+    async def collaborative_filter(
+        self, user_id: str, candidate_screen_ids: list
+    ) -> list:
+        """
+        Re-rank candidate screens using collaborative filtering:
+        1. Find users with similar rating patterns (cosine similarity of rating vectors)
+        2. What did those similar users rate highly that this user hasn't seen?
+        3. Boost those items in the ranking
+
+        Returns the input candidate_screen_ids list re-ranked, with CF-boosted items
+        mixed in at 1 CF card per 5 cards.
+
+        PRIVACY: All similarity computations use aggregate rating vectors.
+        No individual user data is surfaced.
+        """
+        try:
+            import numpy as np
+        except ImportError:
+            logger.warning("CollectiveIntelligence.collaborative_filter: numpy not available")
+            return candidate_screen_ids
+
+        try:
+            # ── Step 1: Build user-item rating matrix (last 30 days) ──────
+            rows = await fetch(
+                """
+                SELECT
+                    i.user_id::text AS uid,
+                    ss.id::text AS screen_spec_id,
+                    i.rating
+                FROM interactions i
+                JOIN screen_specs ss ON ss.id = i.screen_spec_id
+                WHERE i.created_at >= NOW() - INTERVAL '30 days'
+                  AND i.rating IS NOT NULL
+                ORDER BY i.created_at DESC
+                LIMIT 20000
+                """,
+            )
+
+            if not rows:
+                return candidate_screen_ids
+
+            # Build {uid: {spec_id: rating}}
+            from collections import defaultdict
+            user_ratings: dict = defaultdict(dict)
+            for row in rows:
+                uid = str(row["uid"])
+                sid = str(row["screen_spec_id"])
+                user_ratings[uid][sid] = float(row["rating"])
+
+            if user_id not in user_ratings:
+                return candidate_screen_ids
+
+            # ── Step 2: Compute cosine similarity ────────────────────────
+            all_users = list(user_ratings.keys())
+            all_items = list({sid for v in user_ratings.values() for sid in v})
+
+            if len(all_users) < 2 or len(all_items) < 5:
+                return candidate_screen_ids
+
+            item_idx = {sid: i for i, sid in enumerate(all_items)}
+            user_idx = {uid: i for i, uid in enumerate(all_users)}
+
+            # Sparse matrix as numpy array
+            mat = np.zeros((len(all_users), len(all_items)), dtype=np.float32)
+            for uid, ratings in user_ratings.items():
+                for sid, rating in ratings.items():
+                    if uid in user_idx and sid in item_idx:
+                        mat[user_idx[uid], item_idx[sid]] = rating
+
+            target_vec = mat[user_idx[user_id]]  # shape: (n_items,)
+
+            # Cosine similarity: dot / (norm_a * norm_b)
+            target_norm = np.linalg.norm(target_vec)
+            if target_norm == 0:
+                return candidate_screen_ids
+
+            norms = np.linalg.norm(mat, axis=1)  # (n_users,)
+            norms[norms == 0] = 1e-9  # avoid division by zero
+            dots = mat.dot(target_vec)  # (n_users,)
+            similarities = dots / (norms * target_norm)
+
+            # Zero out self-similarity
+            similarities[user_idx[user_id]] = -1
+
+            # Top-5 similar users (excluding self)
+            top5_idx = np.argsort(similarities)[-5:][::-1]
+            top5_users = [all_users[i] for i in top5_idx if similarities[i] > 0]
+
+            if not top5_users:
+                return candidate_screen_ids
+
+            # ── Step 3: Items they liked that this user hasn't seen ───────
+            seen_by_target = set(user_ratings[user_id].keys())
+            cf_candidates: dict = {}  # spec_id → total_score
+
+            for similar_uid in top5_users:
+                for sid, rating in user_ratings[similar_uid].items():
+                    if sid not in seen_by_target and rating >= 4:
+                        cf_candidates[sid] = cf_candidates.get(sid, 0) + rating
+
+            if not cf_candidates:
+                return candidate_screen_ids
+
+            # Sort CF candidates by score
+            cf_ranked = sorted(cf_candidates, key=lambda s: cf_candidates[s], reverse=True)
+
+            # ── Step 4: Mix CF items into candidates (1 per 5) ───────────
+            result = list(candidate_screen_ids)
+            cf_iter = iter(cf_ranked)
+            mixed: list = []
+            cf_count = 0
+
+            for i, item in enumerate(result):
+                mixed.append(item)
+                if (i + 1) % 5 == 0:
+                    cf_item = next(cf_iter, None)
+                    if cf_item and cf_item not in mixed:
+                        mixed.append(cf_item)
+                        cf_count += 1
+
+            logger.info(
+                f"CollectiveIntelligence.collaborative_filter: "
+                f"injected {cf_count} CF items for user {user_id[:8]}"
+            )
+            return mixed
+
+        except Exception as e:
+            logger.warning(f"CollectiveIntelligence.collaborative_filter: {e}")
+            return candidate_screen_ids
+
+    # -----------------------------------------------------------------------
     # 4. Suppress distress patterns globally
     # -----------------------------------------------------------------------
 

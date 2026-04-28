@@ -8,6 +8,7 @@ import json
 from uuid import UUID
 from datetime import datetime, timezone
 
+from core.config import settings
 from fastapi import APIRouter, HTTPException, status, Depends
 
 from typing import Optional, List
@@ -97,12 +98,30 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
 
+    try:
+        _email = (row["email"] or "").lower()
+        _admin_list = getattr(settings, "admin_email_list", ["carlosandromeda8@gmail.com"])
+        _is_admin = _email in _admin_list
+    except Exception:
+        _is_admin = False
+    try:
+        _raw = row["profile"]
+        if isinstance(_raw, str):
+            import json as _json
+            profile_data = _json.loads(_raw) if _raw else {}
+        elif _raw is None:
+            profile_data = {}
+        else:
+            profile_data = dict(_raw)
+    except Exception:
+        profile_data = {}
+    profile_data["is_admin"] = _is_admin
     return UserProfile(
         id=row["id"],
         email=row["email"],
         subscription_tier=row["subscription_tier"],
         fulfilment_score=row["fulfilment_score"] or 0.0,
-        profile=dict(row["profile"]) if row["profile"] else {},
+        profile=profile_data,
         created_at=row["created_at"],
         last_active=row["last_active"],
     )
@@ -533,3 +552,56 @@ async def get_weekly_summary(user_id: str = Depends(get_current_user_id)):
         "ora_narrative": row["ora_narrative"] or "",
         "fulfilment_change": row["fulfilment_change"] or 0.0,
     }
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/users/privacy  (Integration G)
+# ---------------------------------------------------------------------------
+
+class PrivacyUpdateRequest(BaseModel):
+    privacy_level: str  # "standard" | "sensitive" | "minimal"
+
+
+@router.patch("/privacy")
+async def update_privacy_level(
+    payload: PrivacyUpdateRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Update the user's privacy level for Ora's memory system.
+
+    - standard: Ora uses all context (default)
+    - sensitive: Ora uses goals + ratings only, never repeats back sensitive content
+    - minimal: Ora uses no personal context, fresh each conversation
+    """
+    allowed = {"standard", "sensitive", "minimal"}
+    if payload.privacy_level not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"privacy_level must be one of: {sorted(allowed)}",
+        )
+
+    row = await fetchrow("SELECT profile FROM users WHERE id = $1", UUID(user_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    raw_profile = row["profile"] or {}
+    profile = json.loads(raw_profile) if isinstance(raw_profile, str) else dict(raw_profile)
+    profile["privacy_level"] = payload.privacy_level
+
+    await execute(
+        "UPDATE users SET profile = $1::jsonb WHERE id = $2",
+        json.dumps(profile),
+        UUID(user_id),
+    )
+
+    # Invalidate user model cache
+    try:
+        from core.redis_client import redis_delete
+        await redis_delete(f"user_model:{user_id}")
+        await redis_delete(f"user:{user_id}:context")
+    except Exception:
+        pass
+
+    logger.info(f"User {user_id[:8]}: privacy_level set to '{payload.privacy_level}'")
+    return {"ok": True, "privacy_level": payload.privacy_level}

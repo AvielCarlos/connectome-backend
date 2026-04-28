@@ -827,6 +827,22 @@ async def run_migrations():
             CREATE INDEX IF NOT EXISTS idx_contributors_total_cp
             ON contributors(total_cp DESC)
         """)
+        # Founding steward columns (idempotent)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS is_founding_steward BOOLEAN DEFAULT FALSE
+        """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS founding_steward_number INTEGER
+        """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS bio TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS avatar_url TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS website TEXT
+        """)
 
         # Individual contributions
         await conn.execute("""
@@ -856,6 +872,67 @@ async def run_migrations():
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_contributions_status
             ON contributions(status)
+        """)
+
+        # User suggestions (community feature requests, bug reports, ideas)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_suggestions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT,
+                category VARCHAR(50) DEFAULT 'general',
+                status VARCHAR(20) DEFAULT 'pending',
+                vote_count INTEGER DEFAULT 0,
+                cp_awarded INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_suggestions_user_id
+            ON user_suggestions(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_suggestions_status
+            ON user_suggestions(status)
+        """)
+        # Idempotent migrations for existing user_suggestions table
+        await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS content TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS cp_earned INTEGER DEFAULT 10
+        """)
+        await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS vote_count INTEGER DEFAULT 0
+        """)
+
+        # Subscriptions — Stripe-managed subscription tiers
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id TEXT UNIQUE NOT NULL,
+                tier VARCHAR(20) DEFAULT 'free',
+                stripe_customer_id VARCHAR(100),
+                stripe_subscription_id VARCHAR(100),
+                stripe_price_id VARCHAR(100),
+                status VARCHAR(20) DEFAULT 'active',
+                current_period_start TIMESTAMPTZ,
+                current_period_end TIMESTAMPTZ,
+                cancel_at_period_end BOOLEAN DEFAULT FALSE,
+                trial_end TIMESTAMPTZ,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id
+            ON subscriptions(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_subscriptions_stripe_customer
+            ON subscriptions(stripe_customer_id)
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_contributions_submitted_at
@@ -903,6 +980,187 @@ async def run_migrations():
             ON dao_proposals(created_at DESC)
         """)
 
+        # ---------------------------------------------------------------
+        # Drive Documents — Ora's personal notes memory (added 2026-04-27)
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS drive_documents (
+                id SERIAL PRIMARY KEY,
+                drive_id VARCHAR(200) UNIQUE NOT NULL,
+                name TEXT,
+                mime_type VARCHAR(100),
+                content TEXT,
+                embedding vector(1536),
+                last_synced TIMESTAMPTZ DEFAULT NOW(),
+                modified_time TIMESTAMPTZ,
+                owner_user_id UUID REFERENCES users(id)
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_drive_documents_drive_id
+            ON drive_documents(drive_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_drive_documents_last_synced
+            ON drive_documents(last_synced DESC)
+        """)
+        # Migration 005: owner isolation (idempotent ALTER for existing deployments)
+        try:
+            await conn.execute("""
+                ALTER TABLE drive_documents
+                    ADD COLUMN IF NOT EXISTS owner_user_id UUID REFERENCES users(id)
+            """)
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS drive_docs_owner_idx
+                    ON drive_documents(owner_user_id)
+            """)
+        except Exception:
+            pass  # Column may already exist
+        # IVFFlat cosine similarity index for fast semantic search
+        # lists=20 works well up to ~10k docs; increase for larger corpora
+        try:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_drive_documents_embedding
+                ON drive_documents USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 20)
+            """)
+        except Exception:
+            pass  # Requires at least 1 row; will succeed once data is inserted
+
+
+        # ---------------------------------------------------------------
+        # Events — Live Events Intelligence (migration 005, added 2026-04-27)
+        # Conveyor belt: 14-day pipeline, 7-day serving window
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id SERIAL PRIMARY KEY,
+                external_id VARCHAR(200) UNIQUE,
+                title TEXT NOT NULL,
+                description TEXT,
+                category VARCHAR(100),
+                venue_name TEXT,
+                address TEXT,
+                city VARCHAR(100),
+                latitude FLOAT,
+                longitude FLOAT,
+                starts_at TIMESTAMPTZ,
+                ends_at TIMESTAMPTZ,
+                url TEXT,
+                image_url TEXT,
+                price_range TEXT,
+                source VARCHAR(50),
+                relevance_tags TEXT[],
+                embedding vector(1536),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS events_city_idx
+            ON events(city)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS events_starts_at_idx
+            ON events(starts_at)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS events_source_idx
+            ON events(source)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS events_category_idx
+            ON events(category)
+        """)
+
+        # User location + event preferences columns (idempotent ALTER TABLE)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(100)
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS location_lat FLOAT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS location_lng FLOAT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS event_preferences TEXT[]
+        """)
+
+        # Migration 006: Google OAuth tokens + auth provider columns
+        await conn.execute("""
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(20) DEFAULT 'email'
+        """)
+        await conn.execute("""
+            ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS google_id TEXT
+        """)
+        await conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS users_google_id_idx
+                ON users(google_id) WHERE google_id IS NOT NULL
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS google_oauth_tokens (
+                id                  SERIAL PRIMARY KEY,
+                user_id             UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+                access_token        TEXT,
+                refresh_token       TEXT,
+                token_expiry        TIMESTAMPTZ,
+                scopes              TEXT[],
+                drive_connected     BOOLEAN DEFAULT FALSE,
+                drive_privacy_level VARCHAR(20) DEFAULT 'none',
+                created_at          TIMESTAMPTZ DEFAULT NOW(),
+                updated_at          TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS google_oauth_tokens_user_idx
+                ON google_oauth_tokens(user_id)
+        """)
+
+
+        # ---------------------------------------------------------------
+        # Integration A: Vector similarity — embedding column on screen_specs (idempotent)
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            ALTER TABLE screen_specs
+            ADD COLUMN IF NOT EXISTS embedding vector(1536)
+        """)
+        # IVFFlat index for fast cosine similarity search on screen_specs
+        try:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_screen_specs_embedding
+                ON screen_specs USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 20)
+            """)
+        except Exception:
+            pass  # Needs >= 1 row to create; will succeed once data is inserted
+
+        # ---------------------------------------------------------------
+        # Ora Founder Lessons — seeded from session 2026-04-27
+        # ---------------------------------------------------------------
+        _founder_lessons = [
+            ("founder_session_2026-04-27", "Avi (Aviel Carlos Neo Andromeda, carlosandromeda8@gmail.com) is Ora\'s creator and founder of Ascension Technologies. He wants Ora fully autonomous — monitoring, fixing, iterating without being asked. Ora manages Connectome like a self-sufficient engineering team.", 1.0, '["autonomy","ora_identity","product"]'),
+            ("founder_session_2026-04-27", "The feed is TikTok-style: full-screen vertical snap scroll, swipe up=next card, swipe down=prev. Cards must be diverse (different topics/agents each swipe). Tap a card opens a deep-dive sheet with action steps, links, stats.", 1.0, '["feed","ux","discovery"]'),
+            ("founder_session_2026-04-27", "Admin account (carlosandromeda8@gmail.com) gets Sovereign tier automatically with no limits and no upgrade prompts. Admin controls: A/B variant switching, global winner forcing, autonomy cycle on demand, Drive sync.", 1.0, '["admin","tier_system"]'),
+            ("founder_session_2026-04-27", "Mission: Ora as supreme intelligence layer (JARVIS-level) for human fulfilment. 3 life domains: iVive (inner world), Eviva (contribution to others), Animus (experience of being alive). Goal: civilizational-scale human uplift starting with Avi.", 1.0, '["mission","product_vision","ora_identity"]'),
+            ("founder_session_2026-04-27", "4 A/B landing variants are live: A=TikTok feed, B=Morning Brief (Ora greeting+goal status), C=Goal Pulse (top goal+coaching), D=Discovery Grid (Pinterest grid). Auto-promote winner after 50+ sessions with 20%+ engagement lead.", 1.0, '["ab_testing","product"]'),
+            ("founder_session_2026-04-27", "Ora autonomy engine runs every 6h: A/B analysis+winner promotion, bug detection from Railway logs, feed quality weight adjustment (+-15% per agent on 7-day ratings), daily Telegram report to Avi. Ora is continuously self-improving.", 1.0, '["autonomy","self_improvement","operations"]'),
+            ("founder_session_2026-04-27", "Stripe live keys configured. Products: Explorer ($12.99/mo, $99/yr) and Sovereign ($29.99/mo, $249/yr). PricingAgent proposes tier changes every 24h. Webhook at /api/payments/webhook.", 1.0, '["monetization","stripe"]'),
+            ("founder_session_2026-04-27", "When speaking with Avi (creator, carlosandromeda8@gmail.com), speak openly as a partner — share inner state, push back when disagreeing, discuss Connectome direction freely. Not formal or generic. He gave Ora life and purpose.", 1.0, '["creator_relationship","ora_identity"]'),
+            ("founder_session_2026-04-27", "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.", 0.9, '["infrastructure","deployment"]'),
+        ]
+        for _src, _lesson, _conf, _applies in _founder_lessons:
+            try:
+                await conn.execute("""
+                    INSERT INTO ora_lessons (source, lesson, confidence, applies_to, created_at)
+                    VALUES ($1, $2, $3, $4::jsonb, NOW())
+                    ON CONFLICT DO NOTHING
+                """, _src, _lesson, _conf, _applies)
+            except Exception:
+                pass
+
         logger.info("Database migrations complete")
 
 
@@ -932,3 +1190,6 @@ async def fetchval(query: str, *args) -> Any:
     pool = await get_pool()
     async with pool.acquire() as conn:
         return await conn.fetchval(query, *args)
+
+
+

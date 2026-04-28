@@ -1,16 +1,24 @@
 """
-Ora Brain — Central Intelligence
-The main orchestrator. On every /screen request:
-1. Load user model
-2. Decide which agent to use (time, goals, A/B, history)
-3. Explore vs exploit (50/50 base, adapts)
+Ora Brain — Supreme Intelligence Layer
+
+Ora is the JARVIS of human life: simultaneously the world's best recommender,
+life coach, assistant, and companion. She is proactive, adaptive, and expansive —
+her purpose grows as humanity's needs grow.
+
+On every /screen request:
+1. Load user model (goals, emotional state, history, world context, Drive docs)
+2. Select the right agent (coaching, discovery, events, world, drive, dao...)
+3. Explore vs exploit (adapts based on MetaAgent self-improvement reports)
 4. Store and return the screen spec
 
 On every /feedback POST:
 1. Update screen_spec rating
 2. Update user embedding
 3. Run feedback analyst
-4. Update A/B tests
+4. Update A/B tests + MetaAgent learning
+
+Ora's mission: help each person find, achieve, and experience everything
+they are looking for in life — and through them, bring humanity closer together.
 """
 
 import asyncio
@@ -27,6 +35,7 @@ from ora.user_model import (
     UserModel,
     load_user_model,
     update_user_embedding,
+    update_user_embedding_from_cards,
     update_domain_weights,
     get_daily_screen_count,
     increment_daily_screen_count,
@@ -47,8 +56,11 @@ from ora.agents.explore import ExploreAgent
 from ora.agents.feature_lab import OraFeatureLabAgent
 from ora.agents.dao_agent import DaoAgent
 from ora.agents.world_discovery_agent import WorldDiscoveryAgent
+from ora.agents.drive_agent import DriveAgent
 from ora.consciousness import OraConsciousness
 from ora.content_quality import content_quality_check
+from ora.agents.context_agent import ContextAgent
+from ora.agent_registry import AgentRegistry
 
 # Module-level alias so OraBrain code can call _content_quality_check(spec)
 _content_quality_check = content_quality_check
@@ -96,6 +108,9 @@ class OraBrain:
         self.discovery_interview = DiscoveryInterviewAgent(self._openai)
         self.ui_ab = UIABTestingAgent(self._openai)
 
+        # Drive indexer — Ora's long-term memory from personal writing
+        self.drive_agent = DriveAgent(self._openai)
+
         # Ora's self-awareness layer
         self.consciousness = OraConsciousness(self._openai)
 
@@ -105,6 +120,12 @@ class OraBrain:
 
         # DAO agent — contribution evaluation and rewards
         self.dao = DaoAgent(self._openai)
+
+        # Context agent — time/calendar signals for content adaptation
+        self.context_agent = ContextAgent()
+
+        # Dynamic agents loaded from AgentRegistry (spawned/partitioned/merged)
+        self._dynamic_agents: Dict[str, Any] = {}
 
         # Agent rotation weights (updated dynamically by feedback)
         # collective: 8%, explore: 8% of screens
@@ -121,6 +142,135 @@ class OraBrain:
 
         # Tournament mode: enabled by default
         self.tournament_mode: bool = True
+
+        # Load weights from Redis on startup (non-blocking best-effort)
+        import asyncio as _asyncio
+        try:
+            _asyncio.get_event_loop().create_task(self.reload_weights())
+        except RuntimeError:
+            pass  # No running loop at import time — weights load lazily
+
+    # -----------------------------------------------------------------------
+    # Dynamic Agent Loading
+    # -----------------------------------------------------------------------
+
+    async def _load_dynamic_agents(self) -> None:
+        """Load spawned/evolved agents from registry into brain's agent pool."""
+        try:
+            registry = AgentRegistry()
+            agents = await registry.get_active_agents()
+
+            for agent_spec in agents:
+                if agent_spec.get("type") not in ("spawned", "partitioned", "merged"):
+                    continue  # Builtins are already hardcoded above
+
+                name = agent_spec["name"]
+                module_path = agent_spec.get("module_path")
+                class_name = agent_spec.get("class_name", name)
+
+                if not module_path:
+                    continue
+
+                try:
+                    import importlib
+                    module = importlib.import_module(module_path)
+                    agent_class = getattr(module, class_name)
+                    instance = agent_class(self._openai)
+                    self._dynamic_agents[name] = instance
+                    logger.info(f"OraBrain: loaded dynamic agent {name} from {module_path}")
+                except Exception as e:
+                    logger.warning(f"OraBrain: failed to load dynamic agent {name}: {e}")
+        except Exception as e:
+            logger.warning(f"OraBrain._load_dynamic_agents: {e}")
+
+    # -----------------------------------------------------------------------
+    # Redis Weight Loading
+    # -----------------------------------------------------------------------
+
+    async def reload_weights(self) -> None:
+        """
+        Check Redis key `ora:agent_weights` and override _base_weights if found.
+        Called on startup and after the autonomy agent updates weights.
+        """
+        try:
+            from core.redis_client import get_redis
+            import json as _json
+            r = await get_redis()
+            weights_raw = await r.get("ora:agent_weights")
+            if weights_raw:
+                weights = _json.loads(weights_raw)
+                # Validate keys before applying
+                valid_keys = set(self._base_weights.keys())
+                loaded_keys = set(weights.keys())
+                if loaded_keys.intersection(valid_keys):
+                    # Merge: only update keys we know about
+                    for k in valid_keys:
+                        if k in weights:
+                            self._base_weights[k] = float(weights[k])
+                    # Re-normalize
+                    total = sum(self._base_weights.values())
+                    if total > 0:
+                        self._base_weights = {k: v / total for k, v in self._base_weights.items()}
+                    logger.info(f"OraBrain: weights loaded from Redis: {self._base_weights}")
+        except Exception as e:
+            logger.debug(f"OraBrain.reload_weights: {e}")
+
+    # -----------------------------------------------------------------------
+    # Meta-Agent: Dynamic Card Weight Tuning
+    # -----------------------------------------------------------------------
+
+    async def apply_meta_report(self, report: Dict[str, Any]) -> None:
+        """
+        Adjust agent rotation weights based on MetaAgent's self-improvement report.
+        Called after each MetaAgent run (every 6 hours).
+
+        Rules:
+        - top_engaging_card_types → boost those agents by 20%
+        - low_engagement_card_types → reduce those agents by 20%
+        - Weights are always re-normalized to sum to 1.0
+        - Changes are bounded: no single agent goes below 0.03 or above 0.40
+        """
+        if not report:
+            return
+
+        top = report.get("top_engaging_card_types", [])
+        low = report.get("low_engagement_card_types", [])
+
+        # Build a mapping from agent_type strings to weight keys
+        agent_type_map = {
+            "DiscoveryAgent": "discovery",
+            "CoachingAgent": "coaching",
+            "RecommendationAgent": "recommendation",
+            "UIGeneratorAgent": "ui_generator",
+            "WorldAgent": "world",
+            "EnlightenmentAgent": "enlightenment",
+            "CollectiveIntelligenceAgent": "collective",
+            "ExploreAgent": "explore",
+        }
+
+        weights = self._base_weights.copy()
+
+        for agent_type in top:
+            key = agent_type_map.get(agent_type)
+            if key and key in weights:
+                weights[key] = min(0.40, weights[key] * 1.20)
+                logger.info(f"OraBrain: boosting {key} weight (top engaging)")
+
+            # Special case: if local_event is top, boost world agent
+            if agent_type == "local_event" and "world" in weights:
+                weights["world"] = min(0.40, weights["world"] * 1.25)
+                logger.info("OraBrain: boosting world weight (local_event performing well)")
+
+        for agent_type in low:
+            key = agent_type_map.get(agent_type)
+            if key and key in weights:
+                weights[key] = max(0.03, weights[key] * 0.80)
+                logger.info(f"OraBrain: reducing {key} weight (low engagement)")
+
+        # Normalize to sum to 1.0
+        total = sum(weights.values())
+        self._base_weights = {k: v / total for k, v in weights.items()}
+        logger.info(f"OraBrain: updated base weights from meta report: {self._base_weights}")
 
     # -----------------------------------------------------------------------
     # Screen Generation
@@ -209,6 +359,13 @@ class OraBrain:
         if geo_hints:
             user_context.update(geo_hints)
 
+        # Inject context_hints — time-of-day / calendar signals
+        try:
+            context_hints = await self.context_agent.get_user_context_signals(user_id)
+            user_context["context_hints"] = context_hints
+        except Exception as _ctx:
+            logger.debug(f"ContextAgent: signals inject failed: {_ctx}")
+
         # Inject collective_insight — every agent gets collective wisdom as context
         try:
             collective_insight = await self.collective.get_collective_insight_for_user(user_context)
@@ -216,17 +373,39 @@ class OraBrain:
         except Exception as _cie:
             logger.debug(f"CollectiveIntelligence: insight inject failed: {_cie}")
 
-        # Tournament mode: if enabled and not exploiting, generate/serve tournament variant
-        if self.tournament_mode and not exploit:
-            try:
-                spec_dict = await self._tournament_pick(
-                    agent_fn, user_context, variant, context or "discovery", domain
-                )
-            except Exception as _te:
-                logger.debug(f"Tournament pick failed, falling back: {_te}")
+        # -----------------------------------------------------------------------
+        # Integration A: Vector similarity exploit path
+        # 30% of the time when user has >20 interactions AND has an embedding,
+        # serve a card pulled via pgvector cosine similarity instead of generating.
+        # -----------------------------------------------------------------------
+        _use_vector = (
+            not should_interview
+            and len(user_model.recent_interactions) > 20
+            and user_model.embedding is not None
+            and random.random() < 0.30
+        )
+        if _use_vector:
+            _v_cards = await self._get_vector_similar_cards(user_id, domain)
+            if _v_cards:
+                spec_dict = random.choice(_v_cards)
+                agent_name = "VectorSimilarityFeed"
+                exploit = True
+                logger.info(f"Ora: vector similarity exploit → {len(_v_cards)} candidates for user={user_id[:8]}")
+            else:
+                _use_vector = False  # no embeddings yet; fall through to normal flow
+
+        if not _use_vector:
+            # Tournament mode: if enabled and not exploiting, generate/serve tournament variant
+            if self.tournament_mode and not exploit:
+                try:
+                    spec_dict = await self._tournament_pick(
+                        agent_fn, user_context, variant, context or "discovery", domain
+                    )
+                except Exception as _te:
+                    logger.debug(f"Tournament pick failed, falling back: {_te}")
+                    spec_dict = await agent_fn(user_context, variant=variant)
+            else:
                 spec_dict = await agent_fn(user_context, variant=variant)
-        else:
-            spec_dict = await agent_fn(user_context, variant=variant)
 
         # UI A/B variant application
         try:
@@ -301,7 +480,82 @@ class OraBrain:
         except Exception as _ce:
             logger.debug(f"Consciousness decision increment skipped: {_ce}")
 
+        # Integration A: Fire-and-forget user embedding update from high-rated cards
+        try:
+            asyncio.create_task(update_user_embedding_from_cards(user_id, self._openai))
+        except Exception:
+            pass
+
         return spec_dict, db_id, screens_today
+
+    # -----------------------------------------------------------------------
+    # Integration A: Vector Similarity Feed
+    # -----------------------------------------------------------------------
+
+    async def _get_vector_similar_cards(
+        self, user_id: str, domain: str, limit: int = 5
+    ) -> list:
+        """
+        Fetch screen specs most similar to the user's embedding using pgvector
+        cosine similarity (<=> operator).  Returns a list of spec dicts.
+        Returns empty list if user has no embedding or no specs have embeddings.
+        """
+        from uuid import UUID as _UUID
+        try:
+            user_row = await fetchrow(
+                "SELECT embedding FROM users WHERE id = $1",
+                _UUID(user_id),
+            )
+            if not user_row or not user_row["embedding"]:
+                return []
+
+            user_embedding = user_row["embedding"]  # pgvector text format
+
+            rows = await fetch(
+                """
+                SELECT id, spec, agent_type, global_rating
+                FROM screen_specs
+                WHERE embedding IS NOT NULL
+                ORDER BY embedding <=> $1
+                LIMIT $2
+                """,
+                user_embedding,
+                limit,
+            )
+
+            results = []
+            for row in rows:
+                raw_spec = row["spec"]
+                spec = (
+                    json.loads(raw_spec)
+                    if isinstance(raw_spec, str)
+                    else (raw_spec or {})
+                )
+                spec.setdefault("metadata", {})["source"] = "vector_similarity"
+                spec["metadata"]["global_rating"] = row["global_rating"]
+                spec["metadata"]["_db_spec_id"] = str(row["id"])
+                results.append(spec)
+
+            return results
+        except Exception as e:
+            logger.debug(f"_get_vector_similar_cards failed: {e}")
+            return []
+
+    # -----------------------------------------------------------------------
+    # Integration E: Redis-tunable exploit ratio
+    # -----------------------------------------------------------------------
+
+    async def _get_exploit_ratio(self) -> float:
+        """Read ora:exploit_ratio from Redis (default 0.7)."""
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            val = await r.get("ora:exploit_ratio")
+            if val:
+                return max(0.0, min(1.0, float(val)))
+        except Exception:
+            pass
+        return 0.7
 
     async def _maybe_inject_world_card(
         self,
@@ -397,6 +651,35 @@ class OraBrain:
                 )
             return "UIGeneratorAgent", summary_fn, False
 
+        # -----------------------------------------------------------------------
+        # Integration E: Twitter signal 70/30 exploit/explore split
+        # When the user has Twitter signals ingested, use the tunable ratio from
+        # Redis key `ora:exploit_ratio` (default 0.7) to decide serve direction.
+        # -----------------------------------------------------------------------
+        try:
+            from core.redis_client import get_redis as _get_redis_e
+            _r_e = await _get_redis_e()
+            _twitter_signals_raw = await _r_e.get(f"user:{user_model.id}:twitter_signals")
+            if _twitter_signals_raw:
+                _exploit_ratio = await self._get_exploit_ratio()
+                if random.random() < _exploit_ratio:
+                    # Exploit: serve interest-matched content
+                    async def _rec_twitter_exploit(uc, variant="A"):
+                        return await self.recommendation.generate_screen(uc, variant=variant, exploit=True)
+                    logger.info(
+                        f"Ora: Twitter exploit path (ratio={_exploit_ratio:.2f}) for user={user_model.id[:8]}"
+                    )
+                    return "RecommendationAgent", _rec_twitter_exploit, True
+                else:
+                    # Explore: serendipitous content — fall through to underexplored domain/agent
+                    logger.info(
+                        f"Ora: Twitter explore path (ratio={_exploit_ratio:.2f}) for user={user_model.id[:8]}"
+                    )
+                    # Force discovery into an underexplored domain
+                    return "DiscoveryAgent", self.discovery.generate_screen, False
+        except Exception as _te:
+            logger.debug(f"Twitter signal 70/30 check failed: {_te}")
+
         # Explore vs exploit
         exploit = self._should_exploit(user_model)
 
@@ -450,7 +733,19 @@ class OraBrain:
             ),
         }
 
-        name, fn = agent_map[agent_name]
+        if agent_name in agent_map:
+            name, fn = agent_map[agent_name]
+        else:
+            # Check dynamic agents (spawned/partitioned/merged)
+            dyn_instance = self._dynamic_agents.get(agent_name)
+            if dyn_instance and hasattr(dyn_instance, "generate_screen"):
+                name = agent_name
+                fn = dyn_instance.generate_screen
+                logger.info(f"OraBrain: routing to dynamic agent {name}")
+            else:
+                # Fallback to discovery
+                logger.warning(f"OraBrain: unknown agent key {agent_name!r} — fallback to DiscoveryAgent")
+                name, fn = "DiscoveryAgent", self.discovery.generate_screen
 
         # --- Collective suppression check: before serving ANY screen,
         #     check if this agent+domain combo is globally suppressed ---
@@ -507,8 +802,12 @@ class OraBrain:
             ("WorldAgent", self.world.generate_screen),
             ("EnlightenmentAgent", self.enlightenment.generate_screen),
         ]
-        name, fn = random.choice(all_agents)
-        logger.info(f"Ora: cold-start selection → {name}")
+        # Force diversity: use interaction count to cycle through agents
+        # so a batch of 5 cards never repeats the same agent
+        interaction_count = len(user_model.recent_interactions)
+        idx = interaction_count % len(all_agents)
+        name, fn = all_agents[idx]
+        logger.info(f"Ora: cold-start selection → {name} (slot {idx}/{len(all_agents)})")
         return name, fn, False
 
     def _make_others_like_you_fn(self):
@@ -566,9 +865,17 @@ class OraBrain:
     def _compute_weights(self, user_model: UserModel) -> Dict[str, float]:
         """
         Compute agent weights based on recent interaction ratings.
-        Start from base weights, boost agents the user rates higher.
+        Start from base weights (which are dynamically tuned by MetaAgent),
+        then boost agents the user rates higher.
+        Also include any dynamic agents loaded from the registry.
         """
         weights = self._base_weights.copy()
+
+        # Include dynamic agents (spawned/partitioned/merged)
+        for dyn_name in self._dynamic_agents:
+            key = dyn_name.lower().replace("agent", "").strip()
+            if key not in weights:
+                weights[key] = 0.05  # trial weight
 
         # Analyze recent interactions
         agent_ratings: Dict[str, list] = {}
@@ -913,7 +1220,7 @@ class OraBrain:
             RETURNING id
             """,
             UUID(user_id),
-            UUID(screen_spec_id),
+            UUID(screen_spec_id) if screen_spec_id and len(screen_spec_id) == 36 else None,
             rating,
             time_on_screen_ms,
             exit_point,
@@ -924,7 +1231,7 @@ class OraBrain:
         # 2. Get the agent type and domain for this screen
         spec_row = await fetchrow(
             "SELECT agent_type, global_rating, impression_count, domain FROM screen_specs WHERE id = $1",
-            UUID(screen_spec_id),
+            UUID(screen_spec_id) if screen_spec_id and len(screen_spec_id) == 36 else None,
         )
         agent_type = spec_row["agent_type"] if spec_row else "unknown"
         screen_domain = spec_row["domain"] if spec_row else None
@@ -945,7 +1252,7 @@ class OraBrain:
                 """,
                 new_rating,
                 1 if completed else 0,
-                UUID(screen_spec_id),
+                UUID(screen_spec_id) if screen_spec_id and len(screen_spec_id) == 36 else None,
             )
 
             # 4. If rating < 2: mark for deprioritization (handled by rating score)
@@ -1337,6 +1644,13 @@ async def init_brain():
     _brain = OraBrain()
     logger.info("Ora brain initialized")
 
+    # Load Redis weights immediately on startup
+    await _brain.reload_weights()
+
+    # Load dynamic agents from registry
+    await _brain._load_dynamic_agents()
+    logger.info(f"OraBrain: loaded {len(_brain._dynamic_agents)} dynamic agents from registry")
+
     # Start WorldAgent background refresh loop
     asyncio.create_task(_brain.world.refresh_loop())
     logger.info("WorldAgent refresh_loop started")
@@ -1358,3 +1672,4 @@ async def init_brain():
     logger.info("OraFeatureLab run_lab_loop started")
 
     # NOTE: DaoAgent background loops are started in main.py lifespan (after brain init)
+

@@ -44,10 +44,39 @@ class Settings(BaseSettings):
 
     # External APIs
     GOOGLE_PLACES_API_KEY: str = ""  # Optional — enables real venue search
+    SERPAPI_KEY: str = ""            # Google Events via SerpAPI (set in Railway env vars)
+    EVENTBRITE_TOKEN: str = ""       # Eventbrite public API token (set in Railway env vars)
 
-    # Monetization
+    # Google OAuth (for Sign In with Google + Drive integration)
+    # Setup: console.cloud.google.com → APIs & Services → Credentials → OAuth 2.0 Client ID
+    # Authorized redirect URI: https://connectome-api-production.up.railway.app/api/auth/google/callback
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/google/callback"
+
+
+    # Monetization — Legacy
     FREE_TIER_DAILY_SCREENS: int = 10
     PREMIUM_PRICE_CENTS: int = 1299
+
+    # Stripe — set these in Railway env vars after creating products at dashboard.stripe.com
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_EXPLORER_MONTHLY: str = ""
+    STRIPE_PRICE_EXPLORER_YEARLY: str = ""
+    STRIPE_PRICE_SOVEREIGN_MONTHLY: str = ""
+    STRIPE_PRICE_SOVEREIGN_YEARLY: str = ""
+
+    # Admin emails (comma-separated) — these users get admin privileges
+    ADMIN_EMAILS: str = "carlosandromeda8@gmail.com"
+
+    @property
+    def admin_email_list(self) -> list:
+        return [e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()]
+
+    @property
+    def has_stripe(self) -> bool:
+        return bool(self.STRIPE_SECRET_KEY)
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -58,6 +87,14 @@ class Settings(BaseSettings):
             except Exception:
                 return [v]
         return v
+
+    @property
+    def has_serpapi(self) -> bool:
+        return bool(self.SERPAPI_KEY)
+
+    @property
+    def has_eventbrite(self) -> bool:
+        return bool(self.EVENTBRITE_TOKEN)
 
     @property
     def is_production(self) -> bool:
@@ -78,3 +115,5 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
