@@ -302,6 +302,14 @@ async def stripe_webhook(request: Request):
 
     logger.info(f"Stripe webhook: {event_type} id={event.get('id', '')[:12]}")
 
+    # Alert Avi on any purchase
+    try:
+        if event_type in ("checkout.session.completed", "invoice.payment_succeeded",
+                          "customer.subscription.created", "payment_intent.succeeded"):
+            await _alert_avi_purchase(event_type, data)
+    except Exception:
+        pass
+
     try:
         if event_type in ("customer.subscription.created", "customer.subscription.updated"):
             await _handle_subscription_upsert(data)
@@ -597,3 +605,48 @@ async def approve_pricing_proposal(
         "proposal": applied,
         "message": "Ora's pricing adjustment is now live.",
     }
+
+
+async def _alert_avi_purchase(event_type: str, data: dict) -> None:
+    """Send Telegram alert to Avi on any purchase."""
+    import httpx, os
+    bot_token = os.getenv("ORA_TELEGRAM_TOKEN", "")
+    if not bot_token:
+        return
+
+    # Extract purchase details
+    amount = 0.0
+    customer_email = data.get("customer_email") or data.get("customer_details", {}).get("email", "unknown")
+    
+    if event_type in ("checkout.session.completed", "payment_intent.succeeded"):
+        amount = (data.get("amount_total") or data.get("amount_received") or 0) / 100.0
+        currency = data.get("currency", "usd").upper()
+        metadata = data.get("metadata") or {}
+        service = metadata.get("service_id", "subscription")
+    elif event_type in ("invoice.payment_succeeded", "customer.subscription.created"):
+        amount = data.get("amount_paid", 0) / 100.0
+        currency = data.get("currency", "usd").upper()
+        service = "subscription"
+    else:
+        return
+
+    if amount <= 0:
+        return
+
+    emoji = "🎉" if amount >= 30 else "💰"
+    msg = (
+        f"{emoji} New purchase!\n"
+        f"💳 ${amount:.2f} {currency}\n"
+        f"📦 {service}\n"
+        f"📧 {customer_email}\n"
+        f"🔔 {event_type.replace('_', ' ').title()}"
+    )
+
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(
+                f"https://api.telegram.org/bot{bot_token}/sendMessage",
+                json={"chat_id": "5716959016", "text": msg}
+            )
+    except Exception:
+        pass
