@@ -1,0 +1,13 @@
+{
+  "android": {
+    "package": "com.avielandromeda.connectome"
+  },
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "4db51cdf-f373-4043-a073-0dfa67bee34f"
+      }
+    },
+    "owner": "avielandromeda"
+  }
+}
