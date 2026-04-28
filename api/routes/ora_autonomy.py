@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ora/autonomy", tags=["ora_autonomy"])
 
 # Admin emails — users allowed to trigger autonomy runs
-ADMIN_EMAILS = {"avi@atdao.org", "nea@atdao.org"}
+ADMIN_EMAILS = {"avi@atdao.org", "nea@atdao.org", "carlosandromeda8@gmail.com"}
 
 
 async def _require_admin(user_id: str = Depends(get_current_user_id)) -> str:
