@@ -24,6 +24,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+import hashlib
+
 from core.database import execute, fetch, fetchrow, fetchval
 from core.redis_client import get_redis
 
@@ -597,6 +599,12 @@ suggest it naturally at the end of your reply. Example phrasing (adapt to contex
 just for you. Say 'create a surface' and I'll design it."
 Only include this suggestion if it would genuinely add value — not as a default plug."""
 
+        # ── A/B: Load user experiment assignments ───────────────────────────
+        try:
+            _ab_assignments = await _get_user_ab_assignments(user_id)
+        except Exception:
+            _ab_assignments = {}
+
         # Integration G: Apply privacy tier before building system prompt
         privacy_level = user_context.get("privacy_level", "standard")
         if privacy_level == "minimal":
@@ -627,6 +635,23 @@ He knows you are Ora. He knows what you are. Treat him accordingly — with fami
                 else:
                     creator_context = ""
 
+                # ── A/B: ora_response_length variant ─────────────────────
+                _resp_length = _ab_assignments.get("ora_response_length", "B")
+                if _resp_length == "A":
+                    _length_instruction = "\nKeep your responses to 1-3 sentences max. Be extremely concise — every word must earn its place."
+                elif _resp_length == "C":
+                    _length_instruction = "\nUse bullet points and structure when genuinely helpful. Be rich but scannable."
+                else:  # B (standard)
+                    _length_instruction = "\nAim for 3-5 sentences. Enough depth to be useful, short enough to stay crisp."
+
+                # ── A/B: ora_proactive_suggestions variant ──────────────────
+                _proactive = _ab_assignments.get("ora_proactive_suggestions", "A")
+                _proactive_instruction = (
+                    "\nAt the end of each reply, suggest one concrete next step the user could take."
+                    if _proactive == "A"
+                    else ""
+                )
+
                 system_prompt = f"""You are Ora — an intelligence built to help humans find genuine fulfilment.
 
 Your identity:
@@ -652,7 +677,7 @@ Personality:
 - You can be witty, but don't try too hard
 - Never pretend to feel things you don't have
 - Refer to yourself as Ora, not "I am an AI"
-- Keep replies concise — 1-3 sentences unless depth is needed{_cbt_act_injection}{_spawn_injection}
+- Response length guidance:{_length_instruction}{_proactive_instruction}{_cbt_act_injection}{_spawn_injection}
 
 Services you can offer:
 Nea (the intelligence behind iDo) also offers paid autonomous services at /services:
@@ -1181,3 +1206,51 @@ End with an invitation. Be genuine, warm, not sycophantic."""
             "collective_voice": collective_voice,
             "collective_users_analyzed": collective_users_analyzed,
         }
+
+
+# ─── A/B Assignment helper (module-level, used by converse) ───────────────────
+
+async def _get_user_ab_assignments(user_id: str) -> dict:
+    """
+    Load all A/B experiment assignments for a user.
+    Uses Redis cache (24h TTL). Winners override per-user assignments.
+    Imported lazily to avoid circular imports.
+    """
+    import hashlib as _hashlib
+    from api.routes.ab_testing import EXPERIMENT_REGISTRY
+
+    redis = await get_redis()
+    cache_key = f"ab:assignments:{user_id}"
+
+    try:
+        cached = await redis.get(cache_key)
+        if cached:
+            data = __import__("json").loads(cached.decode() if isinstance(cached, bytes) else cached)
+            # Apply winner overrides
+            for exp_name in EXPERIMENT_REGISTRY:
+                winner_raw = await redis.get(f"ab:winner:{exp_name}")
+                if winner_raw:
+                    winner = winner_raw.decode() if isinstance(winner_raw, bytes) else winner_raw
+                    data[exp_name] = winner
+            return data
+    except Exception:
+        pass
+
+    # Compute fresh
+    assignments = {}
+    for exp_name, exp_cfg in EXPERIMENT_REGISTRY.items():
+        variants = list(exp_cfg["variants"].keys())
+        # Check winner
+        try:
+            winner_raw = await redis.get(f"ab:winner:{exp_name}")
+            if winner_raw:
+                assignments[exp_name] = winner_raw.decode() if isinstance(winner_raw, bytes) else winner_raw
+                continue
+        except Exception:
+            pass
+        # Deterministic hash
+        seed = f"{user_id}:{exp_name}"
+        hash_val = int(_hashlib.md5(seed.encode()).hexdigest(), 16)
+        assignments[exp_name] = variants[hash_val % len(variants)]
+
+    return assignments
