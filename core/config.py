@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     STRIPE_PRICE_SOVEREIGN_MONTHLY: str = ""
     STRIPE_PRICE_SOVEREIGN_YEARLY: str = ""
 
+    # Admin emails (comma-separated) — these users get admin privileges
+    ADMIN_EMAILS: str = "carlosandromeda8@gmail.com"
+
+    @property
+    def admin_email_list(self) -> list:
+        return [e.strip().lower() for e in self.ADMIN_EMAILS.split(",") if e.strip()]
+
     @property
     def has_stripe(self) -> bool:
         return bool(self.STRIPE_SECRET_KEY)
