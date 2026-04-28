@@ -186,7 +186,7 @@ async def create_checkout_session(
     # Get or create Stripe customer
     user_row = await fetchrow(
         "SELECT email FROM users WHERE id = $1",
-        UUID(user_id),
+        str(user_id),
     )
     if not user_row:
         raise HTTPException(status_code=404, detail="User not found")
@@ -203,7 +203,7 @@ async def create_checkout_session(
             customer_id = customer["id"]
             await execute(
                 "UPDATE subscriptions SET stripe_customer_id = $2 WHERE user_id = $1",
-                UUID(user_id),
+                str(user_id),
                 customer_id,
             )
 
