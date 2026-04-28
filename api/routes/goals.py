@@ -264,12 +264,12 @@ async def list_goals(
     if status_filter == "all":
         rows = await fetch(
             "SELECT * FROM goals WHERE user_id = $1 ORDER BY created_at DESC",
-            UUID(user_id),
+            str(user_id),
         )
     else:
         rows = await fetch(
             "SELECT * FROM goals WHERE user_id = $1 AND status = $2 ORDER BY created_at DESC",
-            UUID(user_id),
+            str(user_id),
             status_filter,
         )
     return [_build_goal_out(r) for r in rows]
@@ -293,7 +293,7 @@ async def create_goal(
         VALUES ($1, $2, $3, $4, 'active', 0.0, $5)
         RETURNING *
         """,
-        UUID(user_id),
+        str(user_id),
         body.title,
         body.description,
         json.dumps(steps),
@@ -317,7 +317,7 @@ async def get_goal(
     row = await fetchrow(
         "SELECT * FROM goals WHERE id = $1 AND user_id = $2",
         UUID(goal_id),
-        UUID(user_id),
+        str(user_id),
     )
     if not row:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -334,7 +334,7 @@ async def update_goal(
     row = await fetchrow(
         "SELECT * FROM goals WHERE id = $1 AND user_id = $2",
         UUID(goal_id),
-        UUID(user_id),
+        str(user_id),
     )
     if not row:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -379,7 +379,7 @@ async def delete_goal(
     row = await fetchrow(
         "SELECT id FROM goals WHERE id = $1 AND user_id = $2",
         UUID(goal_id),
-        UUID(user_id),
+        str(user_id),
     )
     if not row:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -404,7 +404,7 @@ async def complete_goal(
     """
     row = await fetchrow(
         "SELECT * FROM goals WHERE id = $1 AND user_id = $2",
-        UUID(goal_id), UUID(user_id),
+        UUID(goal_id), str(user_id),
     )
     if not row:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -488,7 +488,7 @@ async def _suggest_next_goal(user_id: str, completed_goal_id: str) -> Optional[s
             ORDER BY progress DESC
             LIMIT 5
             """,
-            UUID(user_id), UUID(completed_goal_id),
+            str(user_id), UUID(completed_goal_id),
         )
 
         if not active_rows:
@@ -523,7 +523,7 @@ async def breakdown_goal(
     row = await fetchrow(
         "SELECT * FROM goals WHERE id = $1 AND user_id = $2",
         UUID(goal_id),
-        UUID(user_id),
+        str(user_id),
     )
     if not row:
         raise HTTPException(status_code=404, detail="Goal not found")
@@ -554,7 +554,7 @@ async def ask_about_step(
     row = await fetchrow(
         "SELECT * FROM goals WHERE id = $1 AND user_id = $2",
         UUID(goal_id),
-        UUID(user_id),
+        str(user_id),
     )
     if not row:
         raise HTTPException(status_code=404, detail="Goal not found")
