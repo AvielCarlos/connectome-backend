@@ -314,9 +314,19 @@ async def stripe_webhook(request: Request):
             if sub_id:
                 sub_data = await stripe.get_subscription(sub_id)
                 await _handle_subscription_upsert(sub_data)
+            # Also track as a service conversion if metadata has UTM info
+            await _maybe_record_service_conversion(data, event_type)
 
         elif event_type == "invoice.payment_failed":
             await _handle_payment_failed(data)
+
+        elif event_type == "checkout.session.completed":
+            # Track one-time service purchases via checkout sessions
+            await _maybe_record_service_conversion(data, event_type)
+
+        elif event_type == "payment_intent.succeeded":
+            # Track direct payment intents (one-time service purchases)
+            await _maybe_record_service_conversion(data, event_type)
 
     except Exception as e:
         logger.error(f"Stripe webhook handler error ({event_type}): {e}", exc_info=True)
@@ -324,6 +334,58 @@ async def stripe_webhook(request: Request):
         return {"received": True, "error": str(e)}
 
     return {"received": True, "type": event_type}
+
+
+async def _maybe_record_service_conversion(data: dict, event_type: str) -> None:
+    """Extract UTM metadata from Stripe event and record as a service conversion."""
+    try:
+        # Stripe metadata is set in checkout session with UTM params
+        metadata = data.get("metadata") or {}
+        source = metadata.get("utm_source", "")
+        medium = metadata.get("utm_medium", "")
+        campaign = metadata.get("utm_campaign", "")
+        content = metadata.get("utm_content", "")
+        service_id = metadata.get("service_id", "")
+
+        # Only record if we have UTM data (Nea's outreach)
+        if not source and not campaign:
+            return
+
+        # Get amount from the event
+        amount = 0.0
+        if event_type == "checkout.session.completed":
+            amount = data.get("amount_total", 0) / 100.0  # Stripe amounts in cents
+            order_id = data.get("id", "")
+            currency = data.get("currency", "usd")
+        elif event_type == "invoice.payment_succeeded":
+            amount = data.get("amount_paid", 0) / 100.0
+            order_id = data.get("id", "")
+            currency = data.get("currency", "usd")
+        elif event_type == "payment_intent.succeeded":
+            amount = data.get("amount", 0) / 100.0
+            order_id = data.get("id", "")
+            currency = data.get("currency", "usd")
+        else:
+            return
+
+        if not order_id:
+            return
+
+        # Record in services_conversions table
+        from api.routes.services import record_service_conversion
+        await record_service_conversion({
+            "order_id": order_id,
+            "source": source,
+            "medium": medium,
+            "campaign": campaign,
+            "content": content,
+            "service_id": service_id,
+            "amount": amount,
+            "currency": currency,
+        })
+        logger.info(f"Service conversion recorded: order={order_id} source={source} amount=${amount}")
+    except Exception as e:
+        logger.warning(f"Could not record service conversion: {e}")
 
 
 async def _handle_subscription_upsert(sub: dict) -> None:
