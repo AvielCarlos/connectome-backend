@@ -117,30 +117,40 @@ class OraAutonomyAgent:
             from ora.agents.self_improvement_agent import SelfImprovementAgent
             self_agent = SelfImprovementAgent(self._openai, self._telegram_token)
             improvement_result = await self_agent.run()
-            result["self_improvement"] = improvement_result
+            report["self_improvement"] = improvement_result
         except Exception as e:
             logger.error(f"OraAutonomy self-improvement cycle failed: {e}")
-            result["self_improvement"] = {"error": str(e)}
+            report["self_improvement"] = {"error": str(e)}
 
         # F. Self-improvement eval loop (Loop 2: did last change actually help?)
         try:
             from ora.agents.self_improvement_agent import SelfImprovementAgent
             eval_agent = SelfImprovementAgent(self._openai, self._telegram_token)
             eval_result = await eval_agent.run_eval_loop()
-            result["self_improvement_eval"] = eval_result
+            report["self_improvement_eval"] = eval_result
         except Exception as e:
             logger.error(f"OraAutonomy eval_loop failed: {e}")
-            result["self_improvement_eval"] = {"error": str(e)}
+            report["self_improvement_eval"] = {"error": str(e)}
 
         # G. Self-improvement meta loop (Loop 3: learn to improve better)
         try:
             from ora.agents.self_improvement_agent import SelfImprovementAgent
             meta_agent = SelfImprovementAgent(self._openai, self._telegram_token)
             meta_result = await meta_agent.run_meta_loop()
-            result["self_improvement_meta"] = meta_result
+            report["self_improvement_meta"] = meta_result
         except Exception as e:
             logger.error(f"OraAutonomy meta_loop failed: {e}")
-            result["self_improvement_meta"] = {"error": str(e)}
+            report["self_improvement_meta"] = {"error": str(e)}
+
+        # H. Agent evolution cycle
+        try:
+            from ora.agents.evolution_agent import OraEvolutionAgent
+            evolution_agent = OraEvolutionAgent(self._openai, self._telegram_token)
+            evolution_result = await evolution_agent.run()
+            report["evolution"] = evolution_result
+        except Exception as e:
+            logger.error(f"OraAutonomy evolution cycle failed: {e}")
+            report["evolution"] = {"error": str(e)}
 
         # Persist last run metadata to Redis
         try:

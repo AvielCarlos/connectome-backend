@@ -60,6 +60,7 @@ from ora.agents.drive_agent import DriveAgent
 from ora.consciousness import OraConsciousness
 from ora.content_quality import content_quality_check
 from ora.agents.context_agent import ContextAgent
+from ora.agent_registry import AgentRegistry
 
 # Module-level alias so OraBrain code can call _content_quality_check(spec)
 _content_quality_check = content_quality_check
@@ -123,6 +124,9 @@ class OraBrain:
         # Context agent — time/calendar signals for content adaptation
         self.context_agent = ContextAgent()
 
+        # Dynamic agents loaded from AgentRegistry (spawned/partitioned/merged)
+        self._dynamic_agents: Dict[str, Any] = {}
+
         # Agent rotation weights (updated dynamically by feedback)
         # collective: 8%, explore: 8% of screens
         self._base_weights = {
@@ -145,6 +149,39 @@ class OraBrain:
             _asyncio.get_event_loop().create_task(self.reload_weights())
         except RuntimeError:
             pass  # No running loop at import time — weights load lazily
+
+    # -----------------------------------------------------------------------
+    # Dynamic Agent Loading
+    # -----------------------------------------------------------------------
+
+    async def _load_dynamic_agents(self) -> None:
+        """Load spawned/evolved agents from registry into brain's agent pool."""
+        try:
+            registry = AgentRegistry()
+            agents = await registry.get_active_agents()
+
+            for agent_spec in agents:
+                if agent_spec.get("type") not in ("spawned", "partitioned", "merged"):
+                    continue  # Builtins are already hardcoded above
+
+                name = agent_spec["name"]
+                module_path = agent_spec.get("module_path")
+                class_name = agent_spec.get("class_name", name)
+
+                if not module_path:
+                    continue
+
+                try:
+                    import importlib
+                    module = importlib.import_module(module_path)
+                    agent_class = getattr(module, class_name)
+                    instance = agent_class(self._openai)
+                    self._dynamic_agents[name] = instance
+                    logger.info(f"OraBrain: loaded dynamic agent {name} from {module_path}")
+                except Exception as e:
+                    logger.warning(f"OraBrain: failed to load dynamic agent {name}: {e}")
+        except Exception as e:
+            logger.warning(f"OraBrain._load_dynamic_agents: {e}")
 
     # -----------------------------------------------------------------------
     # Redis Weight Loading
@@ -696,7 +733,19 @@ class OraBrain:
             ),
         }
 
-        name, fn = agent_map[agent_name]
+        if agent_name in agent_map:
+            name, fn = agent_map[agent_name]
+        else:
+            # Check dynamic agents (spawned/partitioned/merged)
+            dyn_instance = self._dynamic_agents.get(agent_name)
+            if dyn_instance and hasattr(dyn_instance, "generate_screen"):
+                name = agent_name
+                fn = dyn_instance.generate_screen
+                logger.info(f"OraBrain: routing to dynamic agent {name}")
+            else:
+                # Fallback to discovery
+                logger.warning(f"OraBrain: unknown agent key {agent_name!r} — fallback to DiscoveryAgent")
+                name, fn = "DiscoveryAgent", self.discovery.generate_screen
 
         # --- Collective suppression check: before serving ANY screen,
         #     check if this agent+domain combo is globally suppressed ---
@@ -818,8 +867,15 @@ class OraBrain:
         Compute agent weights based on recent interaction ratings.
         Start from base weights (which are dynamically tuned by MetaAgent),
         then boost agents the user rates higher.
+        Also include any dynamic agents loaded from the registry.
         """
         weights = self._base_weights.copy()
+
+        # Include dynamic agents (spawned/partitioned/merged)
+        for dyn_name in self._dynamic_agents:
+            key = dyn_name.lower().replace("agent", "").strip()
+            if key not in weights:
+                weights[key] = 0.05  # trial weight
 
         # Analyze recent interactions
         agent_ratings: Dict[str, list] = {}
@@ -1590,6 +1646,10 @@ async def init_brain():
 
     # Load Redis weights immediately on startup
     await _brain.reload_weights()
+
+    # Load dynamic agents from registry
+    await _brain._load_dynamic_agents()
+    logger.info(f"OraBrain: loaded {len(_brain._dynamic_agents)} dynamic agents from registry")
 
     # Start WorldAgent background refresh loop
     asyncio.create_task(_brain.world.refresh_loop())
