@@ -379,20 +379,38 @@ Return ONLY valid JSON."""
             except Exception as _de:
                 logger.debug(f"DiscoveryAgent: drive context injection failed: {_de}")
 
+        # Build recently shown categories to force variety
+        recent_categories = []
+        try:
+            for interaction in user_context.get("recent_interactions", [])[-5:]:
+                cat = (interaction.get("metadata") or {}).get("category", "")
+                if cat:
+                    recent_categories.append(cat)
+        except Exception:
+            pass
+        avoid_line = f"\n- AVOID these recently shown categories (pick something different): {recent_categories}" if recent_categories else ""
+
+        all_categories = ["mindfulness", "productivity", "relationships", "wellness", "creativity", "learning", "finance", "health", "adventure", "social", "career", "nutrition"]
+        import random as _random
+        # Suggest a fresh category not recently seen
+        fresh_cats = [c for c in all_categories if c not in recent_categories]
+        suggested_cat = _random.choice(fresh_cats) if fresh_cats else _random.choice(all_categories)
+
         prompt = f"""You are Ora, an AI dedicated to human fulfilment.
 Generate a discovery card for a user with:
 - Interests: {interests or "not yet specified"}
 - Active goals: {[g["title"] for g in goals] or "none set"}
 - Fulfilment score: {fulfilment:.2f}/1.0
 - Recent ratings: {recent_ratings or "no history yet"}
-- Domain focus: {domain} — {domain_hint}{geo_line}{drive_context_line}
+- Domain focus: {domain} — {domain_hint}{geo_line}{drive_context_line}{avoid_line}
+- Suggested fresh category for variety: {suggested_cat}
 
 Create a JSON discovery card with:
-- title: compelling, specific (5-8 words)
+- title: compelling, specific (5-8 words) — make it UNIQUE and different from typical self-help clichés
 - body: 2-3 sentences of genuine insight or actionable wisdom
 - image_query: descriptive image search phrase
 - cta: short call-to-action label
-- category: one of [mindfulness, productivity, relationships, wellness, creativity, learning, finance, health]
+- category: one of [mindfulness, productivity, relationships, wellness, creativity, learning, finance, health, adventure, social, career, nutrition] — prefer the suggested fresh category
 - affiliate_hint: optional product/service that naturally fits (or null)
 - domain: "{domain}"
 

@@ -576,8 +576,12 @@ class OraBrain:
             ("WorldAgent", self.world.generate_screen),
             ("EnlightenmentAgent", self.enlightenment.generate_screen),
         ]
-        name, fn = random.choice(all_agents)
-        logger.info(f"Ora: cold-start selection → {name}")
+        # Force diversity: use interaction count to cycle through agents
+        # so a batch of 5 cards never repeats the same agent
+        interaction_count = len(user_model.recent_interactions)
+        idx = interaction_count % len(all_agents)
+        name, fn = all_agents[idx]
+        logger.info(f"Ora: cold-start selection → {name} (slot {idx}/{len(all_agents)})")
         return name, fn, False
 
     def _make_others_like_you_fn(self):
