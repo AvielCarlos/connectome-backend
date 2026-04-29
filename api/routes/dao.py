@@ -331,50 +331,73 @@ async def submit_contribution(
     body: SubmitContributionRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Submit a contribution for Ora's review."""
+    """Submit a contribution for Ora's review without requiring GitHub registration."""
     if body.contribution_type not in VALID_CONTRIBUTION_TYPES:
         raise HTTPException(
             status_code=400,
             detail=f"contribution_type must be one of: {', '.join(sorted(VALID_CONTRIBUTION_TYPES))}",
         )
 
-    # Find contributor — need their contributor record
-    # We'll use the github_username from query param or let them pass it separately
-    # For now, require they're registered first
-    # The user must pass their github_username in the request context
-    # Simple approach: look up by user_id in profile — or require prior registration
-    # We'll accept contributions without strict linking to a registered contributor
-    # and link them if possible
+    # Idempotent schema hardening for deployments that have not run the latest DB bootstrap yet.
+    await execute("ALTER TABLE contributors ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)")
+    await execute("CREATE INDEX IF NOT EXISTS idx_contributors_user_id ON contributors(user_id)")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS external_link TEXT")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS evidence_text TEXT")
 
-    # Find any contributor registered by this user session
-    # Since contributors are linked by github_username (not user_id), we'll create
-    # an anonymous contribution placeholder and link on registration
-    # Better: require contributor registration first
+    user_uuid = UUID(user_id)
 
-    # Check if at least one contributor exists (for minimal auth)
-    # In production you'd link user_id → contributor via a mapping table
-    # For now, accept with a note in the status
+    contributor = await fetchrow(
+        "SELECT id FROM contributors WHERE user_id = $1",
+        user_uuid,
+    )
+
+    if not contributor:
+        user_row = await fetchrow(
+            "SELECT email, display_name, profile FROM users WHERE id = $1",
+            user_uuid,
+        )
+        user_data = _record_to_dict(user_row)
+        email = user_data.get("email") or ""
+        profile = user_data.get("profile") or {}
+        display = (
+            user_data.get("display_name")
+            or profile.get("display_name")
+            or (email.split("@")[0] if email else f"user_{user_id[:8]}")
+        )
+        contributor = await fetchrow(
+            """
+            INSERT INTO contributors (github_username, display_name, email, tier, user_id)
+            VALUES ($1, $2, $3, 'observer', $4)
+            ON CONFLICT (github_username) DO UPDATE SET
+                user_id = EXCLUDED.user_id,
+                display_name = COALESCE(contributors.display_name, EXCLUDED.display_name),
+                email = COALESCE(contributors.email, EXCLUDED.email)
+            RETURNING id
+            """,
+            f"user_{user_id[:8]}",
+            display,
+            email,
+            user_uuid,
+        )
+
     row = await fetchrow(
         """
         INSERT INTO contributions (
-            contributor_id, contribution_type, title, description, github_pr_url
+            contributor_id, user_id, contribution_type, title, description, github_pr_url, external_link, evidence_text
         )
-        SELECT
-            (SELECT id FROM contributors ORDER BY joined_at DESC LIMIT 1),
-            $1, $2, $3, $4
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING id, contribution_type, title, submitted_at, status
         """,
+        contributor["id"],
+        user_uuid,
         body.contribution_type,
         body.title,
         body.description,
         body.github_pr_url,
+        body.external_link,
+        body.evidence_text,
     )
-
-    if not row:
-        raise HTTPException(
-            status_code=400,
-            detail="No registered contributor found. Please register via /api/dao/register first.",
-        )
 
     logger.info(f"DAO: new contribution submitted: '{body.title}' ({body.contribution_type})")
 
@@ -382,15 +405,39 @@ async def submit_contribution(
     try:
         await execute(
             "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, $3, $4)",
-            UUID(user_id), 50, "contribution_submit", row["id"],
+            user_uuid, 50, "contribution_submit", row["id"],
         )
     except Exception:
         pass  # Non-critical
 
     return {
         "contribution": _serialize(_record_to_dict(row)),
-        "message": "Contribution submitted. Ora will evaluate it within 24 hours.",
+        "message": "Contribution submitted! Ora will review within 24h.",
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/dao/my-contributions
+# ---------------------------------------------------------------------------
+
+@router.get("/my-contributions")
+async def my_contributions(user_id: str = Depends(get_current_user_id)):
+    """Return the authenticated user's submitted contributions."""
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS external_link TEXT")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS evidence_text TEXT")
+
+    rows = await fetch(
+        """
+        SELECT id, contribution_type, title, description, github_pr_url, external_link,
+               submitted_at, status, final_cp AS cp_awarded
+        FROM contributions
+        WHERE user_id = $1
+        ORDER BY submitted_at DESC
+        """,
+        UUID(user_id),
+    )
+    return {"contributions": [_serialize(_record_to_dict(r)) for r in rows]}
 
 
 # ---------------------------------------------------------------------------

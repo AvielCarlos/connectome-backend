@@ -903,6 +903,13 @@ async def run_migrations():
         await conn.execute("""
             ALTER TABLE contributors ADD COLUMN IF NOT EXISTS website TEXT
         """)
+        await conn.execute("""
+            ALTER TABLE contributors ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_contributors_user_id
+            ON contributors(user_id)
+        """)
 
         # Individual contributions
         await conn.execute("""
@@ -932,6 +939,15 @@ async def run_migrations():
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_contributions_status
             ON contributions(status)
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS external_link TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS evidence_text TEXT
         """)
 
         # User suggestions (community feature requests, bug reports, ideas)

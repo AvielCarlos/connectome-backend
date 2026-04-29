@@ -498,6 +498,8 @@ CREATE TABLE IF NOT EXISTS contributors (
 
 CREATE INDEX IF NOT EXISTS idx_contributors_github_username ON contributors(github_username);
 CREATE INDEX IF NOT EXISTS idx_contributors_total_cp ON contributors(total_cp DESC);
+ALTER TABLE contributors ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id);
+CREATE INDEX IF NOT EXISTS idx_contributors_user_id ON contributors(user_id);
 
 -- contributions: individual tracked contributions
 CREATE TABLE IF NOT EXISTS contributions (
@@ -522,6 +524,9 @@ CREATE TABLE IF NOT EXISTS contributions (
 CREATE INDEX IF NOT EXISTS idx_contributions_contributor_id ON contributions(contributor_id);
 CREATE INDEX IF NOT EXISTS idx_contributions_status ON contributions(status);
 CREATE INDEX IF NOT EXISTS idx_contributions_submitted_at ON contributions(submitted_at DESC);
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id);
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS external_link TEXT;
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS evidence_text TEXT;
 
 -- cp_ledger: immutable CP transaction log
 CREATE TABLE IF NOT EXISTS cp_ledger (
