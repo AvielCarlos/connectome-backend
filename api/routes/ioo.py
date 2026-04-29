@@ -16,6 +16,7 @@ Endpoints:
 """
 
 import logging
+import json
 from typing import Optional, List
 from uuid import UUID
 
@@ -31,6 +32,77 @@ from ora.agents.surface_lifecycle import SurfaceLifecycleManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ioo", tags=["ioo"])
+
+
+CORE_DOMAIN_SEED_NODES = [
+    # iVive — maintenance and growth of self
+    {"title": "Get physically stronger and fitter", "description": "Start a strength or fitness path that makes your body feel capable.", "domain": "iVive", "type": "goal", "step_type": "physical", "difficulty_level": 5, "tags": ["fitness", "strength", "self"]},
+    {"title": "Improve mental health and emotional wellbeing", "description": "Build support, tools, and practices for emotional regulation and resilience.", "domain": "iVive", "type": "goal", "step_type": "hybrid", "difficulty_level": 6, "tags": ["mental-health", "therapy", "self"]},
+    {"title": "Deepen spiritual practice or sense of purpose", "description": "Explore meaning, inner peace, reflection, and spiritual grounding.", "domain": "iVive", "type": "goal", "step_type": "hybrid", "difficulty_level": 5, "tags": ["spirituality", "purpose", "inner-world"]},
+    {"title": "Develop a creative practice", "description": "Use creativity as self-development through art, writing, music, or making.", "domain": "iVive", "type": "activity", "step_type": "hybrid", "difficulty_level": 4, "tags": ["creativity", "practice", "self-development"]},
+    {"title": "Get finances stable and growing", "description": "Create clarity, budgeting, saving, and security around money.", "domain": "iVive", "type": "goal", "step_type": "digital", "difficulty_level": 5, "tags": ["finance", "stability", "life-admin"]},
+    {"title": "Build rituals and habits that ground me", "description": "Design repeatable routines for recovery, clarity, and stability.", "domain": "iVive", "type": "activity", "step_type": "hybrid", "difficulty_level": 3, "tags": ["habits", "rituals", "self-care"]},
+
+    # Eviva — contribution and reward
+    {"title": "Build a career that actually means something", "description": "Move toward work that contributes value and gives you purpose, recognition, and reward.", "domain": "Eviva", "type": "goal", "step_type": "hybrid", "difficulty_level": 7, "tags": ["career", "purpose", "income"]},
+    {"title": "Volunteer for a cause you care about", "description": "Give time to a mission that matters and become part of something larger.", "domain": "Eviva", "type": "experience", "step_type": "physical", "difficulty_level": 3, "tags": ["volunteering", "service", "community"]},
+    {"title": "Contribute to an open-source or community project", "description": "Build for others and earn recognition in a shared mission.", "domain": "Eviva", "type": "activity", "step_type": "digital", "difficulty_level": 5, "tags": ["open-source", "dao", "contribution"]},
+    {"title": "Start something that gives back", "description": "Create a project, group, or offering that serves people beyond you.", "domain": "Eviva", "type": "activity", "step_type": "hybrid", "difficulty_level": 8, "tags": ["service", "creation", "collective"]},
+    {"title": "Create income from skills that serve others", "description": "Turn a useful skill into value exchange — help people and get rewarded.", "domain": "Eviva", "type": "goal", "step_type": "hybrid", "difficulty_level": 6, "tags": ["income", "skills", "service"]},
+    {"title": "Participate in governance or civic life", "description": "Take part in DAO, local, or civic decisions that shape the collective.", "domain": "Eviva", "type": "experience", "step_type": "hybrid", "difficulty_level": 4, "tags": ["governance", "civic", "dao"]},
+    {"title": "Mentor someone or teach what you know", "description": "Share earned knowledge with someone who can benefit from it.", "domain": "Eviva", "type": "experience", "step_type": "hybrid", "difficulty_level": 4, "tags": ["mentorship", "teaching", "service"]},
+
+
+    {"title": "Find a volunteering role that matches your skills", "description": "Search global volunteering opportunities where your strengths can genuinely help.", "domain": "Eviva", "type": "activity", "step_type": "hybrid", "difficulty_level": 4, "tags": ["volunteering", "skills", "global"], "requirements": {"required_skills": ["basic outreach"]}},
+    {"title": "Apply to one mission-aligned job this month", "description": "Find and apply for one job at an organisation whose mission you believe in.", "domain": "Eviva", "type": "activity", "step_type": "hybrid", "difficulty_level": 5, "tags": ["career", "impact-jobs", "mission"]},
+    {"title": "Contribute to an open-source project", "description": "Find a project looking for contributors and submit one useful contribution.", "domain": "Eviva", "type": "activity", "step_type": "digital", "difficulty_level": 5, "tags": ["open-source", "github", "contribution"], "requirements": {"required_skills": ["git", "technical writing or coding"]}},
+    {"title": "Mentor someone who needs your expertise", "description": "Offer a concrete hour of guidance to someone who can benefit from what you know.", "domain": "Eviva", "type": "activity", "step_type": "hybrid", "difficulty_level": 4, "tags": ["mentorship", "teaching", "service"]},
+    {"title": "Join a local community initiative", "description": "Find a neighbourhood or community effort and show up in person.", "domain": "Eviva", "type": "activity", "step_type": "physical", "difficulty_level": 3, "tags": ["community", "local", "service"]},
+    {"title": "Start freelancing with your skills for a cause you believe in", "description": "Package a useful skill and offer it to a mission-aligned organisation or cause.", "domain": "Eviva", "type": "activity", "step_type": "hybrid", "difficulty_level": 6, "tags": ["freelance", "skills", "impact", "income"]},
+    {"title": "Work abroad — find a meaningful international role", "description": "Research international impact roles where your skills can serve and grow.", "domain": "Eviva", "type": "activity", "step_type": "physical", "difficulty_level": 7, "tags": ["work-abroad", "impact-jobs", "travel"], "requirements": {"required_skills": ["cross-cultural readiness"]}},
+    {"title": "Volunteer with Doctors Without Borders", "description": "Explore MSF roles and prepare for the resilience, medical, or operational prerequisites.", "domain": "Eviva", "type": "activity", "step_type": "physical", "difficulty_level": 9, "tags": ["msf", "medical", "global-service"], "requirements": {"required_skills": ["first aid", "mental resilience"]}},
+    {"title": "Get a job as a data scientist", "description": "Build the capability stack and portfolio needed for mission-aligned data science work.", "domain": "Eviva", "type": "activity", "step_type": "digital", "difficulty_level": 8, "tags": ["data-science", "career", "impact-jobs"], "requirements": {"required_skills": ["python", "machine learning", "portfolio"]}},
+    {"title": "Teach English abroad", "description": "Find international teaching opportunities and prepare the certification required.", "domain": "Eviva", "type": "activity", "step_type": "physical", "difficulty_level": 6, "tags": ["teaching", "work-abroad", "service"], "requirements": {"required_skills": ["tefl certification"]}},
+    {"title": "Lead a community project", "description": "Step into visible leadership for a project that benefits your community.", "domain": "Eviva", "type": "activity", "step_type": "physical", "difficulty_level": 6, "tags": ["leadership", "community", "civic"], "requirements": {"required_skills": ["public speaking"]}},
+
+    # Aventi — aliveness, fun, discovery
+    {"title": "Travel somewhere new this year", "description": "Choose a place you have not been and make the trip real.", "domain": "Aventi", "type": "experience", "step_type": "physical", "difficulty_level": 5, "tags": ["travel", "discovery", "aliveness"]},
+    {"title": "Go to more events — concerts, festivals, markets", "description": "Add more live culture, crowds, music, sport, markets, and gatherings to your life.", "domain": "Aventi", "type": "activity", "step_type": "physical", "difficulty_level": 3, "tags": ["events", "fun", "culture"]},
+    {"title": "Date intentionally and find real connection", "description": "Bring courage, play, and clarity to romantic connection.", "domain": "Aventi", "type": "goal", "step_type": "physical", "difficulty_level": 5, "tags": ["dating", "romance", "connection"]},
+    {"title": "Invest in a friendship you've been neglecting", "description": "Revive a friendship through time, play, and presence.", "domain": "Aventi", "type": "activity", "step_type": "physical", "difficulty_level": 2, "tags": ["friendship", "social", "play"]},
+    {"title": "Try a thrilling new physical experience", "description": "Surf, ski, skydive, climb, dance — do something that wakes up your body.", "domain": "Aventi", "type": "experience", "step_type": "physical", "difficulty_level": 4, "tags": ["thrill", "adventure", "body"]},
+    {"title": "Make weeknights an adventure", "description": "Create small pockets of aliveness outside the weekend routine.", "domain": "Aventi", "type": "activity", "step_type": "physical", "difficulty_level": 2, "tags": ["weeknights", "spontaneity", "fun"]},
+    {"title": "Say yes to spontaneous plans more often", "description": "Practice following aliveness when safe opportunities appear.", "domain": "Aventi", "type": "activity", "step_type": "physical", "difficulty_level": 2, "tags": ["spontaneity", "play", "discovery"]},
+]
+
+
+async def seed_core_domain_nodes() -> dict:
+    """Seed canonical 3-domain IOO nodes idempotently."""
+    seeded = 0
+    existing = 0
+    for node in CORE_DOMAIN_SEED_NODES:
+        existing_id = await fetchval("SELECT id FROM ioo_nodes WHERE lower(title) = lower($1) LIMIT 1", node["title"])
+        if existing_id:
+            existing += 1
+            continue
+        await execute(
+            """
+            INSERT INTO ioo_nodes
+                (type, title, description, tags, domain, step_type, goal_category, difficulty_level, requirements)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
+            """,
+            node["type"], node["title"], node["description"], node.get("tags", []), node["domain"],
+            node.get("step_type", "hybrid"), node["domain"], node.get("difficulty_level", 5),
+            json.dumps(node.get("requirements", {})),
+        )
+        seeded += 1
+    try:
+        if seeded:
+            await get_graph_agent().embed_all_nodes()
+    except Exception as e:
+        logger.debug(f"Embedding core domain seed nodes skipped: {e}")
+    return {"seeded": seeded, "existing": existing, "total_core_domain_seed_nodes": len(CORE_DOMAIN_SEED_NODES)}
+
 
 
 async def _ioo_xp_for_node(node_id: str, user_id: str) -> int:
@@ -756,7 +828,8 @@ async def seed_nodes(user_id: str = Depends(get_current_user_id)):
     """Seed initial IOO nodes (idempotent). Available to all for Phase 1."""
     agent = get_graph_agent()
     result = await agent.seed_initial_nodes()
-    return result
+    domain_result = await seed_core_domain_nodes()
+    return {**result, "domains": domain_result}
 
 
 # ---------------------------------------------------------------------------

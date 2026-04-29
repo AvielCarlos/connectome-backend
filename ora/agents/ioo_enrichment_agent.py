@@ -23,8 +23,14 @@ logger = logging.getLogger(__name__)
 
 class IOOEnrichmentAgent:
     CATEGORIES = [
-        "health/fitness", "mental wellness", "relationships", "career",
-        "finance", "creativity", "spirituality", "learning", "adventure", "community",
+        "Eviva global meaningful work opportunities",
+        "Eviva volunteering roles with NGOs and social enterprises",
+        "Eviva open-source projects looking for contributors",
+        "Eviva impact-driven jobs remote 2026",
+        "Eviva meaningful volunteering opportunities 2026",
+        "Aventi fun adventure events dating travel friendship",
+        "iVive physical mental spiritual creative financial self-growth",
+        "health/fitness", "mental wellness", "career", "finance", "learning", "community",
     ]
 
     QUERY_TEMPLATES = [
@@ -32,6 +38,15 @@ class IOOEnrichmentAgent:
         "what do you need to achieve {goal}",
         "science-backed pathway to {goal}",
         "evidence based steps habits metrics for {goal}",
+    ]
+
+    EVIVA_SOURCE_QUERIES = [
+        "site:volunteermatch.org volunteering opportunities skills remote 2026",
+        "site:idealist.org remote impact jobs volunteering 2026",
+        "site:80000hours.org impact careers job board",
+        "GitHub trending open source projects looking for contributors good first issue",
+        "meaningful volunteering opportunities 2026",
+        "impact-driven jobs remote 2026",
     ]
 
     def __init__(self, openai_client=None):
@@ -70,6 +85,24 @@ class IOOEnrichmentAgent:
 
     def _fallback_steps(self, category: str) -> List[Dict[str, Any]]:
         templates = {
+            "Eviva global meaningful work opportunities": [
+                ("Find a volunteering role that matches your skills", "Search global volunteer listings and shortlist roles where your abilities can create real value.", "hybrid", ["Eviva", "volunteering", "skills"]),
+                ("Apply to one mission-aligned job this month", "Find one impact role aligned with your values and submit a serious application.", "hybrid", ["Eviva", "impact-jobs", "career"]),
+                ("Contribute to an open-source project", "Find a project with good-first-issues and make one useful contribution.", "digital", ["Eviva", "open-source", "github"]),
+            ],
+            "Eviva volunteering roles with NGOs and social enterprises": [
+                ("Find a volunteering role that matches your skills", "Use VolunteerMatch, Idealist, or local NGO directories to identify one fitting role.", "hybrid", ["Eviva", "volunteering", "NGO"]),
+                ("Join a local community initiative", "Find a real local initiative and attend one meeting or event.", "physical", ["Eviva", "community", "local"]),
+            ],
+            "Eviva open-source projects looking for contributors": [
+                ("Contribute to an open-source project", "Find a project with contributor guidance and submit a useful issue, doc, or PR.", "digital", ["Eviva", "open-source", "github"]),
+            ],
+            "Eviva impact-driven jobs remote 2026": [
+                ("Apply to one mission-aligned job this month", "Build a short list of remote impact roles and apply to one high-fit opportunity.", "hybrid", ["Eviva", "impact-jobs", "remote"]),
+            ],
+            "Eviva meaningful volunteering opportunities 2026": [
+                ("Find a volunteering role that matches your skills", "Search current global and local volunteer roles, then pick one worthy next step.", "hybrid", ["Eviva", "volunteering", "purpose"]),
+            ],
             "health/fitness": [
                 ("Schedule 3-4 movement sessions per week", "Create recurring training blocks and start with manageable intensity.", "physical", ["fitness", "habit"]),
                 ("Track daily protein intake for 3 days", "Measure current protein intake before changing the diet.", "hybrid", ["nutrition", "tracking"]),
@@ -102,7 +135,7 @@ class IOOEnrichmentAgent:
             prompt = f"""
 Extract actionable IOO graph nodes for the goal category: {category}.
 Use the search evidence below. Return JSON only: {{"steps": [{{"title": str, "description": str, "step_type": "digital|physical|hybrid", "tags": [str], "confidence": 0-1, "source_url": str}}]}}
-Prefer clear prerequisites, habits, metrics, physical actions, and digital actions. Avoid vague motivation.
+Prefer clear opportunities, prerequisites, habits, metrics, physical actions, and digital actions. For Eviva categories, extract concrete jobs, volunteering roles, open-source contribution paths, community initiatives, impact startups, and prerequisites that may need iVive capability-building. Avoid vague motivation.
 
 Evidence:
 {source_text}
@@ -158,6 +191,9 @@ Evidence:
         proposed = promoted = skipped = 0
         for category in categories:
             results: List[Dict[str, str]] = []
+            if category.startswith("Eviva"):
+                for q in self.EVIVA_SOURCE_QUERIES:
+                    results.extend(await self._search_web(q))
             for tmpl in self.QUERY_TEMPLATES:
                 results.extend(await self._search_web(tmpl.format(goal=category)))
             steps = await self._extract_steps(category, results)
@@ -180,7 +216,7 @@ Evidence:
                     step.get("description"),
                     category,
                     step.get("step_type") if step.get("step_type") in ("digital", "physical", "hybrid") else "hybrid",
-                    step.get("domain") or "iVive",
+                    step.get("domain") or ("Eviva" if category.startswith("Eviva") else ("Aventi" if "adventure" in category.lower() or "fun" in category.lower() else "iVive")),
                     step.get("tags") or [category],
                     step.get("source_url") or source_url,
                     confidence,
