@@ -260,7 +260,11 @@ async def submit_feedback(
         logger.error(f"Feedback processing error for user {user_id[:8]}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to process feedback")
 
-    # Update IOO graph weights if this was a graph-sourced card
+    # Update IOO graph weights if this was a graph-sourced card.
+    # TODO(IOO): replace the MVP 1-5 rating proxy with explicit feed responses:
+    # - not_interested -> down-rank/refine similar nodes in the user vector
+    # - do_later       -> save/schedule/resurface as a live opportunity
+    # - do_now         -> trigger IOO Execution Protocol and record outcome
     await _record_ioo_outcome_if_applicable(user_id, body.screen_spec_id, body.rating)
 
     # Build a human-readable message based on the insight
