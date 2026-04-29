@@ -70,6 +70,13 @@ except Exception as _ioo_err:
     _ioo_available = False
     logging.warning(f"IOO routes unavailable: {_ioo_err}")
 try:
+    from api.routes import ioo_execution as ioo_execution_routes
+    _ioo_execution_available = True
+except Exception as _ioo_execution_err:
+    ioo_execution_routes = None
+    _ioo_execution_available = False
+    logging.warning(f"IOO execution routes unavailable: {_ioo_execution_err}")
+try:
     from api.routes import services as services_routes
     _services_available = True
 except Exception as _services_err:
@@ -310,6 +317,8 @@ if _cgo_available and cgo_routes:
     app.include_router(cgo_routes.router)
 if _ioo_available and ioo_routes:
     app.include_router(ioo_routes.router)
+if _ioo_execution_available and ioo_execution_routes:
+    app.include_router(ioo_execution_routes.router)
 try:
     from api.routes.github_webhook import router as github_webhook_router
     app.include_router(github_webhook_router)

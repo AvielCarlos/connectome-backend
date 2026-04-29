@@ -1694,6 +1694,33 @@ async def run_migrations():
             ON ioo_user_progress(status)
         """)
 
+        # IOO Execution Protocol runs — turns possibility-map nodes into reality plans
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_execution_runs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id),
+                node_id UUID,
+                intent TEXT NOT NULL DEFAULT 'do_now',
+                status TEXT NOT NULL DEFAULT 'created',
+                protocol JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                completed_at TIMESTAMP
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_execution_runs_user
+            ON ioo_execution_runs(user_id, created_at DESC)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_execution_runs_node
+            ON ioo_execution_runs(node_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_execution_runs_status
+            ON ioo_execution_runs(status)
+        """)
+
         # Mini-app surfaces spawned per node
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ioo_surfaces (
