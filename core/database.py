@@ -763,6 +763,25 @@ async def run_migrations():
         """)
 
         # ---------------------------------------------------------------
+        # AIOS Evolution state — collective launcher priorities
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS aios_state (
+                id SERIAL PRIMARY KEY,
+                ruling_goals JSONB DEFAULT '[]',
+                featured_apps JSONB DEFAULT '["iDo", "Aventi", "iVive", "Eviva"]',
+                ora_mission_statement TEXT,
+                evolution_notes TEXT,
+                user_count INTEGER DEFAULT 0,
+                computed_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_aios_state_computed_at
+            ON aios_state(computed_at DESC)
+        """)
+
+        # ---------------------------------------------------------------
         # Onboarding state (idempotent)
         # ---------------------------------------------------------------
         await conn.execute("""

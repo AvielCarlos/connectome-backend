@@ -13,7 +13,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+import os
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
 from api.middleware import get_current_user_id
 from core.database import fetchrow
@@ -27,14 +28,24 @@ router = APIRouter(prefix="/api/ora/autonomy", tags=["ora_autonomy"])
 
 # Admin emails — users allowed to trigger autonomy runs
 ADMIN_EMAILS = {"avi@atdao.org", "nea@atdao.org", "carlosandromeda8@gmail.com"}
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "connectome-admin-secret")
 
 
-async def _require_admin(user_id: str = Depends(get_current_user_id)) -> str:
-    """Dependency: only allow admin users (by email)."""
-    row = await fetchrow("SELECT email FROM users WHERE id = $1", UUID(user_id))
-    if not row or row["email"] not in ADMIN_EMAILS:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user_id
+async def _require_admin(
+    request: Request,
+    x_admin_token: Optional[str] = Header(default=None, alias="x-admin-token"),
+    user_id: Optional[str] = Depends(get_current_user_id),
+) -> str:
+    """Dependency: allow admin users (by email) OR valid X-Admin-Token header."""
+    # Token-based auth for automated crons
+    if x_admin_token and x_admin_token == ADMIN_TOKEN:
+        return "admin-token"
+    # Email-based auth for logged-in users
+    if user_id:
+        row = await fetchrow("SELECT email FROM users WHERE id = $1", UUID(user_id))
+        if row and row["email"] in ADMIN_EMAILS:
+            return user_id
+    raise HTTPException(status_code=403, detail="Admin access required")
 
 
 @router.post("/run")
@@ -508,3 +519,4 @@ async def get_product_proposals(
     except Exception as e:
         logger.error(f"OraAutonomy: product proposals failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
