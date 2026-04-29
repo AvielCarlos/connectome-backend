@@ -9,10 +9,12 @@ Endpoints:
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import random
 import uuid as _uuid_mod
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -116,6 +118,117 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
     return str(row["id"])
 
 
+_STATIC_FALLBACK_CARDS = [
+    {
+        "title": "Take a 10-minute Aventi walk",
+        "body": "Step outside, pick one direction, and let curiosity choose the next turn. Notice one place you could return to with a friend.",
+        "domain": "Aventi",
+        "tag": "exploration",
+        "button": "Start the walk →",
+    },
+    {
+        "title": "Reset your system with iVive",
+        "body": "Drink water, loosen your jaw, drop your shoulders, and take five slow breaths. Tiny regulation counts.",
+        "domain": "iVive",
+        "tag": "vitality",
+        "button": "Do the reset →",
+    },
+    {
+        "title": "Send one Eviva spark",
+        "body": "Message someone a real appreciation in one sentence. No performance — just warmth, delivered.",
+        "domain": "Eviva",
+        "tag": "connection",
+        "button": "Send appreciation →",
+    },
+    {
+        "title": "Choose Rest on purpose",
+        "body": "Put your phone down for three minutes. Let your nervous system learn that nothing needs to be chased right now.",
+        "domain": "Rest",
+        "tag": "recovery",
+        "button": "Begin rest →",
+    },
+]
+
+
+async def _static_fallback_card(
+    user_id: str,
+    tier: str,
+    daily_limit: int,
+    reason: str,
+) -> ScreenResponse:
+    """Build a deterministic local card so the main feed never appears empty."""
+    # Deterministic across process restarts so repeated failures do not create
+    # a chaotic feed. These are seed cards, not the long-term feed model: IOO
+    # graph generation should remain the primary path and learn from responses.
+    digest = hashlib.sha256(f"{user_id}:{datetime.now(timezone.utc).date()}".encode("utf-8")).hexdigest()
+    idx = int(digest[:8], 16) % len(_STATIC_FALLBACK_CARDS)
+    item = _STATIC_FALLBACK_CARDS[idx]
+    screen_id = str(_uuid_mod.uuid4())
+    spec_dict = {
+        "screen_id": screen_id,
+        "type": "activity",
+        "layout": "card_stack",
+        "components": [
+            {"type": "category_badge", "text": item["domain"].upper(), "color": "#00d4aa"},
+            {"type": "headline", "text": item["title"]},
+            {"type": "body", "text": item["body"]},
+            {
+                "type": "action_button",
+                "text": item["button"],
+                "action": {
+                    "type": "open_url",
+                    "url": f"ido://fallback/{item['tag']}",
+                    "payload": {"tag": item["tag"], "source": "static_fallback"},
+                },
+            },
+        ],
+        "feedback_overlay": {"type": "star_rating", "position": "bottom_right", "always_visible": True},
+        "metadata": {
+            "agent": "StaticFallbackAgent",
+            "source": "static_fallback",
+            "domain": item["domain"],
+            "tags": [item["tag"], "mvp_stability"],
+            "fallback_reason": reason,
+            "ioo_execution_status": "pending_user_response",
+            "ioo_learning_event": "fallback_card_shown",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+    }
+
+    # TODO(IOO): when the user chooses "do now", trigger the IOO Execution
+    # Protocol for this fallback action. "do later" should schedule/resurface,
+    # and "not interested" should become a graph-learning signal/refinement.
+
+    try:
+        db_id = await _store_ioo_screen_spec(spec_dict)
+    except Exception as err:
+        db_id = screen_id
+        logger.error("Static fallback card persistence failed for user %s: %s", user_id[:8], err, exc_info=True)
+
+    try:
+        screens_today = await increment_daily_screen_count(user_id)
+    except Exception as err:
+        screens_today = await get_daily_screen_count(user_id)
+        logger.warning("Static fallback count increment failed for user %s: %s", user_id[:8], err)
+
+    logger.warning("Using static fallback screen for user %s: %s", user_id[:8], reason)
+
+    return ScreenResponse(
+        screen=ScreenSpec(
+            screen_id=spec_dict["screen_id"],
+            type=spec_dict["type"],
+            layout=spec_dict["layout"],
+            components=spec_dict["components"],
+            feedback_overlay=FeedbackOverlay(**spec_dict["feedback_overlay"]),
+            metadata=ScreenMetadata(**spec_dict["metadata"]),
+        ),
+        screen_spec_db_id=db_id,
+        screens_today=screens_today,
+        daily_limit=daily_limit,
+        is_limited=False,
+    )
+
+
 async def _try_ioo_card(
     user_id: str,
     goal_id: Optional[str],
@@ -208,7 +321,8 @@ async def get_next_screen(
 ):
     """
     Request the next screen from Ora.
-    Respects freemium limits (10/day for free users).
+    MVP/stability: preserves auth but does not hard-block the main feed on
+    daily limits. Paywall enforcement can return after feed stability is proven.
     """
     # Check subscription tier via PricingAgent-backed tier guard
     from api.tier_guard import check_tier_limit, get_user_tier, build_upgrade_card, get_current_usage
@@ -217,12 +331,13 @@ async def get_next_screen(
     tier = await get_user_tier(user_id)
     pricing_agent = get_pricing_agent()
     limits = await pricing_agent.get_tier_limits(tier)
-    daily_limit = limits.get("daily_screens", 10)
+    configured_daily_limit = limits.get("daily_screens", 10)
+    daily_limit = configured_daily_limit if configured_daily_limit == -1 else max(configured_daily_limit, 999)
 
     # Get current count BEFORE incrementing (brain will increment)
     current_count = await get_daily_screen_count(user_id)
 
-    if daily_limit != -1 and current_count >= daily_limit:
+    if False and daily_limit != -1 and current_count >= daily_limit:
         # Return Ora's warm upgrade card instead of a cold 402
         upgrade_card = await build_upgrade_card("daily_screens", daily_limit, tier)
         raise HTTPException(
@@ -271,8 +386,8 @@ async def get_next_screen(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"Brain error for user {user_id[:8]}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Ora is temporarily unavailable")
+        logger.error(f"Brain error for user {user_id[:8]}, using static fallback: {e}", exc_info=True)
+        return await _static_fallback_card(user_id, tier, daily_limit, f"brain_exception:{type(e).__name__}")
 
     # Parse spec into Pydantic model (validates structure)
     try:
@@ -290,8 +405,8 @@ async def get_next_screen(
             metadata=ScreenMetadata(**spec_dict.get("metadata", {"agent": "OraBrain"})),
         )
     except Exception as e:
-        logger.error(f"Spec parse error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Screen spec generation error")
+        logger.error(f"Spec parse error, using static fallback: {e}", exc_info=True)
+        return await _static_fallback_card(user_id, tier, daily_limit, f"spec_parse_error:{type(e).__name__}")
 
     return ScreenResponse(
         screen=screen,
@@ -308,6 +423,7 @@ async def get_next_screen(
 
 class BatchScreenRequest(BaseModel):
     count: int = 3
+    goal_id: Optional[str] = None
     domain: Optional[DomainType] = None
 
 
@@ -333,17 +449,20 @@ async def get_screen_batch(
 
     tier = user_row["subscription_tier"]
     is_free = tier == "free"
-    daily_limit = settings.FREE_TIER_DAILY_SCREENS
+    daily_limit = max(settings.FREE_TIER_DAILY_SCREENS, 999)
 
     if is_free:
+        # MVP/stability: keep authentication, but do not hard-block the primary
+        # feed on daily limits. A broken empty feed is worse than over-serving
+        # during pre-product-stability.
         current_count = await get_daily_screen_count(user_id)
-        available = daily_limit - current_count
-        if available <= 0:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail=f"Daily limit of {daily_limit} screens reached.",
+        if current_count >= settings.FREE_TIER_DAILY_SCREENS:
+            logger.info(
+                "Free user %s exceeded configured daily screen limit (%s/%s); serving feed for MVP stability",
+                user_id[:8],
+                current_count,
+                settings.FREE_TIER_DAILY_SCREENS,
             )
-        count = min(count, available)
 
     brain = get_brain()
     results: List[ScreenResponse] = []
@@ -364,7 +483,7 @@ async def get_screen_batch(
             # Feed is primarily IOO discovery — ~75% IOO nodes, ~25% brain coaching content
             # No goals gate: anyone can discover IOO nodes regardless of whether they have active goals
             if random.random() < 0.75:
-                ioo_resp = await _try_ioo_card(user_id, None, tier, daily_limit)
+                ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
                 if ioo_resp is not None:
                     results.append(ioo_resp)
                     continue
@@ -372,7 +491,7 @@ async def get_screen_batch(
             spec_dict, db_id, screens_today = await brain.get_screen(
                 user_id=user_id,
                 context=None,
-                goal_id=None,
+                goal_id=body.goal_id,
                 domain=body.domain,
                 geo_hints=batch_geo_hints,
             )
@@ -401,12 +520,13 @@ async def get_screen_batch(
         except HTTPException:
             raise
         except Exception as e:
-            logger.error(f"Batch screen error for user {user_id[:8]}: {e}", exc_info=True)
-            # Return partial results if we got some
+            logger.error(f"Batch screen error for user {user_id[:8]}, using fallback if needed: {e}", exc_info=True)
+            if not results:
+                results.append(await _static_fallback_card(user_id, tier, daily_limit, f"batch_exception:{type(e).__name__}"))
             break
 
     if not results:
-        raise HTTPException(status_code=500, detail="Could not generate screens")
+        results.append(await _static_fallback_card(user_id, tier, daily_limit, "batch_empty"))
 
     return results
 
