@@ -25,6 +25,8 @@ from pydantic import BaseModel
 from core.database import fetch, fetchrow, fetchval, execute
 from api.middleware import get_current_user_id
 from ora.agents.ioo_graph_agent import get_graph_agent
+from ora.agents.surface_generator import SurfaceGenerator
+from ora.agents.surface_lifecycle import SurfaceLifecycleManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ioo", tags=["ioo"])
@@ -397,6 +399,20 @@ async def get_node(
 # Surfaces
 # ---------------------------------------------------------------------------
 
+@router.post("/surfaces/lifecycle/sweep")
+async def lifecycle_sweep(
+    user_id: str = Depends(get_current_user_id),
+):
+    """Run a lifecycle sweep over all non-killed surfaces (admin utility)."""
+    mgr = SurfaceLifecycleManager()
+    try:
+        summary = await mgr.run_lifecycle_sweep()
+    except Exception as e:
+        logger.error(f"Lifecycle sweep failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Lifecycle sweep failed")
+    return summary
+
+
 @router.post("/surfaces/{node_id}")
 async def spawn_surface(
     node_id: str,
@@ -415,8 +431,12 @@ async def spawn_surface(
 
     title = body.title or node["title"]
 
-    # Generate a simple spec based on surface type and node
-    spec = _generate_surface_spec(dict(node), body.surface_type)
+    # Use SurfaceGenerator to produce a rich spec
+    gen = SurfaceGenerator()
+    spec = gen.generate_spec(dict(node))
+
+    # surface_type comes from the generator's template pick
+    surface_type = spec.get("template", body.surface_type)
 
     row = await fetchrow(
         """
@@ -425,7 +445,7 @@ async def spawn_surface(
         RETURNING id, node_id, surface_type, title, spec, status, created_at
         """,
         nid,
-        body.surface_type,
+        surface_type,
         title,
         spec,
     )
@@ -517,67 +537,5 @@ async def seed_nodes(user_id: str = Depends(get_current_user_id)):
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# (Legacy _generate_surface_spec removed — now handled by SurfaceGenerator)
 # ---------------------------------------------------------------------------
-
-def _generate_surface_spec(node: dict, surface_type: str) -> dict:
-    """
-    Generate a minimal Ora-created surface spec for a node.
-    In Phase 2 this will call the Ora LLM to generate rich specs.
-    """
-    base = {
-        "node_id": str(node["id"]),
-        "node_type": node["type"],
-        "surface_type": surface_type,
-    }
-
-    if surface_type == "info_card":
-        return {
-            **base,
-            "components": [
-                {"type": "heading", "text": node["title"]},
-                {"type": "body", "text": node.get("description", "")},
-                {"type": "tags", "items": node.get("tags", [])},
-                {"type": "stats", "items": [
-                    {"label": "Est. time", "value": f"{node.get('requires_time_hours', '?')}h"},
-                    {"label": "Est. cost", "value": f"${node.get('requires_finances', 0) or 0:.0f}"},
-                ]},
-                {"type": "cta", "label": "Start", "action": "start_node"},
-            ],
-        }
-    elif surface_type == "checklist":
-        return {
-            **base,
-            "components": [
-                {"type": "heading", "text": f"How to: {node['title']}"},
-                {"type": "checklist", "items": [
-                    "Research what you need",
-                    "Block time in your calendar",
-                    "Get any gear or preparation done",
-                    "Take the first step",
-                    "Reflect on what you learned",
-                ]},
-            ],
-        }
-    elif surface_type == "habit_tracker":
-        return {
-            **base,
-            "components": [
-                {"type": "heading", "text": node["title"]},
-                {"type": "streak_tracker", "target_days": 7, "current_streak": 0},
-                {"type": "body", "text": "Check in each day you work toward this."},
-                {"type": "cta", "label": "Check in today", "action": "checkin"},
-            ],
-        }
-    elif surface_type == "challenge":
-        return {
-            **base,
-            "components": [
-                {"type": "heading", "text": f"7-Day Challenge: {node['title']}"},
-                {"type": "body", "text": node.get("description", "")},
-                {"type": "progress_bar", "current": 0, "total": 7},
-                {"type": "cta", "label": "Accept Challenge", "action": "start_challenge"},
-            ],
-        }
-    else:
-        return base
