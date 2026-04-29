@@ -1023,6 +1023,24 @@ async def run_migrations():
             ON contributions(source_id) WHERE source_id IS NOT NULL
         """)
 
+        # Global app feedback — lightweight screenshot/context loop that awards CP/XP
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS app_feedback (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                category TEXT NOT NULL DEFAULT 'Other',
+                message TEXT NOT NULL,
+                route TEXT,
+                screenshot_data_url TEXT,
+                metadata JSONB DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_app_feedback_user_created
+            ON app_feedback(user_id, created_at DESC)
+        """)
+
         # User suggestions (community feature requests, bug reports, ideas)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS user_suggestions (
@@ -1927,4 +1945,3 @@ async def fetchval(query: str, *args) -> Any:
     pool = await get_pool()
     async with pool.acquire() as conn:
         return await conn.fetchval(query, *args)
-

@@ -646,3 +646,16 @@ ALTER TABLE contributions ADD COLUMN IF NOT EXISTS attachment_urls JSONB DEFAULT
 ALTER TABLE contributions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual';
 ALTER TABLE contributions ADD COLUMN IF NOT EXISTS source_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_contributions_source_id ON contributions(source_id) WHERE source_id IS NOT NULL;
+
+-- Global app feedback: context + screenshot capture for lightweight CP earning
+CREATE TABLE IF NOT EXISTS app_feedback (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    category TEXT NOT NULL DEFAULT 'Other',
+    message TEXT NOT NULL,
+    route TEXT,
+    screenshot_data_url TEXT,
+    metadata JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_app_feedback_user_created ON app_feedback(user_id, created_at DESC);

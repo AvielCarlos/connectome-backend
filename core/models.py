@@ -135,17 +135,29 @@ class ScreenResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class FeedbackSubmit(BaseModel):
-    screen_spec_id: str
+    # Legacy card-feedback fields
+    screen_spec_id: Optional[str] = None
     rating: Optional[int] = Field(None, ge=1, le=5)
     time_on_screen_ms: Optional[int] = None
     exit_point: Optional[str] = None
     completed: bool = False
+    # Global in-app feedback fields
+    category: Optional[Literal["Bug", "Confusing", "Idea", "Design", "Praise", "Other"]] = None
+    message: Optional[str] = None
+    route: Optional[str] = None
+    screenshot_data_url: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class FeedbackResponse(BaseModel):
     ok: bool
     fulfilment_delta: float = 0.0
     message: str = ""
+    xp_earned: int = 0
+    cp_earned: int = 0
+    cp_balance: Optional[int] = None
+    total_dao_cp: Optional[int] = None
+    contribution_id: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
