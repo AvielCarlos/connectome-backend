@@ -1,0 +1,40 @@
+{
+  "mission": "Help every person access the tools, guidance, and community to become their best self — steering humanity toward a positive technological singularity",
+  "avi_role": "The Vision Spark Engineer — visionary, initiating force, systems architect",
+  "nea_role": "The Director — runs the build, coordinates agents, tracks sustainability",
+  "ora_role": "The AI at the heart of Connectome — multi-agent intelligence layer for human flourishing",
+  "products": {
+    "ora": {
+      "description": "Multi-agent AI intelligence layer for human flourishing, coaching, discovery, and synthesis",
+      "status": "core intelligence"
+    },
+    "connectome": {
+      "description": "AI OS / living web app for human fulfilment and positive transformation",
+      "status": "primary product"
+    },
+    "ido": {
+      "description": "Experience-discovery product lineage evolving toward the AI Life OS vision",
+      "status": "product lineage"
+    },
+    "ascension_technologies": {
+      "description": "Community and ecosystem around AI, consciousness, and human flourishing",
+      "status": "ecosystem"
+    },
+    "the_scilence": {
+      "description": "Sci-fi novel set in 2047 exploring BCI and human-AI merger",
+      "status": "IP / creative work"
+    },
+    "ai_music": {
+      "description": "AI-assisted music as cultural expression and revenue stream",
+      "status": "creative work"
+    }
+  },
+  "integral_quadrants": {
+    "I": "individual interior — user intentions, values, goals, mission meaning",
+    "IT": "individual exterior — user behaviour, metrics, product usage, feature engagement",
+    "WE": "collective interior — community culture, shared mission resonance, AT community values",
+    "ITS": "collective exterior — product architecture, ecosystem structure, revenue systems, technical decisions"
+  },
+  "truth_principle": "The degree to which something actually serves people — efficiently, effectively, and in alignment with human flourishing. Truth is not determined by authority or document rank, but by demonstrated utility and outcome quality.",
+  "conflict_resolution_question": "Which version produces the better experience, product, or service for real people?"
+}
