@@ -92,10 +92,27 @@ async def get_next_screen(
     except Exception:
         pass
 
+    # IOO Graph: if goal_id is set, inject recommended next nodes as context hints
+    ioo_context_hint = ""
+    if body.goal_id:
+        try:
+            from ora.agents.ioo_graph_agent import get_graph_agent as _get_ioo
+            _ioo = _get_ioo()
+            _ioo_nodes = await _ioo.recommend_next_nodes(
+                user_id=str(user_id),
+                goal_id=body.goal_id,
+                limit=3,
+            )
+            if _ioo_nodes:
+                _node_titles = ", ".join(n["title"] for n in _ioo_nodes[:3])
+                ioo_context_hint = f" [IOO next steps: {_node_titles}]"
+        except Exception as _ioo_err:
+            logger.debug(f"IOO context injection skipped: {_ioo_err}")
+
     try:
         spec_dict, db_id, screens_today = await brain.get_screen(
             user_id=user_id,
-            context=body.context,
+            context=(body.context or "") + ioo_context_hint,
             goal_id=body.goal_id,
             domain=body.domain,
             geo_hints=geo_hints,

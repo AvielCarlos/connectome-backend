@@ -45,6 +45,13 @@ from api.routes import ora_autonomy as ora_autonomy_routes
 from api.routes import onboarding as onboarding_routes
 from api.routes import surfaces as surfaces_routes
 try:
+    from api.routes import ioo as ioo_routes
+    _ioo_available = True
+except Exception as _ioo_err:
+    ioo_routes = None
+    _ioo_available = False
+    logging.warning(f"IOO routes unavailable: {_ioo_err}")
+try:
     from api.routes import services as services_routes
     _services_available = True
 except Exception as _services_err:
@@ -255,6 +262,8 @@ if _services_available and services_routes:
     app.include_router(services_routes.router)
 if _executive_available and executive_routes:
     app.include_router(executive_routes.router)
+if _ioo_available and ioo_routes:
+    app.include_router(ioo_routes.router)
 
 
 @app.get("/api/schema")

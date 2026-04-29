@@ -1365,6 +1365,144 @@ async def run_migrations():
         except Exception:
             pass  # Needs data first
 
+        # ---------------------------------------------------------------
+        # IOO Graph — IRL Experience Achievement Map (Phase 1, 2026-04-28)
+        # ---------------------------------------------------------------
+
+        # All nodes: activities, experiences, sub-goals, goals
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_nodes (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                type TEXT NOT NULL CHECK (type IN ('activity', 'experience', 'sub_goal', 'goal')),
+                title TEXT NOT NULL,
+                description TEXT,
+                tags TEXT[] DEFAULT '{}',
+                domain TEXT,
+                requires_finances NUMERIC(10,2),
+                requires_fitness_level INT DEFAULT 0,
+                requires_skills TEXT[] DEFAULT '{}',
+                requires_location TEXT,
+                requires_time_hours NUMERIC(5,1),
+                attempt_count INT DEFAULT 0,
+                success_count INT DEFAULT 0,
+                avg_completion_hours NUMERIC(8,2),
+                is_active BOOLEAN DEFAULT true,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_type ON ioo_nodes(type)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_domain ON ioo_nodes(domain)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_active ON ioo_nodes(is_active)
+        """)
+
+        # Graph edges — weighted paths between nodes
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_edges (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                from_node_id UUID REFERENCES ioo_nodes(id) ON DELETE CASCADE,
+                to_node_id UUID REFERENCES ioo_nodes(id) ON DELETE CASCADE,
+                traversal_count INT DEFAULT 0,
+                success_count INT DEFAULT 0,
+                avg_time_to_success_hours NUMERIC(8,2),
+                weight NUMERIC(6,4) DEFAULT 0.5,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(from_node_id, to_node_id)
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_edges_from ON ioo_edges(from_node_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_edges_to ON ioo_edges(to_node_id)
+        """)
+
+        # Per-user capability profile (passively/actively learned)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_user_state (
+                user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                finances_level TEXT DEFAULT 'unknown'
+                    CHECK (finances_level IN ('unknown','tight','moderate','comfortable','wealthy')),
+                finances_monthly_budget_usd NUMERIC(10,2),
+                location_city TEXT,
+                location_country TEXT,
+                fitness_level INT DEFAULT 5 CHECK (fitness_level BETWEEN 0 AND 10),
+                known_skills TEXT[] DEFAULT '{}',
+                has_partner BOOLEAN,
+                has_car BOOLEAN,
+                free_time_weekday_hours NUMERIC(4,1),
+                free_time_weekend_hours NUMERIC(4,1),
+                state_json JSONB DEFAULT '{}',
+                last_updated TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+
+        # Per-user progress tracking through the graph
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_user_progress (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                node_id UUID REFERENCES ioo_nodes(id) ON DELETE CASCADE,
+                goal_id UUID REFERENCES goals(id) ON DELETE SET NULL,
+                status TEXT DEFAULT 'suggested'
+                    CHECK (status IN ('suggested','viewed','started','completed','abandoned')),
+                started_at TIMESTAMPTZ,
+                completed_at TIMESTAMPTZ,
+                abandoned_at TIMESTAMPTZ,
+                surface_type TEXT,
+                surface_id TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_progress_user
+            ON ioo_user_progress(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_progress_node
+            ON ioo_user_progress(node_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_progress_status
+            ON ioo_user_progress(status)
+        """)
+
+        # Mini-app surfaces spawned per node
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_surfaces (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                node_id UUID REFERENCES ioo_nodes(id) ON DELETE CASCADE,
+                surface_type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                spec JSONB NOT NULL DEFAULT '{}',
+                status TEXT DEFAULT 'testing'
+                    CHECK (status IN ('testing','active','changing','killed')),
+                open_mechanism TEXT DEFAULT 'button'
+                    CHECK (open_mechanism IN ('button','conversation','proactive','push')),
+                view_count INT DEFAULT 0,
+                interaction_count INT DEFAULT 0,
+                completion_count INT DEFAULT 0,
+                goal_success_count INT DEFAULT 0,
+                kill_at_views INT DEFAULT 100,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_surfaces_node
+            ON ioo_surfaces(node_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_surfaces_status
+            ON ioo_surfaces(status)
+        """)
+
         logger.info("Database migrations complete")
 
 
