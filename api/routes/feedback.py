@@ -13,11 +13,52 @@ from pydantic import BaseModel
 from core.models import FeedbackSubmit, FeedbackResponse
 from api.middleware import get_current_user_id
 from ora.brain import get_brain
-from core.database import execute
+from core.database import execute, fetchrow
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
+
+
+async def _record_ioo_outcome_if_applicable(
+    user_id: str,
+    screen_spec_id: str,
+    rating: Optional[int],
+) -> None:
+    """
+    If the rated card was sourced from the IOO graph, record its outcome so
+    cross-user path weights are updated.
+    """
+    if not rating or not screen_spec_id:
+        return
+    try:
+        import json as _json
+        row = await fetchrow(
+            "SELECT spec FROM screen_specs WHERE id = $1",
+            UUID(screen_spec_id) if len(screen_spec_id) == 36 else None,
+        )
+        if not row:
+            return
+        spec = row["spec"]
+        if isinstance(spec, str):
+            spec = _json.loads(spec)
+        meta = spec.get("metadata", {}) if isinstance(spec, dict) else {}
+        if meta.get("source") != "ioo_graph" or not meta.get("node_id"):
+            return
+        node_id = meta["node_id"]
+        from ora.agents.ioo_graph_agent import get_graph_agent as _get_ioo
+        await _get_ioo().record_node_outcome(
+            user_id=str(user_id),
+            node_id=str(node_id),
+            success=(rating >= 4),
+            hours_taken=0,
+        )
+        logger.info(
+            f"IOO outcome recorded: user={user_id[:8]} node={str(node_id)[:8]} "
+            f"success={rating >= 4} rating={rating}"
+        )
+    except Exception as _err:
+        logger.warning(f"IOO outcome recording skipped: {_err}")
 
 
 @router.post("/", response_model=FeedbackResponse)
@@ -28,6 +69,7 @@ async def submit_feedback(
     """
     Submit feedback for a screen.
     Triggers the full learning loop: embedding update, rating update, A/B tracking.
+    Also updates IOO graph weights when the card was graph-sourced.
     """
     brain = get_brain()
 
@@ -43,6 +85,9 @@ async def submit_feedback(
     except Exception as e:
         logger.error(f"Feedback processing error for user {user_id[:8]}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to process feedback")
+
+    # Update IOO graph weights if this was a graph-sourced card
+    await _record_ioo_outcome_if_applicable(user_id, body.screen_spec_id, body.rating)
 
     # Build a human-readable message based on the insight
     signal = insight.get("signal_type", "neutral")
@@ -138,6 +183,9 @@ async def submit_implicit_signals(
                 exit_point=f"implicit_{signal.signal_type}",
                 completed=signal.signal_type in ("dwell", "swipe_back", "action_tap"),
             )
+
+            # Update IOO graph weights for graph-sourced implicit signals
+            await _record_ioo_outcome_if_applicable(user_id, signal.screen_spec_id, rating)
 
             # Also store the raw signal type on the interaction row
             try:

@@ -9,7 +9,10 @@ Endpoints:
 """
 
 import asyncio
+import json
 import logging
+import random
+import uuid as _uuid_mod
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -26,13 +29,137 @@ from core.models import (
 from core.config import settings
 from api.middleware import get_current_user_id
 from ora.brain import get_brain
-from ora.user_model import get_daily_screen_count
+from ora.user_model import get_daily_screen_count, increment_daily_screen_count
 from core.database import fetchrow, execute
 from core.geo import get_location_for_ip, geo_to_context_hints
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/screens", tags=["screens"])
+
+
+# ---------------------------------------------------------------------------
+# IOO Graph helpers — smart feed routing
+# ---------------------------------------------------------------------------
+
+async def _get_user_has_goals(user_id: str) -> bool:
+    """Return True if the user has at least one active goal."""
+    row = await fetchrow(
+        "SELECT id FROM goals WHERE user_id = $1 AND status = 'active' LIMIT 1",
+        str(user_id),
+    )
+    return row is not None
+
+
+def _ioo_node_to_screen_dict(node: dict) -> dict:
+    """
+    Convert an IOO graph node into a screen spec dict.
+    The dict is JSON-serialisable and compatible with the ScreenSpec Pydantic model.
+    """
+    components = [
+        {
+            "type": "category_badge",
+            "text": str(node.get("type", "")).upper().replace("_", " "),
+            "color": "#8b5cf6",
+        },
+        {"type": "headline", "text": node.get("title", "")},
+        {"type": "body", "text": node.get("description") or ""},
+    ]
+    if node.get("requires_time_hours"):
+        components.append({"type": "meta", "text": f"\u23f1 ~{node['requires_time_hours']}h"})
+    if node.get("requires_finances"):
+        components.append({"type": "meta", "text": f"\U0001f4b0 ~${node['requires_finances']:.0f}"})
+    components.append({
+        "type": "action_button",
+        "text": "Start this \u2192",
+        "action": {
+            "type": "open_url",
+            "url": f"ioo://node/{node['id']}",
+            "payload": {"node_id": str(node["id"])},
+        },
+    })
+    return {
+        "screen_id": str(_uuid_mod.uuid4()),
+        "type": "opportunity",
+        "layout": "card_stack",
+        "components": components,
+        "feedback_overlay": {
+            "type": "star_rating",
+            "position": "bottom_right",
+            "always_visible": True,
+        },
+        "metadata": {
+            "agent": "IOOGraphAgent",
+            "source": "ioo_graph",
+            "node_id": str(node["id"]),
+            "node_type": node.get("type"),
+            "domain": node.get("domain"),
+            "tags": node.get("tags") or [],
+        },
+        "is_limited": False,
+        "daily_limit": 999,
+    }
+
+
+async def _store_ioo_screen_spec(spec_dict: dict) -> str:
+    """Persist an IOO-sourced screen spec in screen_specs and return its DB id."""
+    row = await fetchrow(
+        """
+        INSERT INTO screen_specs (spec, agent_type, domain)
+        VALUES ($1, $2, $3)
+        RETURNING id
+        """,
+        json.dumps(spec_dict),
+        "IOOGraphAgent",
+        spec_dict.get("metadata", {}).get("domain"),
+    )
+    return str(row["id"])
+
+
+async def _try_ioo_card(
+    user_id: str,
+    goal_id: Optional[str],
+    tier: str,
+    daily_limit: int,
+) -> Optional[ScreenResponse]:
+    """
+    Attempt to build one IOO graph-sourced card.
+    Returns a ScreenResponse on success, None if the graph has nothing to offer.
+    """
+    try:
+        from ora.agents.ioo_graph_agent import get_graph_agent as _get_ioo
+        _ioo = _get_ioo()
+        nodes = await _ioo.recommend_next_nodes(
+            user_id=str(user_id),
+            goal_id=goal_id,
+            limit=5,
+        )
+        if not nodes:
+            return None
+
+        node = random.choice(nodes)
+        spec_dict = _ioo_node_to_screen_dict(node)
+        db_id = await _store_ioo_screen_spec(spec_dict)
+        screens_today = await increment_daily_screen_count(user_id)
+
+        screen = ScreenSpec(
+            screen_id=spec_dict["screen_id"],
+            type=spec_dict["type"],
+            layout=spec_dict["layout"],
+            components=spec_dict["components"],
+            feedback_overlay=FeedbackOverlay(**spec_dict["feedback_overlay"]),
+            metadata=ScreenMetadata(**spec_dict["metadata"]),
+        )
+        return ScreenResponse(
+            screen=screen,
+            screen_spec_db_id=db_id,
+            screens_today=screens_today,
+            daily_limit=daily_limit,
+            is_limited=(tier == "free"),
+        )
+    except Exception as _err:
+        logger.warning(f"IOO card build failed, falling back to brain: {_err}")
+        return None
 
 
 def _client_ip(request: Request) -> str:
@@ -92,27 +219,20 @@ async def get_next_screen(
     except Exception:
         pass
 
-    # IOO Graph: if goal_id is set, inject recommended next nodes as context hints
-    ioo_context_hint = ""
-    if body.goal_id:
-        try:
-            from ora.agents.ioo_graph_agent import get_graph_agent as _get_ioo
-            _ioo = _get_ioo()
-            _ioo_nodes = await _ioo.recommend_next_nodes(
-                user_id=str(user_id),
-                goal_id=body.goal_id,
-                limit=3,
-            )
-            if _ioo_nodes:
-                _node_titles = ", ".join(n["title"] for n in _ioo_nodes[:3])
-                ioo_context_hint = f" [IOO next steps: {_node_titles}]"
-        except Exception as _ioo_err:
-            logger.debug(f"IOO context injection skipped: {_ioo_err}")
+    # ── Smart IOO routing ──────────────────────────────────────────────────
+    # When the user has an active goal, 40 % of cards come from the IOO graph;
+    # the remaining 60 % (and all cards for goal-less users) use the brain.
+    has_goals = bool(body.goal_id) or await _get_user_has_goals(user_id)
+    if has_goals and random.random() < 0.4:
+        ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
+        if ioo_response is not None:
+            return ioo_response
+    # ──────────────────────────────────────────────────────────────────────
 
     try:
         spec_dict, db_id, screens_today = await brain.get_screen(
             user_id=user_id,
-            context=(body.context or "") + ioo_context_hint,
+            context=body.context or "",
             goal_id=body.goal_id,
             domain=body.domain,
             geo_hints=geo_hints,
@@ -206,9 +326,19 @@ async def get_screen_batch(
     except Exception:
         pass
 
+    # Check if user has active goals (once, shared across batch)
+    batch_has_goals = await _get_user_has_goals(user_id)
+
     # Fetch screens sequentially to respect rate limits and user model updates
     for _ in range(count):
         try:
+            # Smart IOO routing: 40 % of batch cards from graph when user has goals
+            if batch_has_goals and random.random() < 0.4:
+                ioo_resp = await _try_ioo_card(user_id, None, tier, daily_limit)
+                if ioo_resp is not None:
+                    results.append(ioo_resp)
+                    continue
+
             spec_dict, db_id, screens_today = await brain.get_screen(
                 user_id=user_id,
                 context=None,
