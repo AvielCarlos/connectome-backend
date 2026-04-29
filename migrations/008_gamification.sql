@@ -1,6 +1,9 @@
 -- Migration 008: Gamification — Streaks, XP, Badges, Collections
 -- Implements Duolingo-style retention mechanics + Pinterest-style save collections
 
+ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_current INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS xp_level INTEGER DEFAULT 1;
+
 -- ─── Streaks ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS user_streaks (
     id                  SERIAL PRIMARY KEY,

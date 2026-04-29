@@ -18,12 +18,13 @@ Endpoints:
 """
 
 import logging
+import math
 from datetime import date, datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.middleware import get_current_user_id
 from core.database import execute, fetch, fetchrow, fetchval
@@ -73,6 +74,7 @@ BADGE_DEFS = [
 class CheckinRequest(BaseModel):
     reason: str = "daily_login"   # context for XP award
     ref_id: Optional[str] = None
+    context: Dict[str, Any] = Field(default_factory=dict)
 
 class CollectionCreate(BaseModel):
     name: str
@@ -89,19 +91,99 @@ class CollectionItemAdd(BaseModel):
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-async def _award_xp(user_id: str, reason: str, ref_id: Optional[str] = None) -> int:
-    """Award XP for a reason. Returns amount awarded (0 if unknown reason)."""
-    amount = XP_TABLE.get(reason, 0)
-    if amount <= 0:
+TIER_MULTIPLIERS = {"free": 1.0, "explorer": 1.5, "sovereign": 2.5}
+
+
+def xp_to_level(total_xp: int) -> int:
+    """XP required for each level follows exponential growth."""
+    if total_xp < 200:
+        return 1
+    return min(100, int(1 + math.log(total_xp / 100, 1.5)))
+
+
+def xp_for_level(level: int) -> int:
+    """XP needed to reach this level."""
+    if level <= 1:
         return 0
+    return int(100 * (1.5 ** (level - 1)))
+
+
+def _tier_multiplier(tier: str) -> float:
+    return TIER_MULTIPLIERS.get((tier or "free").lower(), 1.0)
+
+
+def _streak_multiplier(streak: int) -> float:
+    if streak >= 30:
+        return 1.5
+    if streak >= 7:
+        return 1.2
+    if streak >= 3:
+        return 1.1
+    return 1.0
+
+
+async def _current_xp_multiplier(user_id: str) -> Dict[str, Any]:
+    """Return the user's active base multiplier from tier + streak."""
+    user_row = await fetchrow(
+        "SELECT subscription_tier, streak_current FROM users WHERE id = $1",
+        UUID(user_id),
+    )
+    data = dict(user_row) if user_row else {}
+    tier = (data.get("subscription_tier") or "free").lower()
+    streak = int(data.get("streak_current") or 0)
+    multiplier = _tier_multiplier(tier) * _streak_multiplier(streak)
+    return {"tier": tier, "streak": streak, "multiplier": multiplier}
+
+
+async def _award_xp(
+    user_id: str,
+    reason: str,
+    ref_id: Optional[str] = None,
+    context: Optional[Dict[str, Any]] = None,
+) -> int:
+    """Award dynamically calculated XP for a reason. Returns amount awarded."""
+    base = XP_TABLE.get(reason, 0)
+    if base <= 0:
+        return 0
+
+    context = context or {}
+
     try:
+        multiplier_info = await _current_xp_multiplier(user_id)
+        multiplier = float(multiplier_info["multiplier"])
+
+        first_time = await fetchval(
+            "SELECT COUNT(*) FROM xp_log WHERE user_id = $1 AND reason = $2",
+            UUID(user_id), reason,
+        )
+        if int(first_time or 0) == 0:
+            multiplier *= 2.0
+
+        if reason == "ioo_node_complete":
+            difficulty = int(context.get("difficulty_level", 5) or 5)
+            difficulty = max(1, min(10, difficulty))
+            multiplier *= 0.5 + difficulty / 10.0
+
+        amount = max(1, int(base * multiplier))
+        ref_value = None
+        if ref_id:
+            ref_text = str(ref_id)
+            ref_value = str(UUID(ref_text)) if len(ref_text) == 36 else ref_text
+
         await execute(
             "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, $3, $4)",
-            UUID(user_id), amount, reason, ref_id,
+            UUID(user_id), amount, reason, ref_value,
         )
+
+        total_xp = await _get_total_xp(user_id)
+        await execute(
+            "UPDATE users SET xp_level = $2 WHERE id = $1",
+            UUID(user_id), xp_to_level(total_xp),
+        )
+        return amount
     except Exception as e:
         logger.warning(f"XP award failed: {e}")
-    return amount
+        return 0
 
 
 async def _get_total_xp(user_id: str) -> int:
@@ -222,6 +304,7 @@ async def _update_streak(user_id: str) -> Dict[str, Any]:
                 """,
                 UUID(user_id), today,
             )
+            await execute("UPDATE users SET streak_current = 1 WHERE id = $1", UUID(user_id))
             return {"current_streak": 1, "longest_streak": 1, "is_new_day": True, "streak_extended": True}
 
         last = row["last_activity_date"]
@@ -253,6 +336,7 @@ async def _update_streak(user_id: str) -> Dict[str, Any]:
                 """,
                 new_streak, today, UUID(user_id),
             )
+            await execute("UPDATE users SET streak_current = $2 WHERE id = $1", UUID(user_id), new_streak)
             return {
                 "current_streak": new_streak,
                 "longest_streak": max(longest, new_streak),
@@ -279,6 +363,7 @@ async def _update_streak(user_id: str) -> Dict[str, Any]:
             """,
             new_streak, new_longest, today, UUID(user_id),
         )
+        await execute("UPDATE users SET streak_current = $2 WHERE id = $1", UUID(user_id), new_streak)
 
         return {
             "current_streak": new_streak,
@@ -320,6 +405,13 @@ async def get_gamification_status(user_id: str = Depends(get_current_user_id)):
         last_date = streak_row["last_activity_date"] if streak_row else None
 
         total_xp = await _get_total_xp(user_id)
+        level = xp_to_level(total_xp)
+        current_level_xp = xp_for_level(level)
+        next_level_xp = xp_for_level(level + 1)
+        level_span = max(1, next_level_xp - current_level_xp)
+        xp_progress_pct = max(0, min(100, int(((total_xp - current_level_xp) / level_span) * 100)))
+        multiplier_info = await _current_xp_multiplier(user_id)
+        tier = multiplier_info["tier"]
 
         badges = await fetch(
             "SELECT badge_key, badge_name, badge_emoji, earned_at FROM user_badges WHERE user_id = $1 ORDER BY earned_at DESC",
@@ -348,6 +440,11 @@ async def get_gamification_status(user_id: str = Depends(get_current_user_id)):
                 "total": total_xp,
                 "next_milestone": next_milestone,
                 "progress_to_next": (total_xp / next_milestone) if next_milestone else 1.0,
+                "level": level,
+                "xp_for_next_level": next_level_xp,
+                "xp_progress_pct": xp_progress_pct,
+                "multiplier": round(float(multiplier_info["multiplier"]), 2),
+                "tier_bonus": "2.5x XP" if tier == "sovereign" else "1.5x XP" if tier == "explorer" else None,
             },
             "badges": [
                 {
@@ -359,15 +456,34 @@ async def get_gamification_status(user_id: str = Depends(get_current_user_id)):
                 for b in badges
             ],
             "collections_count": int(collection_count),
+            "level": level,
+            "xp_for_next_level": next_level_xp,
+            "xp_progress_pct": xp_progress_pct,
+            "multiplier": round(float(multiplier_info["multiplier"]), 2),
+            "tier_bonus": "2.5x XP" if tier == "sovereign" else "1.5x XP" if tier == "explorer" else None,
         }
 
     except Exception as e:
         logger.error(f"Gamification status error: {e}")
         return {
             "streak": {"current": 0, "longest": 0, "at_risk": False, "last_activity": None},
-            "xp": {"total": 0, "next_milestone": 100, "progress_to_next": 0},
+            "xp": {
+                "total": 0,
+                "next_milestone": 100,
+                "progress_to_next": 0,
+                "level": 1,
+                "xp_for_next_level": xp_for_level(2),
+                "xp_progress_pct": 0,
+                "multiplier": 1.0,
+                "tier_bonus": None,
+            },
             "badges": [],
             "collections_count": 0,
+            "level": 1,
+            "xp_for_next_level": xp_for_level(2),
+            "xp_progress_pct": 0,
+            "multiplier": 1.0,
+            "tier_bonus": None,
         }
 
 
@@ -399,7 +515,7 @@ async def daily_checkin(
 
     # Award XP for the triggering action (if different from login)
     if body.reason != "daily_login":
-        xp_awarded += await _award_xp(user_id, body.reason, body.ref_id)
+        xp_awarded += await _award_xp(user_id, body.reason, body.ref_id, body.context)
 
     # Check and award badges
     new_badges = await _check_and_award_badges(user_id)

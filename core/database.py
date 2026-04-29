@@ -96,6 +96,8 @@ async def run_migrations():
                 hashed_password TEXT,
                 embedding vector(1536),
                 subscription_tier VARCHAR(20) DEFAULT 'free',
+                streak_current INTEGER DEFAULT 0,
+                xp_level INTEGER DEFAULT 1,
                 fulfilment_score FLOAT DEFAULT 0.0,
                 profile JSONB DEFAULT '{}'
             )
@@ -113,6 +115,12 @@ async def run_migrations():
         """)
         await conn.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_current INTEGER DEFAULT 0
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS xp_level INTEGER DEFAULT 1
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_users_provider ON users(auth_provider, provider_id)

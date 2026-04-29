@@ -159,6 +159,14 @@ async def _get_or_create_user_cp(user_id: UUID) -> dict:
 
 async def _award_cp(user_id: UUID, amount: int, reason: str, reference: Optional[str] = None) -> dict:
     """Credit CP to a user and log the transaction."""
+    base_amount = amount
+    sovereign_bonus = 0
+    user_tier = await fetchval("SELECT subscription_tier FROM users WHERE id = $1", user_id)
+    if user_tier == "sovereign":
+        sovereign_bonus = int(amount * 0.1)
+        amount += sovereign_bonus
+        reason = f"{reason} | sovereign_bonus={sovereign_bonus}"
+
     # Update balance
     await execute(
         """
@@ -188,6 +196,8 @@ async def _award_cp(user_id: UUID, amount: int, reason: str, reference: Optional
     )
     return {
         "cp_awarded": amount,
+        "base_cp_awarded": base_amount,
+        "sovereign_bonus": sovereign_bonus,
         "new_balance": int(row["cp_balance"]),
         "total_earned": int(row["total_cp_earned"]),
     }

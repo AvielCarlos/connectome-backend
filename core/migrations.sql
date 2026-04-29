@@ -17,9 +17,14 @@ CREATE TABLE IF NOT EXISTS users (
     hashed_password TEXT,
     embedding vector(1536),
     subscription_tier VARCHAR(20) DEFAULT 'free',
+    streak_current INTEGER DEFAULT 0,
+    xp_level INTEGER DEFAULT 1,
     fulfilment_score FLOAT DEFAULT 0.0,
     profile JSONB DEFAULT '{}'
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS streak_current INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS xp_level INTEGER DEFAULT 1;
 
 CREATE TABLE IF NOT EXISTS screen_specs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
