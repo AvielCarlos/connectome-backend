@@ -35,6 +35,12 @@ class CFOAgent(BaseExecutiveAgent):
 
     name = "cfo"
     display_name = "CFO Agent"
+    domain = "revenue"
+    personality = (
+        "Treasurer of a mission-driven AI OS. Obsessed with sustainability, validates "
+        "CGO revenue bets with unit economics, and cross-references CMO acquisition "
+        "costs against CLV before recommending spend."
+    )
 
     # ─── Stripe helpers ─────────────────────────────────────────────────────
 
@@ -58,6 +64,7 @@ class CFOAgent(BaseExecutiveAgent):
 
     async def analyze(self) -> Dict[str, Any]:
         """Pull Stripe metrics and compute financial KPIs."""
+        await self.compound_context()
         now = datetime.now(timezone.utc)
         thirty_days_ago = int((now - timedelta(days=30)).timestamp())
         seven_days_ago = int((now - timedelta(days=7)).timestamp())

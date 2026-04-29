@@ -39,11 +39,23 @@ class ExecutiveCouncil(BaseExecutiveAgent):
     async def analyze(self) -> Dict[str, Any]:
         """Load all agent reports and prepare council input."""
         now = datetime.now(timezone.utc)
+        insights = []
+        trigger_queue = []
+        try:
+            from ora.agents.agent_memory import agent_memory_bus
+
+            insights = [i.to_dict() for i in await agent_memory_bus.read_all_recent(hours=168)]
+            trigger_queue = await agent_memory_bus.read_trigger_queue(status="pending")
+        except Exception as e:
+            logger.debug("ExecutiveCouncil: memory bus unavailable: %s", e)
+
         council_input: Dict[str, Any] = {
             "analyzed_at": now.isoformat(),
             "agent_reports": {},
             "agents_reporting": 0,
             "agents_silent": [],
+            "weekly_agent_insights": insights,
+            "fast_track_trigger_queue": trigger_queue,
         }
 
         for agent_name in AGENT_NAMES:
@@ -104,7 +116,23 @@ class ExecutiveCouncil(BaseExecutiveAgent):
         summary = brief.get("public_summary", "")
         await self.set_redis_report(summary)
 
-        # Teach Ora the full council synthesis
+        # Publish a master insight to every agent, then teach Ora the full synthesis
+        try:
+            from ora.agents.agent_memory import AgentInsight, agent_memory_bus
+
+            await agent_memory_bus.publish(AgentInsight(
+                source_agent=self.name,
+                domain="strategy",
+                insight_type="decision",
+                content=brief.get("ora_briefing") or brief.get("strategic_synthesis", "Council convened"),
+                confidence=0.93,
+                action_required=bool(brief.get("fast_track_agents")),
+                target_agents=AGENT_NAMES,
+            ))
+            actions_taken.append("Published master council insight to agent memory bus")
+        except Exception as e:
+            logger.debug("ExecutiveCouncil: master insight publish failed: %s", e)
+
         await self.teach_ora(
             f"Executive council brief {date_str}: {brief.get('strategic_synthesis', '')[:500]}",
             confidence=0.9
@@ -140,6 +168,10 @@ class ExecutiveCouncil(BaseExecutiveAgent):
 
         # Build the synthesis
         agent_reports = council_data.get("agent_reports", {})
+        weekly_insights = council_data.get("weekly_agent_insights", [])
+        trigger_queue = council_data.get("fast_track_trigger_queue", [])
+        compound_opportunities = self._identify_compound_opportunities(weekly_insights)
+        compound_recommendations = self._generate_compound_recommendations(compound_opportunities, trigger_queue)
 
         # Extract key signals from each report
         financial_signal = agent_reports.get("cfo", "")
@@ -222,12 +254,25 @@ class ExecutiveCouncil(BaseExecutiveAgent):
                 "Build viral sharing features to improve K-factor",
                 "Deepen AI coaching quality as key differentiator",
             ]
+        if trigger_queue:
+            target_counts = {}
+            for trigger in trigger_queue:
+                target = trigger.get("target_agent", "unknown")
+                target_counts[target] = target_counts.get(target, 0) + 1
+            actions.insert(0, "Fast-track triggered agents: " + ", ".join(f"{k} ({v})" for k, v in sorted(target_counts.items())))
+
+        for item in compound_recommendations[:3]:
+            actions.append(item)
+
         if not actions:
             actions = [
                 "Run weekly growth experiment",
                 "Review and improve onboarding flow",
                 "Engage top contributors with CP recognition",
             ]
+
+        if compound_opportunities:
+            opportunities.insert(0, compound_opportunities[0])
 
         # Strategic synthesis paragraph
         synthesis = (
@@ -239,6 +284,12 @@ class ExecutiveCouncil(BaseExecutiveAgent):
             f"Top opportunity: {opportunities[0] if opportunities else 'deepen AI quality'}."
         )
 
+        ora_briefing = (
+            f"Ora Briefing: {synthesis} Compound signals: "
+            f"{'; '.join(compound_opportunities[:3]) if compound_opportunities else 'no strong cross-agent convergence yet'}. "
+            f"Fast-track queue: {len(trigger_queue)} pending agent follow-ups."
+        )
+
         brief = {
             "convened_at": now.isoformat(),
             "agents_reporting": council_data["agents_reporting"],
@@ -246,8 +297,13 @@ class ExecutiveCouncil(BaseExecutiveAgent):
             "top_priorities": priorities[:3],
             "key_risks": risks[:3],
             "key_opportunities": opportunities[:3],
-            "recommended_actions": actions[:4],
+            "recommended_actions": actions[:6],
+            "compound_opportunities": compound_opportunities[:5],
+            "compound_recommendations": compound_recommendations[:5],
+            "fast_track_agents": sorted({t.get("target_agent") for t in trigger_queue if t.get("target_agent")}),
+            "ora_briefing": ora_briefing,
             "strategic_synthesis": synthesis,
+            "weekly_agent_insights_snapshot": weekly_insights[:20],
             "agent_reports_snapshot": {
                 k: v[:300] if isinstance(v, str) else str(v)[:300]
                 for k, v in agent_reports.items()
@@ -261,6 +317,56 @@ class ExecutiveCouncil(BaseExecutiveAgent):
         }
 
         return brief
+
+    def _identify_compound_opportunities(self, insights: List[Dict[str, Any]]) -> List[str]:
+        """Find where multiple agents are seeing aligned or conflicting signals."""
+        if not insights:
+            return []
+        by_domain: Dict[str, List[Dict[str, Any]]] = {}
+        for insight in insights:
+            by_domain.setdefault(insight.get("domain", "unknown"), []).append(insight)
+
+        opportunities: List[str] = []
+        for domain, items in by_domain.items():
+            agents = sorted({i.get("source_agent") for i in items if i.get("source_agent")})
+            if len(agents) >= 2:
+                opportunities.append(
+                    f"{domain.title()} convergence: {', '.join(agents)} are independently signalling this domain — synthesize into one coordinated move."
+                )
+
+        action_items = [i for i in insights if i.get("action_required")]
+        if action_items:
+            targets = sorted({a for i in action_items for a in i.get("target_agents", [])})
+            opportunities.append(
+                f"Action-required queue: {len(action_items)} insights need follow-through from {', '.join(targets) or 'the council'}."
+            )
+
+        revenue_terms = ("revenue", "mrr", "paid", "conversion", "pricing", "cac", "ltv")
+        revenue_agents = sorted({
+            i.get("source_agent") for i in insights
+            if any(term in str(i.get("content", "")).lower() for term in revenue_terms)
+        })
+        if len(revenue_agents) >= 2:
+            opportunities.append(
+                f"Revenue compound lever: {', '.join(revenue_agents)} all reference monetisation signals — align offer, campaign, product gate, and unit economics."
+            )
+        return opportunities
+
+    def _generate_compound_recommendations(self, opportunities: List[str], trigger_queue: List[Dict[str, Any]]) -> List[str]:
+        """Turn compound opportunities into multi-agent recommended actions."""
+        recommendations: List[str] = []
+        for opp in opportunities[:3]:
+            if "Revenue" in opp or "monetisation" in opp or "Growth" in opp:
+                recommendations.append("CGO+CFO+CMO+CPO: validate one revenue experiment with pricing, acquisition copy, product trigger, and success metric in one sprint")
+            elif "Action-required" in opp:
+                recommendations.append("COO: consume the trigger queue and schedule the named agents for fast-track follow-up before the next weekly council")
+            else:
+                recommendations.append(f"Strategy+COO: convert signal into an owner, deadline, and measurable next step — {opp[:120]}")
+
+        if trigger_queue:
+            agents = sorted({t.get("target_agent") for t in trigger_queue if t.get("target_agent")})
+            recommendations.append(f"Fast-track next runs for: {', '.join(agents)}")
+        return recommendations
 
     async def escalate(self, issue: str, agent: str) -> None:
         """

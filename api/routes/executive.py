@@ -25,7 +25,7 @@ router = APIRouter(prefix="/api/executive", tags=["executive"])
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "connectome-admin-secret")
 LOG_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/executive_council"
 
-AGENT_NAMES = ["cfo", "cmo", "cpo", "cto", "coo", "community", "strategy", "executive_council"]
+AGENT_NAMES = ["cfo", "cgo", "cmo", "cpo", "cto", "coo", "community", "strategy", "executive_council"]
 
 
 def _require_admin(x_admin_token: str = Header(default="")):
@@ -258,6 +258,7 @@ async def run_agent(
 
     valid_agents = {
         "cfo": "ora.agents.cfo_agent.CFOAgent",
+        "cgo": "ora.agents.cgo_agent.CGOAgent",
         "cmo": "ora.agents.cmo_agent.CMOAgent",
         "cpo": "ora.agents.cpo_agent.CPOAgent",
         "cto": "ora.agents.cto_agent.CTOAgent",

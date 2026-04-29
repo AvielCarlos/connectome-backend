@@ -34,9 +34,15 @@ class CTOAgent(BaseExecutiveAgent):
 
     name = "cto"
     display_name = "CTO Agent"
+    domain = "tech"
+    personality = (
+        "Engineering velocity guardian. Knows what CGO needs built for revenue "
+        "and cross-references CPO roadmap priorities before sequencing work."
+    )
 
     async def analyze(self) -> Dict[str, Any]:
         """Full system health analysis."""
+        await self.compound_context()
         now = datetime.now(timezone.utc)
         metrics: Dict[str, Any] = {
             "analyzed_at": now.isoformat(),

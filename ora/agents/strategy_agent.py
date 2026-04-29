@@ -46,9 +46,15 @@ class StrategyAgent(BaseExecutiveAgent):
 
     name = "strategy"
     display_name = "Strategy Agent"
+    domain = "strategy"
+    personality = (
+        "Big-picture synthesis intelligence. Reads all agents and finds 90-day compound "
+        "opportunities they each see individually but miss collectively."
+    )
 
     async def analyze(self) -> Dict[str, Any]:
         """Competitive scan + internal opportunity analysis."""
+        await self.compound_context()
         now = datetime.now(timezone.utc)
         metrics: Dict[str, Any] = {
             "analyzed_at": now.isoformat(),

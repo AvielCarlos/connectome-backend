@@ -21,6 +21,30 @@ LOG_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/executive_council"
 API_BASE = "https://connectome-api-production.up.railway.app"
 
 
+AGENT_DOMAINS = {
+    "cfo": "revenue",
+    "cgo": "growth",
+    "cmo": "growth",
+    "cpo": "product",
+    "cto": "tech",
+    "coo": "ops",
+    "community": "community",
+    "strategy": "strategy",
+    "executive_council": "strategy",
+}
+
+AGENT_COLLABORATORS = {
+    "cfo": ["cgo", "cmo", "coo"],
+    "cmo": ["cgo", "cpo", "community"],
+    "cpo": ["cgo", "cto", "community"],
+    "cto": ["cgo", "cpo", "coo"],
+    "coo": ["cfo", "cgo", "cmo", "cpo", "cto", "community", "strategy"],
+    "cgo": ["cfo", "cmo", "cpo", "cto", "community"],
+    "strategy": ["cfo", "cgo", "cmo", "cpo", "cto", "coo", "community"],
+    "community": ["cgo", "cmo", "cpo", "strategy"],
+}
+
+
 class BaseExecutiveAgent(ABC):
     """
     Interface all executive agents implement.
@@ -30,15 +54,29 @@ class BaseExecutiveAgent(ABC):
     - Analyzes data in that domain
     - Reports insights in plain English
     - Can take safe autonomous actions
+    - Reads and writes to the compound intelligence bus
     - Teaches Ora what it learns via /api/ora/learn
     """
 
     name: str = "base"
     display_name: str = "Base Agent"
+    domain: str = "strategy"
+    personality: str = "Mission-aligned executive intelligence serving Ora's AI OS for human flourishing."
+    compound_system_prompt: str = (
+        "Ora is an AI OS for human flourishing. Avi is The Spark — the visionary "
+        "initiating force. The agent team is a living executive council that "
+        "compounds collective intelligence: every agent reads what the others found, "
+        "references cross-domain signals where relevant, and publishes structured "
+        "insights back to the shared memory bus. Outputs should include "
+        "agent_insights_published: list[str] and cross_agent_context_used: list[str]."
+    )
 
     def __init__(self):
         self._jwt_token: Optional[str] = None
         self._telegram_token: Optional[str] = None
+        self.domain = getattr(self, "domain", AGENT_DOMAINS.get(self.name, "strategy"))
+        self._last_compound_context_used: List[str] = []
+        self._last_agent_insights_published: List[str] = []
         os.makedirs(LOG_DIR, exist_ok=True)
 
     # ─── Interface ──────────────────────────────────────────────────────────
@@ -64,6 +102,116 @@ class BaseExecutiveAgent(ABC):
         ...
 
     # ─── Shared helpers ─────────────────────────────────────────────────────
+
+    async def compound_context(self, domains: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+        """
+        Pull relevant cross-agent insights from the compound memory bus.
+        Gracefully returns [] if the bus/database is unavailable.
+        """
+        try:
+            from ora.agents.agent_memory import agent_memory_bus
+
+            insights = await agent_memory_bus.read_for(self.name, domains=domains)
+            context = [insight.to_dict() for insight in insights]
+            self._last_compound_context_used = [
+                f"{item['source_agent']}:{item['insight_type']}:{item['content'][:120]}"
+                for item in context
+            ]
+            return context
+        except Exception as e:
+            logger.debug(f"{self.name}: compound context unavailable: {e}")
+            self._last_compound_context_used = []
+            return []
+
+    def compound_personality_prompt(self) -> str:
+        """Richer prompt/context block for LLM-backed executive planning."""
+        collaborators = ", ".join(AGENT_COLLABORATORS.get(self.name, [])) or "the full council"
+        return (
+            f"{self.compound_system_prompt}\n\n"
+            f"You are {self.display_name} ({self.name}), domain={self.domain}. "
+            f"Personality: {self.personality} "
+            f"Primary collaborators to cross-reference: {collaborators}."
+        )
+
+    async def publish_agent_insights(self, data: Dict[str, Any]) -> List[str]:
+        """Extract and publish this run's key findings to the shared bus."""
+        try:
+            from ora.agents.agent_memory import AgentInsight, agent_memory_bus
+
+            insights = self._extract_insights_from_report(data)
+            published: List[str] = []
+            for insight in insights[:5]:
+                insight_id = await agent_memory_bus.publish(insight)
+                if insight_id:
+                    published.append(insight.content)
+            self._last_agent_insights_published = published
+            return published
+        except Exception as e:
+            logger.debug(f"{self.name}: publish_agent_insights failed: {e}")
+            self._last_agent_insights_published = []
+            return []
+
+    def _extract_insights_from_report(self, data: Dict[str, Any]) -> List[Any]:
+        """Best-effort conversion of heterogeneous agent reports into bus insights."""
+        from ora.agents.agent_memory import AgentInsight
+
+        domain = getattr(self, "domain", AGENT_DOMAINS.get(self.name, "strategy"))
+        collaborators = AGENT_COLLABORATORS.get(self.name, [])
+        insights: List[AgentInsight] = []
+
+        def add(insight_type: str, content: str, confidence: float = 0.78, action_required: bool = False, targets: Optional[List[str]] = None) -> None:
+            content = " ".join(str(content).split())[:1000]
+            if content:
+                insights.append(
+                    AgentInsight(
+                        source_agent=self.name,
+                        domain=domain,
+                        insight_type=insight_type,
+                        content=content,
+                        confidence=confidence,
+                        action_required=action_required,
+                        target_agents=targets or collaborators[:3],
+                    )
+                )
+
+        if not isinstance(data, dict):
+            add("finding", str(data))
+            return insights
+
+        if data.get("strategic_synthesis"):
+            add("decision", data["strategic_synthesis"], 0.9, True, AGENT_COLLABORATORS.get("strategy", []))
+        if data.get("mandate"):
+            add("finding", data["mandate"], 0.74)
+
+        for key in ("top_priorities", "key_opportunities", "recommended_actions", "prioritized_action_plan"):
+            value = data.get(key)
+            if isinstance(value, list):
+                for item in value[:2]:
+                    text = item.get("action") if isinstance(item, dict) else item
+                    add("opportunity" if "opportun" in key or "action" in key else "decision", text, 0.82, "action" in key, collaborators[:3])
+
+        for key in ("key_risks", "risks"):
+            value = data.get(key)
+            if isinstance(value, list):
+                for item in value[:2]:
+                    add("risk", item, 0.84, True, collaborators[:3])
+
+        metric_fragments = []
+        metrics = data.get("metrics") if isinstance(data.get("metrics"), dict) else data
+        for key in (
+            "mrr_usd", "arr_usd", "revenue_last_30d_usd", "total_users", "new_users_7d",
+            "active_users_7d", "weekly_growth_rate_pct", "paid_users", "conversion_rate_pct",
+            "system_health_score", "community_health_score", "roadmap_health_score",
+        ):
+            if key in metrics:
+                metric_fragments.append(f"{key}={metrics.get(key)}")
+        if metric_fragments:
+            add("finding", f"{self.display_name} metrics: " + ", ".join(metric_fragments), 0.8)
+
+        if not insights:
+            summary = json.dumps(data, default=str)[:700]
+            add("finding", f"{self.display_name} completed run: {summary}", 0.7)
+        return insights
 
     async def teach_ora(self, insight: str, confidence: float = 0.8) -> bool:
         """
@@ -97,10 +245,14 @@ class BaseExecutiveAgent(ABC):
             return False
 
     async def save_report(self, data: Dict[str, Any], filename: Optional[str] = None) -> str:
-        """Save a report dict as JSON to the executive_council log dir."""
+        """Save a report dict and publish its key findings to the intelligence bus."""
         fname = filename or f"{self.name}_report.json"
         path = os.path.join(LOG_DIR, fname)
         data["_saved_at"] = datetime.now(timezone.utc).isoformat()
+        if "cross_agent_context_used" not in data:
+            data["cross_agent_context_used"] = self._last_compound_context_used
+        if "agent_insights_published" not in data:
+            data["agent_insights_published"] = await self.publish_agent_insights(data)
         with open(path, "w") as f:
             json.dump(data, f, indent=2, default=str)
         return path

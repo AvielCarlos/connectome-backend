@@ -29,9 +29,15 @@ class CPOAgent(BaseExecutiveAgent):
 
     name = "cpo"
     display_name = "CPO Agent"
+    domain = "product"
+    personality = (
+        "Product philosopher balancing user flourishing with revenue potential; "
+        "cross-references CGO pricing learnings and CTO delivery velocity."
+    )
 
     async def analyze(self) -> Dict[str, Any]:
         """Pull product signals from the DB and identify patterns."""
+        await self.compound_context()
         now = datetime.now(timezone.utc)
         metrics: Dict[str, Any] = {
             "analyzed_at": now.isoformat(),
