@@ -17,7 +17,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from core.database import execute, fetch, fetchrow, fetchval
 from api.middleware import get_current_user_id
@@ -39,8 +39,14 @@ CSUITE_DOMAINS = {
     "ora": "strategic_vision",  # Ora as CEO
 }
 
-# CP rate ranges — Ora picks within the range based on quality/impact
-# Format: (min, base, max) — Ora applies quality_score 0.5–2.0x on base
+# CP rate ranges — calibrated around reviewed impact, not raw activity volume.
+# Format: (min, base, max). Awards are clamped to these ranges unless `custom`.
+# Design notes from DAO/OSS practice:
+# - Coordinape-style peer signal: small boosts for named vouches, not raw popularity.
+# - SourceCred-style anti-gaming: reward work when reviewed/merged, not merely posted.
+# - Optimism RPGF: retroactively value proven impact over speculative promises.
+# - Apache/Open Source Way: recognize diverse contribution types without making
+#   leaderboards the only status mechanism.
 CP_RATE_RANGES = {
     # Development
     "bug_fix_minor":        (10,   25,   75),
@@ -50,11 +56,13 @@ CP_RATE_RANGES = {
     "feature_medium":       (250, 500, 1200),
     "feature_large":        (500, 1000, 3000),
     "architecture":         (300, 750, 2000),
-    "code_review":          (20,   50,  150),
+    "code_review":          (25,   75,  250),
     "test_coverage":        (30,   75,  200),
     "performance_opt":      (50,  150,  500),
     "security_fix":         (100, 300, 1000),
     "open_source_contrib":  (100, 250,  750),
+    "devops_infrastructure":(100, 250,  800),
+    "release_management":   (75,  175,  500),
     # Design
     "ui_component":         (50,  100,  300),
     "ux_research":          (100, 200,  600),
@@ -66,6 +74,7 @@ CP_RATE_RANGES = {
     # Content
     "blog_post":            (25,   50,  150),
     "documentation":        (50,  100,  300),
+    "docs_major":           (100, 250,  700),
     "tutorial":             (75,  150,  400),
     "video_content":        (100, 200,  600),
     "podcast_appearance":   (50,  125,  350),
@@ -77,12 +86,16 @@ CP_RATE_RANGES = {
     "ambassador":           (250, 500, 1500),
     "community_manager":    (200, 400, 1000),
     "onboarded_developer":  (100, 200,  500),
+    "support_resolution":   (20,   50,  150),
+    "peer_review_vouch":    (10,   25,   75),
     # Research
     "market_research":      (75,  150,  400),
     "user_interview":       (50,  100,  250),
     "competitive_analysis": (100, 200,  500),
     "grant_application":    (200, 500, 2000),
     "investor_intro":       (100, 300, 1000),
+    "implemented_idea":     (75,  175,  500),
+    "technical_spec":       (75,  200,  600),
     # Strategic
     "partnership_closed":   (500, 1500, 5000),
     "revenue_generated":    (0,     0,     0),  # custom: % of revenue
@@ -95,6 +108,17 @@ CP_RATE_RANGES = {
     "custom":               (1,     0, 99999),  # fully custom
 }
 
+NO_IMMEDIATE_CP_TYPES = {
+    "suggestion_accepted",
+    "suggestion",
+    "idea",
+    "idea_raw",
+}
+
+HIGH_AWARD_THRESHOLD = 2500
+MAX_REASONLESS_AWARD = 1000
+MAX_PEER_VOUCH_BOOST = 0.15
+
 # Backwards compat — base values only
 CP_RATES = {k: v[1] for k, v in CP_RATE_RANGES.items()}
 
@@ -106,7 +130,11 @@ class CPAwardRequest(BaseModel):
     reason: str                    # human-readable description
     reference_url: Optional[str] = None   # PR, issue, design file, etc.
     domain: Optional[str] = None   # which C-suite domain nominated this
-    ltv_multiplier: float = 1.0    # 1.0 = standard, 2.0 = double (high LTV contributor)
+    ltv_multiplier: float = Field(1.0, ge=1.0, le=3.0)  # 1.0 = standard, 3.0 = exceptional LTV
+    quality_score: float = Field(1.0, ge=0.5, le=2.0)  # craft/depth/review quality
+    impact_multiplier: float = Field(1.0, ge=0.75, le=2.0)  # proven user/business/platform impact
+    peer_vouches: int = Field(0, ge=0, le=10)  # Coordinape-style peer signal; capped at +15%
+    review_score: Optional[float] = Field(None, ge=1.0, le=5.0)  # reviewer confidence/quality signal
 
 
 class CPAwardBulkRequest(BaseModel):
@@ -165,6 +193,93 @@ async def _award_cp(user_id: UUID, amount: int, reason: str, reference: Optional
     }
 
 
+def _normalise_contribution_type(contribution_type: str) -> str:
+    return contribution_type.lower().strip()
+
+
+async def _validate_award_request(body: CPAwardRequest, recipient_id: UUID) -> None:
+    """Guardrails that keep CP tied to reviewed, high-signal work."""
+    contribution_type = _normalise_contribution_type(body.contribution_type)
+
+    if contribution_type in NO_IMMEDIATE_CP_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail="Ideas/suggestions earn CP only after implementation, merge, or explicit adoption. Use implemented_idea or suggestion_implemented.",
+        )
+
+    if len(body.reason.strip()) < 20:
+        raise HTTPException(status_code=422, detail="reason must explain impact in at least 20 characters")
+
+    code_like = contribution_type.startswith(("bug_", "feature_")) or contribution_type in {
+        "architecture", "code_review", "test_coverage", "performance_opt", "security_fix",
+        "open_source_contrib", "devops_infrastructure", "release_management",
+    }
+    if code_like and not body.reference_url:
+        raise HTTPException(status_code=422, detail="code/engineering CP requires a PR, issue, or review reference_url")
+
+    if body.reference_url:
+        duplicate = await fetchval(
+            """
+            SELECT COUNT(*)
+            FROM cp_transactions
+            WHERE user_id = $1 AND reference_id = $2 AND amount > 0
+            """,
+            recipient_id,
+            body.reference_url,
+        )
+        if int(duplicate or 0) > 0:
+            raise HTTPException(status_code=409, detail="CP has already been awarded to this user for that reference_url")
+
+
+def _calculate_cp_award(body: CPAwardRequest) -> dict:
+    """Return final CP plus transparent calculation metadata."""
+    contribution_type = _normalise_contribution_type(body.contribution_type)
+
+    if contribution_type == "custom":
+        if not body.amount_override:
+            raise HTTPException(status_code=422, detail="amount_override required for custom type")
+        base_amount = body.amount_override
+        min_amount, max_amount = 1, CP_RATE_RANGES["custom"][2]
+    else:
+        if contribution_type not in CP_RATE_RANGES:
+            raise HTTPException(status_code=422, detail=f"Unknown contribution type: {body.contribution_type}")
+        min_amount, base_amount, max_amount = CP_RATE_RANGES[contribution_type]
+        if body.amount_override:
+            if body.amount_override < min_amount or body.amount_override > max_amount:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"amount_override for {contribution_type} must be within {min_amount}-{max_amount} CP",
+                )
+            base_amount = body.amount_override
+
+    peer_boost = min(min(body.peer_vouches, 3) * 0.05, MAX_PEER_VOUCH_BOOST)
+    if body.review_score is not None and body.review_score < 3.0:
+        raise HTTPException(status_code=422, detail="review_score below 3.0 is not awardable; wait for better review/merge outcome")
+
+    multiplier = body.quality_score * body.impact_multiplier * body.ltv_multiplier * (1 + peer_boost)
+    final_amount = max(min_amount, int(round(base_amount * multiplier)))
+    final_amount = min(final_amount, max_amount)
+
+    if final_amount > MAX_REASONLESS_AWARD and not body.reference_url:
+        raise HTTPException(status_code=422, detail=f"Awards over {MAX_REASONLESS_AWARD} CP require reference_url evidence")
+    if final_amount > HIGH_AWARD_THRESHOLD:
+        if not body.domain or (body.domain not in CSUITE_DOMAINS.values() and body.domain not in CSUITE_DOMAINS.keys()):
+            raise HTTPException(status_code=422, detail="High CP awards require a recognized C-suite/Ora domain")
+        if "approved" not in body.reason.lower() and "reviewed" not in body.reason.lower():
+            raise HTTPException(status_code=422, detail="High CP awards must state review/approval in reason")
+
+    return {
+        "base_amount": base_amount,
+        "final_amount": final_amount,
+        "multiplier": round(multiplier, 3),
+        "quality_score": body.quality_score,
+        "impact_multiplier": body.impact_multiplier,
+        "ltv_multiplier": body.ltv_multiplier,
+        "peer_vouch_boost": round(peer_boost, 2),
+        "range": {"min": min_amount, "max": max_amount},
+    }
+
+
 @router.post("/award")
 async def award_cp(
     body: CPAwardRequest,
@@ -193,22 +308,13 @@ async def award_cp(
     if not recipient:
         raise HTTPException(status_code=404, detail=f"User not found: {body.recipient_email}")
 
-    # Calculate amount
-    if body.contribution_type == "custom":
-        if not body.amount_override:
-            raise HTTPException(status_code=422, detail="amount_override required for custom type")
-        base_amount = body.amount_override
-    else:
-        base_amount = CP_RATES.get(body.contribution_type)
-        if base_amount is None:
-            raise HTTPException(status_code=422, detail=f"Unknown contribution type: {body.contribution_type}")
-        if body.amount_override:
-            base_amount = body.amount_override  # allow override of base rate
-
-    final_amount = max(1, int(base_amount * body.ltv_multiplier))
+    await _validate_award_request(body, UUID(str(recipient["id"])))
+    calculation = _calculate_cp_award(body)
+    final_amount = calculation["final_amount"]
 
     reason_text = (
-        f"[{body.domain or 'ora'} award] {body.contribution_type}: {body.reason}"
+        f"[{body.domain or 'ora'} award] {body.contribution_type}: {body.reason} "
+        f"| calc={calculation}"
     )
 
     result = await _award_cp(
@@ -222,8 +328,8 @@ async def award_cp(
 
     return {
         "recipient": body.recipient_email,
-        "contribution_type": body.contribution_type,
-        "ltv_multiplier": body.ltv_multiplier,
+        "contribution_type": _normalise_contribution_type(body.contribution_type),
+        "calculation": calculation,
         **result,
         "reason": body.reason,
     }
@@ -254,18 +360,21 @@ async def award_cp_bulk(
             results.append({"recipient": award.recipient_email, "error": "user not found"})
             continue
 
-        base_amount = CP_RATES.get(award.contribution_type, 0) if award.contribution_type != "custom" else 0
-        if award.amount_override:
-            base_amount = award.amount_override
-        final_amount = max(1, int(base_amount * award.ltv_multiplier))
+        try:
+            await _validate_award_request(award, UUID(str(recipient["id"])))
+            calculation = _calculate_cp_award(award)
+        except HTTPException as exc:
+            results.append({"recipient": award.recipient_email, "error": exc.detail})
+            continue
+        final_amount = calculation["final_amount"]
 
         result = await _award_cp(
             UUID(str(recipient["id"])),
             final_amount,
-            f"[{body.nominator} nomination] {award.contribution_type}: {award.reason}",
+            f"[{body.nominator} nomination] {award.contribution_type}: {award.reason} | calc={calculation}",
             award.reference_url
         )
-        results.append({"recipient": award.recipient_email, **result})
+        results.append({"recipient": award.recipient_email, "calculation": calculation, **result})
 
     return {"nominator": body.nominator, "awards": results, "total_awards": len(results)}
 
@@ -275,14 +384,26 @@ async def get_cp_rates():
     """Public endpoint — shows the CP rate card for contributors."""
     return {
         "rates": CP_RATES,
+        "ranges": {k: {"min": v[0], "base": v[1], "max": v[2]} for k, v in CP_RATE_RANGES.items()},
         "domains": CSUITE_DOMAINS,
-        "note": "Rates are base values. LTV multiplier (1.0–3.0x) is applied by Ora based on contributor value.",
+        "note": "CP is awarded after review/merge/adoption. Ideas and suggestions receive CP only when implemented. Quality, proven impact, LTV, and capped peer vouches adjust the base rate within each range.",
+        "multipliers": {
+            "quality_score": "0.5–2.0x for craft, depth, maintainability, or review quality",
+            "impact_multiplier": "0.75–2.0x for proven user/business/platform impact",
+            "peer_vouches": "0–3 counted, +5% each, max +15%",
+        },
         "ltv_tiers": {
             "1.0": "Standard contributor",
             "1.5": "High-value contributor",
             "2.0": "Core team member",
             "3.0": "Founding contributor (exceptional impact)",
-        }
+        },
+        "guardrails": {
+            "no_immediate_cp": sorted(NO_IMMEDIATE_CP_TYPES),
+            "duplicate_reference_blocked": True,
+            "engineering_reference_required": True,
+            "high_award_threshold": HIGH_AWARD_THRESHOLD,
+        },
     }
 
 
@@ -454,5 +575,17 @@ async def get_full_cp_rates():
             "2.5": "Key team member — significant ongoing impact",
             "3.0": "Founding contributor — exceptional, irreplaceable",
         },
-        "quality_guidance": "Ora picks within the range based on quality, depth, and business impact. The max is reserved for work that genuinely changes the trajectory.",
+        "quality_multipliers": {
+            "quality_score": "0.5–2.0x. Rewards exceptional craft without encouraging tiny low-value tasks.",
+            "impact_multiplier": "0.75–2.0x. Retroactive/public-goods style boost for proven outcomes.",
+            "peer_vouches": "0–3 counted. Peer signal is useful, but capped to avoid popularity farming.",
+            "review_score": "1–5 optional; below 3 is not awardable.",
+        },
+        "anti_gaming": {
+            "no_cp_for_unimplemented_ideas": sorted(NO_IMMEDIATE_CP_TYPES),
+            "duplicate_reference_blocked": True,
+            "large_awards_need_reference_and_reviewed_reason": HIGH_AWARD_THRESHOLD,
+            "rate_ranges_clamp_non_custom_awards": True,
+        },
+        "quality_guidance": "Ora picks within the range based on quality, depth, and proven impact. The max is reserved for reviewed work that genuinely changes the trajectory.",
     }
