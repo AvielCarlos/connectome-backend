@@ -706,3 +706,61 @@ async def admin_dashboard(x_admin_token: str = Header(default="")):
             for r in agent_rows
         ],
     }
+
+
+@router.get("/users/emails")
+async def get_user_emails(
+    x_admin_token: str = Header(default=""),
+    limit: int = 500,
+    active_only: bool = False,
+    subscription_tier: str = "",
+) -> Dict[str, Any]:
+    """
+    Internal-only endpoint — returns user email list for growth/outreach workflows.
+    Protected by X-Admin-Token. Never expose this publicly.
+
+    Query params:
+      limit: max users to return (default 500)
+      active_only: if true, only users active in the last 30 days
+      subscription_tier: filter by tier (free, explorer, etc.)
+    """
+    _require_admin(x_admin_token)
+
+    filters = []
+    args: list = []
+
+    if active_only:
+        filters.append("last_active > NOW() - INTERVAL '30 days'")
+    if subscription_tier:
+        args.append(subscription_tier)
+        filters.append(f"subscription_tier = ${len(args)}")
+
+    where = ("WHERE " + " AND ".join(filters)) if filters else ""
+    args.append(limit)
+    rows = await fetch(
+        f"""
+        SELECT id, email, subscription_tier, last_active, created_at
+        FROM users
+        {where}
+        ORDER BY created_at DESC
+        LIMIT ${len(args)}
+        """,
+        *args,
+    )
+
+    users = [
+        {
+            "id": str(r["id"]),
+            "email": r["email"],
+            "subscription_tier": r["subscription_tier"] or "free",
+            "last_active": r["last_active"].isoformat() if r["last_active"] else None,
+            "joined": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in rows
+        if r["email"]
+    ]
+
+    return {
+        "count": len(users),
+        "users": users,
+    }
