@@ -48,6 +48,7 @@ from api.routes import suggestions as suggestions_routes
 from api.routes import drive as drive_routes
 from api.routes import ora_health as ora_health_routes
 from api.routes import google_auth as google_auth_routes
+from api.routes import github_oauth as github_oauth_routes
 from api.routes import integrations as integrations_routes
 from api.routes import events as events_routes
 from api.routes import ora_autonomy as ora_autonomy_routes
@@ -286,6 +287,7 @@ app.include_router(events_routes.router)
 app.include_router(drive_routes.router)
 app.include_router(ora_health_routes.router)
 app.include_router(google_auth_routes.router)
+app.include_router(github_oauth_routes.router)
 app.include_router(integrations_routes.router)
 app.include_router(ora_autonomy_routes.router)
 app.include_router(onboarding_routes.router)

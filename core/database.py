@@ -915,6 +915,19 @@ async def run_migrations():
             ALTER TABLE contributors ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)
         """)
         await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS github_username TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS github_avatar_url TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS github_connected BOOLEAN DEFAULT FALSE
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_github
+            ON users(github_username)
+        """)
+        await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_contributors_user_id
             ON contributors(user_id)
         """)
@@ -956,6 +969,19 @@ async def run_migrations():
         """)
         await conn.execute("""
             ALTER TABLE contributions ADD COLUMN IF NOT EXISTS evidence_text TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS attachment_urls JSONB DEFAULT '[]'
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS source_id TEXT
+        """)
+        await conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_contributions_source_id
+            ON contributions(source_id) WHERE source_id IS NOT NULL
         """)
 
         # User suggestions (community feature requests, bug reports, ideas)
@@ -1835,5 +1861,4 @@ async def fetchval(query: str, *args) -> Any:
     pool = await get_pool()
     async with pool.acquire() as conn:
         return await conn.fetchval(query, *args)
-
 

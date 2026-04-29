@@ -440,6 +440,155 @@ async def my_contributions(user_id: str = Depends(get_current_user_id)):
     return {"contributions": [_serialize(_record_to_dict(r)) for r in rows]}
 
 
+@router.post("/sync-github")
+async def sync_github_contributions(user_id: str = Depends(get_current_user_id)):
+    """Sync merged GitHub PRs for the connected user into pending contributions."""
+    await _ensure_contribution_schema()
+    user_uuid = UUID(user_id)
+    user = await fetchrow("SELECT github_username, github_connected FROM users WHERE id = $1", user_uuid)
+    if not user or not user["github_connected"] or not user["github_username"]:
+        raise HTTPException(status_code=400, detail="Connect GitHub before syncing PRs")
+
+    username = user["github_username"]
+    contributor = await _get_or_create_contributor_for_user(user_uuid)
+    repos = ["AvielCarlos/connectome-backend", "AvielCarlos/connectome-web"]
+    created = []
+    headers = {"Accept": "application/vnd.github+json"}
+    if settings.GITHUB_TOKEN:
+        headers["Authorization"] = f"Bearer {settings.GITHUB_TOKEN}"
+
+    import httpx
+    async with httpx.AsyncClient(timeout=20) as client:
+        for repo in repos:
+            q = f"author:{username} repo:{repo} is:pr is:merged"
+            resp = await client.get("https://api.github.com/search/issues", params={"q": q, "per_page": 50}, headers=headers)
+            if resp.status_code >= 300:
+                logger.warning("GitHub PR search failed for %s: %s %s", repo, resp.status_code, resp.text[:200])
+                continue
+            for item in resp.json().get("items", []):
+                source_id = f"github:{repo}#{item.get('number')}"
+                existing = await fetchrow("SELECT id FROM contributions WHERE source_id = $1", source_id)
+                if existing:
+                    continue
+                title = item.get("title") or f"Merged PR #{item.get('number')}"
+                pr_url = item.get("html_url")
+                row = await fetchrow(
+                    """
+                    INSERT INTO contributions (
+                        contributor_id, user_id, contribution_type, title, description, github_pr_url,
+                        external_link, source, source_id, status, submitted_at
+                    )
+                    VALUES ($1, $2, 'code', $3, $4, $5, $5, 'github', $6, 'pending', NOW())
+                    RETURNING id, title, github_pr_url, status
+                    """,
+                    contributor["id"], user_uuid, title,
+                    f"Automatically synced from merged GitHub PR in {repo}.",
+                    pr_url, source_id,
+                )
+                created.append(_serialize(_record_to_dict(row)))
+
+    return {"synced": len(created), "contributions": created}
+
+
+@router.post("/sync-github/all")
+async def sync_github_all(user_id: str = Depends(get_current_user_id)):
+    """Admin endpoint for scheduler visibility; service-token worker can fan out per user."""
+    user_uuid = UUID(user_id)
+    if not await _is_admin_user(user_uuid):
+        raise HTTPException(status_code=403, detail="Admin only")
+    await _ensure_contribution_schema()
+    count = await fetchval("SELECT COUNT(*) FROM users WHERE github_connected = TRUE AND github_username IS NOT NULL")
+    return {"connected_users": int(count or 0), "message": "Daily cron should call /api/dao/sync-github with each user's auth context."}
+
+
+@router.post("/contributions/{contribution_id}/approve")
+async def approve_contribution(
+    contribution_id: str,
+    body: ApproveContributionRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Approve a contribution and award CP + 10x XP."""
+    await _ensure_contribution_schema()
+    admin_uuid = UUID(user_id)
+    if not await _is_admin_user(admin_uuid):
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    contribution = await fetchrow(
+        """
+        SELECT c.*, co.id AS contributor_id, co.total_cp, co.is_founding_steward
+        FROM contributions c
+        JOIN contributors co ON co.id = c.contributor_id
+        WHERE c.id = $1::uuid
+        """,
+        contribution_id,
+    )
+    if not contribution:
+        raise HTTPException(status_code=404, detail="Contribution not found")
+    if contribution["status"] in ("approved", "accepted"):
+        raise HTTPException(status_code=409, detail="Contribution already approved")
+
+    ctype = (contribution["contribution_type"] or "idea").lower()
+    min_cp, max_cp = CP_BY_TYPE.get(ctype, (50, 300))
+    cp_amount = int(body.cp_amount)
+    if cp_amount < min_cp or cp_amount > max_cp:
+        raise HTTPException(status_code=422, detail=f"{ctype} contributions must be awarded between {min_cp}-{max_cp} CP")
+
+    contributor_id = contribution["contributor_id"]
+    recipient_user_id = contribution["user_id"]
+    if not recipient_user_id:
+        row = await fetchrow("SELECT user_id FROM contributors WHERE id = $1", contributor_id)
+        recipient_user_id = row["user_id"] if row else None
+
+    await execute(
+        """
+        UPDATE contributions
+        SET status = 'approved', base_cp = $2, final_cp = $2, ora_evaluation = $3
+        WHERE id = $1::uuid
+        """,
+        contribution_id, cp_amount, body.admin_note,
+    )
+    await execute(
+        "INSERT INTO cp_ledger (contributor_id, contribution_id, cp_amount, reason) VALUES ($1, $2::uuid, $3, $4)",
+        contributor_id, contribution_id, cp_amount, body.admin_note or f"Approved {ctype} contribution",
+    )
+    new_total = int(contribution["total_cp"] or 0) + cp_amount
+    new_tier = _tier_for_cp(new_total, bool(contribution["is_founding_steward"]))
+    await execute("UPDATE contributors SET total_cp = $2, tier = $3 WHERE id = $1", contributor_id, new_total, new_tier)
+
+    if recipient_user_id:
+        await execute(
+            """
+            INSERT INTO user_cp_balance (user_id, cp_balance, total_cp_earned, last_updated)
+            VALUES ($1, $2, $2, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                cp_balance = user_cp_balance.cp_balance + $2,
+                total_cp_earned = user_cp_balance.total_cp_earned + $2,
+                last_updated = NOW()
+            """,
+            recipient_user_id, cp_amount,
+        )
+        await execute(
+            "INSERT INTO cp_transactions (user_id, amount, reason, reference_id, created_at) VALUES ($1, $2, $3, $4, NOW())",
+            recipient_user_id, cp_amount, f"Contribution approved: {contribution['title']}", contribution_id,
+        )
+        await execute(
+            "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, 'cp_earned', $3)",
+            recipient_user_id, cp_amount * 10, contribution_id,
+        )
+        try:
+            await execute(
+                """
+                INSERT INTO notifications (user_id, title, body, type, created_at)
+                VALUES ($1, $2, $3, 'dao_cp_awarded', NOW())
+                """,
+                recipient_user_id, "Contribution approved", f"You earned {cp_amount} CP for {contribution['title']}",
+            )
+        except Exception:
+            pass
+
+    return {"ok": True, "contribution_id": contribution_id, "cp_awarded": cp_amount, "xp_awarded": cp_amount * 10, "tier": new_tier}
+
+
 # ---------------------------------------------------------------------------
 # POST /api/dao/contribute/{github_username}  (with explicit contributor)
 # ---------------------------------------------------------------------------

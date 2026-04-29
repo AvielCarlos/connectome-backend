@@ -19,7 +19,7 @@ _limiter = Limiter(key_func=get_remote_address)
 from typing import Optional, List
 from pydantic import BaseModel
 from core.models import UserCreate, UserLogin, TokenResponse, UserProfile, UserUpdate
-from core.database import fetchrow, execute
+from core.database import fetchrow, execute, fetch, fetchval
 from api.middleware import (
     hash_password,
     verify_password,
@@ -141,6 +141,66 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
         created_at=row["created_at"],
         last_active=row["last_active"],
     )
+
+
+@router.get("/me/contribution-stats")
+async def get_my_contribution_stats(user_id: str = Depends(get_current_user_id)):
+    """Contribution + GitHub connection stats for the current user profile."""
+    uid = UUID(user_id)
+    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS github_username TEXT")
+    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS github_avatar_url TEXT")
+    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS github_connected BOOLEAN DEFAULT FALSE")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS attachment_urls JSONB DEFAULT '[]'")
+
+    user = await fetchrow("SELECT github_username, github_avatar_url, github_connected FROM users WHERE id = $1", uid)
+    total_cp = await fetchval("SELECT COALESCE(SUM(amount), 0) FROM cp_transactions WHERE user_id = $1 AND amount > 0", uid) or 0
+    submitted = await fetchval("SELECT COUNT(*) FROM contributions WHERE user_id = $1", uid) or 0
+    approved = await fetchval("SELECT COUNT(*) FROM contributions WHERE user_id = $1 AND status IN ('approved', 'accepted')", uid) or 0
+    contributor = await fetchrow("SELECT tier FROM contributors WHERE user_id = $1 ORDER BY total_cp DESC LIMIT 1", uid)
+    rank_row = await fetchrow(
+        """
+        WITH weekly AS (
+            SELECT user_id, SUM(amount) AS xp, RANK() OVER (ORDER BY SUM(amount) DESC) AS rank
+            FROM xp_log
+            WHERE created_at >= date_trunc('week', NOW())
+            GROUP BY user_id
+        )
+        SELECT rank FROM weekly WHERE user_id = $1
+        """,
+        uid,
+    )
+    recent = await fetch(
+        """
+        SELECT id, contribution_type, title, status, final_cp AS cp_awarded, submitted_at
+        FROM contributions
+        WHERE user_id = $1
+        ORDER BY submitted_at DESC
+        LIMIT 3
+        """,
+        uid,
+    )
+
+    def ser(row):
+        d = dict(row)
+        for k, v in list(d.items()):
+            if hasattr(v, "isoformat"):
+                d[k] = v.isoformat()
+            elif isinstance(v, UUID):
+                d[k] = str(v)
+        return d
+
+    return {
+        "total_cp": int(total_cp),
+        "contributions_submitted": int(submitted),
+        "contributions_approved": int(approved),
+        "github_username": user["github_username"] if user else None,
+        "github_avatar_url": user["github_avatar_url"] if user else None,
+        "github_connected": bool(user["github_connected"]) if user else False,
+        "tier": contributor["tier"] if contributor else "observer",
+        "weekly_xp_rank": int(rank_row["rank"]) if rank_row else None,
+        "recent_contributions": [ser(r) for r in recent],
+    }
 
 
 @router.patch("/me", response_model=UserProfile)

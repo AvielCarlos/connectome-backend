@@ -621,3 +621,13 @@ CREATE TABLE IF NOT EXISTS ioo_node_proposals (
 CREATE INDEX IF NOT EXISTS idx_ioo_node_proposals_status
     ON ioo_node_proposals(status, created_at DESC);
 ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}';
+
+-- Contribution system v2 (GitHub OAuth + attachments)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS github_username TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS github_avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS github_connected BOOLEAN DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_users_github ON users(github_username);
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS attachment_urls JSONB DEFAULT '[]';
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual';
+ALTER TABLE contributions ADD COLUMN IF NOT EXISTS source_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contributions_source_id ON contributions(source_id) WHERE source_id IS NOT NULL;
