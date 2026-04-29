@@ -230,7 +230,7 @@ async def _check_and_award_badges(user_id: str) -> List[Dict[str, Any]]:
         ) or 0
 
         goals_completed = await fetchval(
-            "SELECT COUNT(*) FROM goals WHERE user_id = $1 AND completed = TRUE",
+            "SELECT COUNT(*) FROM goals WHERE user_id = $1 AND completed_at IS NOT NULL",
             UUID(user_id),
         ) or 0
 
