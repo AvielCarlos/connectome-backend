@@ -162,8 +162,55 @@ class CFOAgent(BaseExecutiveAgent):
         # CAC = $0 (all organic currently)
         metrics["cac_usd"] = 0.0
 
+        # ── Real API cost tracking ───────────────────────────────────────
+        try:
+            from core.database import fetchrow as _fetchrow, fetch as _fetch
+            # Total Claude API spend tracked in last 30 days
+            cost_row = await _fetchrow(
+                """
+                SELECT 
+                    COALESCE(SUM(cost_usd), 0) as total_cost_30d,
+                    COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens_30d,
+                    COUNT(*) as total_calls_30d
+                FROM api_cost_log
+                WHERE ts > NOW() - INTERVAL '30 days'
+                """
+            )
+            if cost_row:
+                metrics["api_cost_30d_usd"] = float(cost_row["total_cost_30d"] or 0)
+                metrics["api_tokens_30d"] = int(cost_row["total_tokens_30d"] or 0)
+                metrics["api_calls_30d"] = int(cost_row["total_calls_30d"] or 0)
+            # Daily breakdown (last 7 days)
+            daily_rows = await _fetch(
+                """
+                SELECT DATE(ts) as day, SUM(cost_usd) as daily_cost, COUNT(*) as calls
+                FROM api_cost_log
+                WHERE ts > NOW() - INTERVAL '7 days'
+                GROUP BY DATE(ts)
+                ORDER BY day
+                """
+            )
+            metrics["api_cost_daily_7d"] = [
+                {"day": str(r["day"]), "cost": float(r["daily_cost"]), "calls": int(r["calls"])}
+                for r in daily_rows
+            ]
+        except Exception as e:
+            logger.debug(f"CFO: API cost tracking query failed: {e}")
+            metrics["api_cost_30d_usd"] = 0.0
+
+        # ── Sustainability metrics ────────────────────────────────────────
+        api_cost = metrics.get("api_cost_30d_usd", ANTHROPIC_COST_MONTHLY)
+        monthly_costs = RAILWAY_COST_MONTHLY + api_cost
+        metrics["monthly_burn_usd"] = round(monthly_costs, 2)
+        metrics["monthly_revenue_usd"] = metrics.get("mrr_usd", 0) + metrics.get("revenue_last_30d_usd", 0)
+        metrics["monthly_net_usd"] = round(metrics["monthly_revenue_usd"] - monthly_costs, 2)
+        metrics["is_profitable"] = metrics["monthly_net_usd"] > 0
+        metrics["burn_months_remaining"] = None  # no runway tracking yet (bootstrapped)
+        metrics["revenue_to_cost_ratio"] = round(
+            metrics["monthly_revenue_usd"] / monthly_costs, 3
+        ) if monthly_costs > 0 else 0.0
+
         # Gross margin: (revenue - infra costs) / revenue
-        monthly_costs = RAILWAY_COST_MONTHLY + ANTHROPIC_COST_MONTHLY
         if metrics["mrr_usd"] > 0:
             metrics["gross_margin_pct"] = round(
                 ((metrics["mrr_usd"] - monthly_costs) / metrics["mrr_usd"]) * 100, 1
@@ -190,30 +237,57 @@ class CFOAgent(BaseExecutiveAgent):
         data = await self.load_last_report()
         if not data:
             data = await self.analyze()
+        api_cost = data.get('api_cost_30d_usd', 0)
+        burn = data.get('monthly_burn_usd', 0)
+        rev = data.get('monthly_revenue_usd', 0)
+        net = data.get('monthly_net_usd', 0)
+        ratio = data.get('revenue_to_cost_ratio', 0)
+        profitable = data.get('is_profitable', False)
+        status_emoji = "✅" if profitable else ("⚠️" if ratio > 0.5 else "🚨")
         lines = [
             f"💰 *CFO Report* — {data.get('analyzed_at', 'unknown')[:10]}",
             f"MRR: ${data.get('mrr_usd', 0):,.2f} | ARR: ${data.get('arr_usd', 0):,.2f}",
             f"Active Subs: {data.get('active_subscriptions', 0)} | Customers: {data.get('total_customers', 0)}",
             f"Revenue (30d): ${data.get('revenue_last_30d_usd', 0):,.2f}",
-            f"Churn: {data.get('churn_rate_pct', 0)}% | Refund Rate: {data.get('refund_rate_pct', 0)}%",
+            f"",
+            f"📊 *Sustainability*",
+            f"Claude API Cost (30d): ${api_cost:.4f} | Calls: {data.get('api_calls_30d', 0)}",
+            f"Railway: ${20:.2f}/mo | Total Burn: ${burn:.2f}/mo",
+            f"Revenue vs Burn: ${rev:.2f} / ${burn:.2f} (ratio: {ratio:.2f})",
+            f"Monthly Net: ${net:.2f} {status_emoji}",
+            f"",
+            f"Churn: {data.get('churn_rate_pct', 0)}% | Gross Margin: {data.get('gross_margin_pct', 0)}%",
             f"LTV Est: ${data.get('ltv_estimate_usd', 0):,.2f} | CAC: $0 (organic)",
-            f"Gross Margin: {data.get('gross_margin_pct', 0)}%",
         ]
         return "\n".join(lines)
 
     async def recommend(self) -> List[str]:
         data = await self.analyze()
         recs = []
+        net = data.get('monthly_net_usd', 0)
+        burn = data.get('monthly_burn_usd', 1)
+        rev = data.get('monthly_revenue_usd', 0)
+        ratio = data.get('revenue_to_cost_ratio', 0)
+        
+        # Sustainability-first recommendations
+        if ratio < 0.1:
+            recs.append("🚨 CRITICAL: Revenue covers <10% of costs. Immediate revenue focus required.")
+            recs.append("Pause all non-revenue-generating agent activity until ratio > 0.5")
+        elif ratio < 0.5:
+            recs.append("⚠️ Revenue covers <50% of costs. Prioritise conversion over expansion.")
+        elif ratio < 1.0:
+            recs.append("Revenue trending toward breakeven. Double down on what's converting.")
+        else:
+            recs.append("✅ Revenue exceeds costs. Sustainable — continue scaling.")
+            
+        if data.get('api_cost_30d_usd', 0) > rev * 0.3:
+            recs.append("API costs are >30% of revenue — review cron frequency and response length")
         if data["mrr_usd"] > 1000:
             recs.append("MRR > $1K: consider raising Sovereign tier price by 10–20%")
         if data["churn_rate_pct"] > 20:
             recs.append("⚠️ HIGH CHURN: investigate cancellation reasons immediately")
         if data["revenue_last_7d_usd"] > (data["revenue_last_30d_usd"] / 4 * 1.2):
-            recs.append("Revenue trending up: document what's driving growth")
-        if data["gross_margin_pct"] < 30:
-            recs.append("Gross margin is low: audit Railway + API costs")
-        if not recs:
-            recs.append("Financials look stable. Keep monitoring for trends.")
+            recs.append("Revenue trending up this week — document what's driving it")
         return recs
 
     async def act(self) -> Dict[str, Any]:

@@ -156,6 +156,36 @@ class ExecutiveCouncil(BaseExecutiveAgent):
         opportunities = []
         actions = []
 
+        # ── SUSTAINABILITY MANDATE (injected by Avi 2026-04-28) ─────────────────
+        # Every council session starts by checking if we are sustainable.
+        # If not, revenue generation takes precedence over ALL other work.
+        sustainability_first = False
+        try:
+            from core.database import fetchrow as _fr
+            cost_row = await _fr(
+                "SELECT COALESCE(SUM(cost_usd),0) as api_cost FROM api_cost_log "
+                "WHERE ts > NOW() - INTERVAL '30 days'"
+            )
+            api_cost_30d = float(cost_row["api_cost"] or 0) if cost_row else 0.0
+            total_burn = 20.0 + api_cost_30d  # Railway + Claude
+            rev_row = await _fr(
+                "SELECT COALESCE(COUNT(*),0) as subs FROM users "
+                "WHERE subscription_tier != 'free'"
+            )
+            paying_users = int(rev_row["subs"] or 0) if rev_row else 0
+            mrr_est = paying_users * 9  # rough: avg $9/user
+            ratio = mrr_est / total_burn if total_burn > 0 else 0
+            if ratio < 1.0:
+                sustainability_first = True
+                risks.insert(0, f"🚨 SUSTAINABILITY: revenue/cost ratio is {ratio:.2f} — we are not yet self-funding")
+                priorities.insert(0, "REVENUE FIRST: every agent must focus on converting users or cutting costs")
+                actions.insert(0, "Audit all cron jobs — disable any that don't directly drive revenue or retention")
+                actions.insert(1, "Activate conversion sequences for all active free users")
+                actions.insert(2, f"Current burn ~${total_burn:.2f}/mo, MRR est ~${mrr_est}/mo — need {int(total_burn/9)+1} paying users to break even")
+        except Exception:
+            pass
+        # ─────────────────────────────────────────────────────────────────────
+
         # Parse signals for key patterns
         if "churn" in financial_signal.lower() or "declining" in financial_signal.lower():
             risks.append("Financial: churn risk detected — investigate cancellation reasons")
@@ -178,8 +208,8 @@ class ExecutiveCouncil(BaseExecutiveAgent):
         if "low" in community_signal.lower() or "inactive" in community_signal.lower():
             actions.append("Community: re-engage inactive contributors, launch new bounties")
 
-        # Default priorities if nothing detected
-        if not priorities:
+        # Default priorities if nothing detected (sustainability-aware)
+        if len([p for p in priorities if "REVENUE" not in p]) == 0 and not sustainability_first:
             priorities = [
                 "Grow to next MRR milestone",
                 "Ship product improvements based on user feedback",

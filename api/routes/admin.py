@@ -497,3 +497,98 @@ async def get_growth_metrics(
         "generated_at": __import__('datetime').datetime.utcnow().isoformat(),
         "note": "All metrics are aggregate counts. No individual user data is returned.",
     }
+
+
+# ---------------------------------------------------------------------------
+# Sustainability Dashboard
+# ---------------------------------------------------------------------------
+
+@router.get("/sustainability")
+async def sustainability_dashboard(x_admin_token: str = Header(default="")):
+    """Real-time cost vs. revenue sustainability report."""
+    import os
+    _token = os.getenv("ADMIN_SECRET", "connectome-admin-secret")
+    if x_admin_token != _token:
+        raise HTTPException(status_code=403, detail="Admin token required")
+
+    # API costs from log
+    cost_row = await fetchrow(
+        """
+        SELECT 
+            COALESCE(SUM(cost_usd), 0) as total_cost_30d,
+            COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens_30d,
+            COUNT(*) as total_calls_30d,
+            COALESCE(SUM(CASE WHEN ts > NOW() - INTERVAL '24 hours' THEN cost_usd ELSE 0 END), 0) as cost_24h,
+            COUNT(CASE WHEN ts > NOW() - INTERVAL '24 hours' THEN 1 END) as calls_24h
+        FROM api_cost_log
+        WHERE ts > NOW() - INTERVAL '30 days'
+        """
+    )
+
+    daily_costs = await fetch(
+        """
+        SELECT DATE(ts) as day, SUM(cost_usd) as cost, COUNT(*) as calls
+        FROM api_cost_log
+        WHERE ts > NOW() - INTERVAL '14 days'
+        GROUP BY DATE(ts)
+        ORDER BY day
+        """
+    )
+
+    # Revenue from users
+    rev_row = await fetchrow(
+        """
+        SELECT 
+            COUNT(CASE WHEN subscription_tier NOT IN ('free') THEN 1 END) as paying_users,
+            COUNT(*) as total_users,
+            COUNT(CASE WHEN last_active > NOW() - INTERVAL '7 days' THEN 1 END) as active_7d
+        FROM users
+        """
+    )
+
+    paying = int(rev_row["paying_users"] or 0) if rev_row else 0
+    total_users = int(rev_row["total_users"] or 0) if rev_row else 0
+    active_7d = int(rev_row["active_7d"] or 0) if rev_row else 0
+
+    api_cost_30d = float(cost_row["total_cost_30d"] or 0) if cost_row else 0
+    railway_cost = 20.0
+    total_burn_30d = api_cost_30d + railway_cost
+    mrr_est = paying * 9  # $9/user estimate
+    net_30d = mrr_est - total_burn_30d
+    ratio = mrr_est / total_burn_30d if total_burn_30d > 0 else 0
+    breakeven_users = int(total_burn_30d / 9) + 1
+
+    return {
+        "generated_at": __import__('datetime').datetime.utcnow().isoformat(),
+        "revenue": {
+            "paying_users": paying,
+            "mrr_estimate_usd": mrr_est,
+            "conversion_rate_pct": round(paying / total_users * 100, 2) if total_users else 0,
+        },
+        "costs": {
+            "claude_api_30d_usd": round(api_cost_30d, 4),
+            "railway_30d_usd": railway_cost,
+            "api_calls_30d": int(cost_row["total_calls_30d"] or 0) if cost_row else 0,
+            "api_tokens_30d": int(cost_row["total_tokens_30d"] or 0) if cost_row else 0,
+            "cost_last_24h_usd": round(float(cost_row["cost_24h"] or 0), 4) if cost_row else 0,
+            "calls_last_24h": int(cost_row["calls_24h"] or 0) if cost_row else 0,
+            "total_burn_30d_usd": round(total_burn_30d, 2),
+        },
+        "sustainability": {
+            "net_30d_usd": round(net_30d, 2),
+            "revenue_to_cost_ratio": round(ratio, 3),
+            "is_profitable": net_30d > 0,
+            "breakeven_paying_users": breakeven_users,
+            "users_to_breakeven": max(0, breakeven_users - paying),
+            "status": "profitable" if net_30d > 0 else ("close" if ratio > 0.7 else ("building" if ratio > 0.3 else "pre-revenue")),
+        },
+        "users": {
+            "total": total_users,
+            "active_7d": active_7d,
+            "paying": paying,
+        },
+        "daily_api_costs": [
+            {"day": str(r["day"]), "cost_usd": round(float(r["cost"]), 4), "calls": int(r["calls"])}
+            for r in daily_costs
+        ],
+    }

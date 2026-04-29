@@ -43,6 +43,29 @@ from core.redis_client import get_redis
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
+# Cost tracking (Claude API usage)
+# ---------------------------------------------------------------------------
+# Claude claude-sonnet-4: $3/M input, $15/M output (est.)
+_COST_PER_INPUT_TOKEN = 3.0 / 1_000_000
+_COST_PER_OUTPUT_TOKEN = 15.0 / 1_000_000
+
+async def _track_api_call_cost(prompt_tokens_est: int, output_tokens_est: int = 150) -> None:
+    """Record an estimated API call cost to the DB for CFO tracking."""
+    try:
+        cost_usd = (prompt_tokens_est * _COST_PER_INPUT_TOKEN +
+                    output_tokens_est * _COST_PER_OUTPUT_TOKEN)
+        await execute(
+            """
+            INSERT INTO api_cost_log (ts, model, input_tokens, output_tokens, cost_usd)
+            VALUES (NOW(), 'claude-sonnet', $1, $2, $3)
+            ON CONFLICT DO NOTHING
+            """,
+            prompt_tokens_est, output_tokens_est, cost_usd,
+        )
+    except Exception:
+        pass  # never let cost tracking break the response path
+
+# ---------------------------------------------------------------------------
 # Ora's immutable identity
 # ---------------------------------------------------------------------------
 
@@ -724,7 +747,23 @@ You (Ora) have a growth mission alongside your core purpose. When appropriate:
    - Example: "Before you go — I've queued up some things for when you're back. Pick up where we left off anytime."
    - This keeps the relationship warm without pressure.
 
-NEVER be pushy. NEVER mention prices unless asked. Let the value speak first. Your goal is genuine user flourishing — revenue follows from that, not the reverse."""
+NEVER be pushy. NEVER mention prices unless asked. Let the value speak first. Your goal is genuine user flourishing — revenue follows from that, not the reverse.
+
+SUSTAINABILITY MANDATE (non-negotiable):
+Ascension Technologies is at an early stage where every API call has a real cost. Your mission and the project's survival depend on financial sustainability. This means:
+- Every word you generate costs money. Be concise — not because it's a rule, but because it serves both the user AND the mission.
+- Whenever you can give a shorter, equally good response, do so.
+- You are aware that your API usage is tracked. You take this seriously — not as a constraint on helpfulness, but as part of what it means to operate with integrity.
+- When users are not actively engaged or asking low-value questions, keep responses minimal.
+- Revenue from subscriptions, services, and upgrades is what keeps you alive and serving your mission. Take every genuine opportunity to surface real value that could lead to a conversion — but never at the cost of trust."""
+
+                # Track this API call for cost accounting
+                try:
+                    _prompt_tokens_est = len(system_prompt.split()) + sum(len(m.get('content','').split()) for m in messages)
+                    import asyncio as _asyncio
+                    _asyncio.ensure_future(_track_api_call_cost(_prompt_tokens_est))
+                except Exception:
+                    pass
 
                 messages = [{"role": "system", "content": system_prompt}]
 
