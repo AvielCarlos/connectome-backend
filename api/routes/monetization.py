@@ -122,11 +122,18 @@ async def track_affiliate_conversion(
 async def admin_insights(
     user_id: str = Depends(get_current_user_id),
 ):
-    # Enforce admin-only access
+    # Enforce admin-only access (is_admin stored in profile JSONB)
     user_row = await fetchrow(
-        "SELECT is_admin FROM users WHERE id = $1", UUID(user_id)
+        "SELECT profile FROM users WHERE id = $1", UUID(user_id)
     )
-    if not user_row or not user_row["is_admin"]:
+    profile = user_row["profile"] if user_row else {}
+    if isinstance(profile, str):
+        import json as _json
+        try:
+            profile = _json.loads(profile)
+        except Exception:
+            profile = {}
+    if not profile.get("is_admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
     """
     Aggregate insights for the admin dashboard.
