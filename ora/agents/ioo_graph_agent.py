@@ -11,13 +11,71 @@ rise to the top over time.
 
 import logging
 import json
-from typing import Optional
+import math
+import re
+from datetime import datetime, timezone
+from typing import Optional, List
 from uuid import UUID
 
+from core.config import settings
 from core.database import fetch, fetchrow, fetchval, execute
+from ora.agents.recommendation_engine import (
+    _embedding_to_pgvector,
+    _hash_text_to_embedding,
+)
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_pgvector(raw) -> List[float]:
+    """Convert asyncpg/pgvector/string values into a Python vector."""
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [float(v) for v in raw]
+    if isinstance(raw, tuple):
+        return [float(v) for v in raw]
+    text = str(raw).strip()
+    if not text:
+        return []
+    try:
+        return [float(v) for v in text.strip("[]").split(",") if v.strip()]
+    except Exception:
+        try:
+            return [float(v) for v in json.loads(text)]
+        except Exception:
+            return []
+
+
+def _normalize_vector(values: List[float]) -> List[float]:
+    norm = math.sqrt(sum(v * v for v in values))
+    if norm <= 0:
+        return values
+    return [v / norm for v in values]
+
+
+def _node_embedding_text(node: dict) -> str:
+    tags = node.get("tags") or []
+    if isinstance(tags, str):
+        try:
+            tags = json.loads(tags)
+        except Exception:
+            tags = [tags]
+    return " | ".join(
+        str(part)
+        for part in [
+            f"title: {node.get('title') or ''}",
+            f"description: {node.get('description') or ''}",
+            f"domain: {node.get('domain') or ''}",
+            f"tags: {', '.join(tags)}",
+            f"node_type: {node.get('type') or node.get('node_type') or ''}",
+            f"step_type: {node.get('step_type') or ''}",
+            f"physical_context: {node.get('physical_context') or ''}",
+            f"best_time: {node.get('best_time') or ''}",
+            f"goal_category: {node.get('goal_category') or ''}",
+        ]
+        if part
+    )
 
 class IOOGraphAgent:
     """Traverses and learns the IOO achievement graph."""
@@ -194,6 +252,679 @@ class IOOGraphAgent:
 
         rows = await fetch(simple_query, *final_params)
         return [dict(r) for r in rows]
+
+
+    # ------------------------------------------------------------------
+    # Vector embeddings / recommendations
+    # ------------------------------------------------------------------
+
+    async def _ensure_vector_schema(self) -> None:
+        """Idempotently add IOO vector columns/indexes."""
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS embedding vector(1536)")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS goal_category TEXT")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS step_type TEXT DEFAULT 'hybrid'")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS physical_context TEXT")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS best_time TEXT")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS requirements JSONB DEFAULT '{}'")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}'")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS estimated_duration_days INTEGER")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS difficulty_level INTEGER DEFAULT 5")
+        await execute(
+            """
+            CREATE TABLE IF NOT EXISTS ioo_node_proposals (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                title TEXT NOT NULL,
+                description TEXT,
+                goal_category TEXT,
+                step_type TEXT DEFAULT 'hybrid',
+                domain TEXT,
+                tags TEXT[] DEFAULT '{}',
+                source_url TEXT,
+                confidence FLOAT DEFAULT 0.5,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+            """
+        )
+        await execute("ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding vector(1536)")
+        await execute("ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding_updated_at TIMESTAMPTZ")
+        try:
+            await execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_ioo_nodes_embedding
+                ON ioo_nodes USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 20)
+                """
+            )
+        except Exception as e:
+            logger.debug(f"IOO vector index creation skipped: {e}")
+
+    async def _embed_text(self, text: str) -> List[float]:
+        """Embed text with OpenAI when configured; otherwise deterministic hash fallback."""
+        api_key = getattr(settings, "OPENAI_API_KEY", "")
+        if api_key:
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    r = await client.post(
+                        "https://api.openai.com/v1/embeddings",
+                        headers={"Authorization": f"Bearer {api_key}"},
+                        json={"model": "text-embedding-3-small", "input": text[:8000]},
+                    )
+                    r.raise_for_status()
+                    return r.json()["data"][0]["embedding"]
+            except Exception as e:
+                logger.warning(f"IOO OpenAI embedding failed: {e} — using hash fallback")
+        return _hash_text_to_embedding(text)
+
+    async def embed_all_nodes(self) -> int:
+        """Generate and store embeddings for all IOO nodes that don't have one yet.
+        Uses OpenAI text-embedding-3-small (1536 dims) when key is available.
+        Returns number of nodes embedded."""
+        await self._ensure_vector_schema()
+        rows = await fetch(
+            """
+            SELECT id, type, title, description, tags, domain, goal_category, step_type, physical_context, best_time
+            FROM ioo_nodes
+            WHERE is_active = TRUE AND embedding IS NULL
+            ORDER BY created_at ASC
+            """
+        )
+        embedded = 0
+        for row in rows:
+            node = dict(row)
+            emb = await self._embed_text(_node_embedding_text(node))
+            if not emb:
+                continue
+            await execute(
+                "UPDATE ioo_nodes SET embedding = $2::vector, updated_at = NOW() WHERE id = $1",
+                str(node["id"]),
+                _embedding_to_pgvector(emb),
+            )
+            embedded += 1
+        return embedded
+
+    async def _capability_filter_sql(self, user_id: str, start_idx: int = 3) -> tuple[str, list]:
+        user_state = await fetchrow("SELECT * FROM ioo_user_state WHERE user_id = $1", str(user_id))
+        clauses: list[str] = []
+        params: list = []
+        idx = start_idx
+        if user_state:
+            budget = user_state["finances_monthly_budget_usd"]
+            if budget is not None:
+                clauses.append(f"AND (n.requires_finances IS NULL OR n.requires_finances <= ${idx})")
+                params.append(float(budget)); idx += 1
+            fitness = user_state["fitness_level"]
+            if fitness is not None:
+                clauses.append(f"AND (n.requires_fitness_level IS NULL OR n.requires_fitness_level <= ${idx})")
+                params.append(int(fitness)); idx += 1
+            city = user_state["location_city"]
+            country = user_state["location_country"]
+            if city or country:
+                clauses.append(f"AND (n.requires_location IS NULL OR n.requires_location ILIKE ${idx} OR n.requires_location ILIKE ${idx+1})")
+                params.extend([f"%{city}%" if city else "%", f"%{country}%" if country else "%"])
+                idx += 2
+
+            # Physical feasibility: only suggest physical/hybrid steps that fit
+            # known available time and basic transport constraints.
+            weekday = user_state["free_time_weekday_hours"]
+            weekend = user_state["free_time_weekend_hours"]
+            available_time = max(
+                float(weekday or 0),
+                float(weekend or 0),
+            )
+            if available_time > 0:
+                clauses.append(
+                    f"AND (n.step_type = 'digital' OR n.requires_time_hours IS NULL OR n.requires_time_hours <= ${idx})"
+                )
+                params.append(available_time)
+                idx += 1
+
+            has_car = user_state["has_car"]
+            if has_car is False:
+                clauses.append(
+                    "AND (n.physical_context IS NULL OR n.physical_context NOT ILIKE '%car%')"
+                )
+        return "\n".join(clauses), params
+
+    async def vector_recommend(
+        self,
+        user_id: str,
+        goal_context: str,
+        limit: int = 10,
+        preference: str = "mixed",
+    ) -> list:
+        """
+        Vector similarity recommendation using the user's goal context.
+        1. Embed the user's current goal/context string
+        2. Find IOO nodes with cosine similarity (pgvector <=> operator)
+        3. Blend with capability filters and edge weight scoring
+        4. Return ranked list of recommended nodes
+        """
+        await self._ensure_vector_schema()
+        if await fetchval("SELECT COUNT(*) FROM ioo_nodes WHERE is_active = TRUE AND embedding IS NULL"):
+            await self.embed_all_nodes()
+
+        goal_emb = await self._embed_text(goal_context or "personal growth real-world experience")
+        query_vec = _embedding_to_pgvector(goal_emb)
+
+        completed_rows = await fetch(
+            "SELECT node_id FROM ioo_user_progress WHERE user_id = $1 AND status = 'completed'",
+            str(user_id),
+        )
+        completed_ids = [str(r["node_id"]) for r in completed_rows]
+        capability_sql, capability_params = await self._capability_filter_sql(str(user_id), start_idx=4)
+        preference = preference if preference in ("prefer_digital", "prefer_physical", "mixed") else "mixed"
+        preference_score_sql = ""
+        if preference == "prefer_digital":
+            preference_score_sql = " + CASE WHEN n.step_type = 'digital' THEN 0.10 WHEN n.step_type = 'hybrid' THEN 0.05 ELSE 0 END"
+        elif preference == "prefer_physical":
+            preference_score_sql = " + CASE WHEN n.step_type = 'physical' THEN 0.10 WHEN n.step_type = 'hybrid' THEN 0.05 ELSE 0 END"
+
+        rows = await fetch(
+            f"""
+            SELECT
+                n.id, n.type, n.title, n.description, n.tags, n.domain, n.goal_category,
+                n.step_type, n.physical_context, n.best_time,
+                n.requires_finances, n.requires_fitness_level, n.requires_skills,
+                n.requires_location, n.requires_time_hours,
+                n.attempt_count, n.success_count, n.avg_completion_hours,
+                1 - (n.embedding <=> $2::vector) AS vector_similarity,
+                COALESCE((
+                    SELECT MAX(e.weight) FROM ioo_edges e
+                    WHERE e.to_node_id = n.id
+                      AND e.from_node_id::text = ANY($3::text[])
+                ), 0.5) AS edge_weight,
+                CASE WHEN n.attempt_count > 0
+                     THEN n.success_count::float / n.attempt_count
+                     ELSE 0.5
+                END AS success_rate
+            FROM ioo_nodes n
+            WHERE n.is_active = TRUE
+              AND n.embedding IS NOT NULL
+              AND n.id NOT IN (
+                  SELECT node_id FROM ioo_user_progress
+                  WHERE user_id = $1 AND status IN ('completed', 'abandoned')
+              )
+              {capability_sql}
+            ORDER BY (
+                (1 - (n.embedding <=> $2::vector)) * 0.60 +
+                COALESCE((
+                    SELECT MAX(e.weight) FROM ioo_edges e
+                    WHERE e.to_node_id = n.id
+                      AND e.from_node_id::text = ANY($3::text[])
+                ), 0.5) * 0.25 +
+                (CASE WHEN n.attempt_count > 0 THEN n.success_count::float / n.attempt_count ELSE 0.5 END) * 0.15
+                {preference_score_sql}
+            ) DESC
+            LIMIT ${4 + len(capability_params)}
+            """,
+            str(user_id),
+            query_vec,
+            completed_ids,
+            *capability_params,
+            limit,
+        )
+        return [dict(r) for r in rows]
+
+
+    async def find_path(
+        self,
+        user_id: str,
+        goal_node_id: str,
+        max_steps: int = 10,
+        preference: str = "mixed",
+    ) -> list[dict]:
+        """
+        Compute the optimal step-by-step path from user's current position to a goal node.
+        Like Google Maps turn-by-turn directions.
+
+        Returns ordered list of nodes: [step1, step2, step3, ... goal]
+        Each step has: node_id, title, description, estimated_time, why_this_step
+        """
+        await self._ensure_vector_schema()
+
+        goal = await fetchrow(
+            """
+            SELECT id, type, title, description, tags, domain, requires_time_hours, embedding,
+                   step_type, physical_context, best_time, goal_category
+            FROM ioo_nodes
+            WHERE id = $1::uuid AND is_active = TRUE
+            """,
+            str(goal_node_id),
+        )
+        if not goal:
+            return []
+
+        completed_rows = await fetch(
+            """
+            SELECT node_id FROM ioo_user_progress
+            WHERE user_id = $1 AND status = 'completed'
+            """,
+            str(user_id),
+        )
+        completed_ids = {str(r["node_id"]) for r in completed_rows}
+        if str(goal["id"]) in completed_ids:
+            return []
+
+        capability_sql, capability_params = await self._capability_filter_sql(str(user_id), start_idx=3)
+        cap_param_count = len(capability_params)
+        shifted_capability_sql = re.sub(
+            r"\$(\d+)",
+            lambda m: f"${int(m.group(1)) + cap_param_count}",
+            capability_sql,
+        )
+        goal_param_idx = 3 + cap_param_count * 2
+        preference = preference if preference in ("prefer_digital", "prefer_physical", "mixed") else "mixed"
+        path_preference_sql = ""
+        if preference == "prefer_digital":
+            path_preference_sql = "CASE WHEN n.step_type = 'digital' THEN 1.10 WHEN n.step_type = 'hybrid' THEN 1.05 ELSE 0.95 END"
+        elif preference == "prefer_physical":
+            path_preference_sql = "CASE WHEN n.step_type = 'physical' THEN 1.10 WHEN n.step_type = 'hybrid' THEN 1.05 ELSE 0.95 END"
+        else:
+            path_preference_sql = "1.0"
+
+        # First try real graph pathfinding: reverse BFS/DFS from current completed
+        # nodes (or root activities when user has no completed nodes) toward the goal.
+        rows = await fetch(
+            f"""
+            WITH RECURSIVE paths AS (
+                -- Starting point: completed nodes if present, otherwise low-friction roots.
+                SELECT
+                    n.id AS node_id,
+                    ARRAY[n.id] AS path_ids,
+                    0 AS depth,
+                    1.0::float AS path_quality,
+                    COALESCE(n.requires_time_hours, 1)::float AS total_time
+                FROM ioo_nodes n
+                WHERE n.is_active = TRUE
+                  AND (
+                    (cardinality($1::uuid[]) > 0 AND n.id = ANY($1::uuid[]))
+                    OR
+                    (cardinality($1::uuid[]) = 0 AND n.id NOT IN (SELECT to_node_id FROM ioo_edges))
+                  )
+                  {capability_sql}
+
+                UNION ALL
+
+                SELECT
+                    e.to_node_id AS node_id,
+                    p.path_ids || e.to_node_id,
+                    p.depth + 1,
+                    p.path_quality * COALESCE(e.weight, 0.5)::float *
+                        (CASE WHEN n.attempt_count > 0 THEN n.success_count::float / n.attempt_count ELSE 0.5 END) *
+                        ({path_preference_sql}),
+                    p.total_time + COALESCE(n.requires_time_hours, 1)::float
+                FROM paths p
+                JOIN ioo_edges e ON e.from_node_id = p.node_id
+                JOIN ioo_nodes n ON n.id = e.to_node_id
+                WHERE p.depth < $2
+                  AND n.is_active = TRUE
+                  AND NOT e.to_node_id = ANY(p.path_ids)
+                  AND NOT e.to_node_id = ANY($1::uuid[])
+                  {shifted_capability_sql}
+            )
+            SELECT path_ids, depth, path_quality, total_time
+            FROM paths
+            WHERE node_id = ${goal_param_idx}::uuid
+            ORDER BY
+                depth ASC,
+                path_quality DESC,
+                total_time ASC
+            LIMIT 1
+            """,
+            list(completed_ids),
+            max_steps,
+            *capability_params,
+            *capability_params,
+            str(goal_node_id),
+        )
+
+        path_ids: list[str] = []
+        if rows:
+            raw_ids = rows[0]["path_ids"]
+            path_ids = [str(pid) for pid in raw_ids if str(pid) not in completed_ids]
+
+        # Fallback: if graph edges are sparse, use vector recommendations as
+        # semantic stepping stones and end at the goal. This keeps the UX useful
+        # while the IOO graph is still learning edges.
+        if not path_ids:
+            goal_context = _node_embedding_text(dict(goal))
+            semantic_steps = await self.vector_recommend(
+                user_id=str(user_id),
+                goal_context=goal_context,
+                limit=max(1, max_steps - 1),
+                preference=preference,
+            )
+            seen = set(completed_ids)
+            for step in semantic_steps:
+                sid = str(step["id"])
+                if sid == str(goal_node_id) or sid in seen:
+                    continue
+                path_ids.append(sid)
+                seen.add(sid)
+            path_ids.append(str(goal_node_id))
+
+        if str(goal_node_id) not in path_ids:
+            path_ids.append(str(goal_node_id))
+        path_ids = path_ids[:max_steps]
+
+        node_rows = await fetch(
+            """
+            SELECT id, type, title, description, tags, domain, requires_time_hours,
+                   step_type, physical_context, best_time,
+                   requires_finances, requires_fitness_level, attempt_count, success_count
+            FROM ioo_nodes
+            WHERE id::text = ANY($1::text[])
+            """,
+            path_ids,
+        )
+        by_id = {str(r["id"]): dict(r) for r in node_rows}
+        ordered: list[dict] = []
+        total = len(path_ids)
+        for index, node_id in enumerate(path_ids, start=1):
+            node = by_id.get(str(node_id))
+            if not node:
+                continue
+            is_goal = str(node_id) == str(goal_node_id)
+            if is_goal:
+                why = "This is your destination — the outcome Ora is mapping you toward."
+            elif index == 1:
+                why = "This is the next reachable step from where you are now."
+            else:
+                why = "This builds on the previous step and moves you closer to the destination."
+            if node.get("attempt_count"):
+                success_rate = (node.get("success_count") or 0) / max(float(node.get("attempt_count") or 1), 1.0)
+                why += f" Similar users complete it about {round(success_rate * 100)}% of the time."
+            ordered.append({
+                "step": index,
+                "node_id": str(node["id"]),
+                "title": node.get("title"),
+                "description": node.get("description"),
+                "type": node.get("type"),
+                "domain": node.get("domain"),
+                "estimated_time": float(node["requires_time_hours"]) if node.get("requires_time_hours") is not None else None,
+                "step_type": node.get("step_type") or "hybrid",
+                "physical_context": node.get("physical_context"),
+                "best_time": node.get("best_time"),
+                "why_this_step": why,
+                "is_goal": is_goal,
+                "remaining_steps": max(total - index, 0),
+            })
+        return ordered
+
+
+    async def check_node_eligibility(self, user_id: str, node_id: str) -> dict:
+        """Check if a user is eligible to attempt a node and identify gaps."""
+        await self._ensure_vector_schema()
+        node = await fetchrow(
+            """
+            SELECT id, title, requirements, prerequisite_nodes, requires_finances, requires_fitness_level,
+                   requires_skills, requires_location, requires_time_hours, step_type,
+                   physical_context
+            FROM ioo_nodes WHERE id = $1::uuid AND is_active = TRUE
+            """,
+            str(node_id),
+        )
+        if not node:
+            return {"eligible": False, "gaps": [{"type": "missing_node", "message": "Node not found"}], "bridge_nodes": []}
+
+        state = await fetchrow("SELECT * FROM ioo_user_state WHERE user_id = $1", str(user_id))
+        completed = await fetch(
+            "SELECT node_id::text FROM ioo_user_progress WHERE user_id = $1 AND status = 'completed'",
+            str(user_id),
+        )
+        completed_ids = {r["node_id"] for r in completed}
+        req = node["requirements"] or {}
+        if isinstance(req, str):
+            try:
+                req = json.loads(req)
+            except Exception:
+                req = {}
+
+        gaps: list[dict] = []
+        def gap(kind: str, message: str, **extra):
+            gaps.append({"type": kind, "message": message, **extra})
+
+        budget_req = req.get("min_budget_usd") or node["requires_finances"]
+        if budget_req is not None and state and state["finances_monthly_budget_usd"] is not None:
+            if float(state["finances_monthly_budget_usd"]) < float(budget_req):
+                gap("budget", f"Needs about ${float(budget_req):.0f} available budget", required=float(budget_req), current=float(state["finances_monthly_budget_usd"]))
+
+        fitness_req = req.get("min_fitness_level") or node["requires_fitness_level"]
+        current_fitness = state["fitness_level"] if state else None
+        if fitness_req is not None and current_fitness is not None and int(current_fitness) < int(fitness_req):
+            gap("fitness", f"Needs fitness level {fitness_req}; current estimate is {current_fitness}", required=int(fitness_req), current=int(current_fitness))
+
+        needed_skills = set(req.get("required_skills") or node["requires_skills"] or [])
+        known_skills = set(state["known_skills"] or []) if state else set()
+        missing_skills = sorted(needed_skills - known_skills)
+        if missing_skills:
+            gap("skills", "Missing prerequisite skills", missing=missing_skills)
+
+        prereqs = [str(x) for x in (req.get("prerequisite_node_ids") or node["prerequisite_nodes"] or [])]
+        missing_prereqs = [pid for pid in prereqs if pid not in completed_ids]
+        if missing_prereqs:
+            gap("prior_nodes", "Needs prerequisite nodes completed first", missing=missing_prereqs)
+
+        if node["step_type"] in ("physical", "hybrid") and state:
+            available_time = max(float(state["free_time_weekday_hours"] or 0), float(state["free_time_weekend_hours"] or 0))
+            required_time = req.get("time_per_week_hours") or node["requires_time_hours"]
+            if required_time and available_time and available_time < float(required_time):
+                gap("time", f"Needs {float(required_time):.1f}h available; current estimate is {available_time:.1f}h", required=float(required_time), current=available_time)
+            if (req.get("requires_location") or node["requires_location"]) and not (state["location_city"] or state["location_country"]):
+                gap("location", "Needs a location context to find a feasible physical option")
+            equipment = req.get("required_equipment") or []
+            if any(str(e).lower() in ("gym_membership", "car", "transport") for e in equipment):
+                if "car" in [str(e).lower() for e in equipment] and state["has_car"] is False:
+                    gap("transport", "Needs transport access or a closer alternative")
+
+        bridge_nodes = []
+        if gaps:
+            ids = await self.spawn_prerequisite_nodes(user_id, node_id, gaps)
+            if ids:
+                rows = await fetch("SELECT id, title, description, step_type FROM ioo_nodes WHERE id::text = ANY($1::text[])", ids)
+                bridge_nodes = [dict(r) for r in rows]
+        return {"eligible": not gaps, "gaps": gaps, "bridge_nodes": bridge_nodes}
+
+    async def spawn_prerequisite_nodes(self, user_id: str, node_id: str, gaps: list) -> list[str]:
+        """Find/create bridge nodes for unmet requirements."""
+        await self._ensure_vector_schema()
+        created_or_found: list[str] = []
+        target = await fetchrow("SELECT title, goal_category, domain FROM ioo_nodes WHERE id = $1::uuid", str(node_id))
+        target_title = target["title"] if target else "this goal"
+        category = target["goal_category"] if target else None
+        domain = target["domain"] if target else "iVive"
+
+        templates = {
+            "budget": ("Create a simple budget for {target}", "Work out the minimum cost and choose the lowest-friction way to fund this step.", "digital", ["finance", "planning"]),
+            "fitness": ("Complete a 2-week foundation program for {target}", "Build baseline strength/endurance before attempting the next physical step.", "physical", ["fitness", "foundation"]),
+            "skills": ("Learn the basic skills needed for {target}", "Complete a short primer/practice block for the missing prerequisite skills.", "digital", ["learning", "skills"]),
+            "prior_nodes": ("Complete prerequisite step for {target}", "Finish the required prior node before moving forward.", "hybrid", ["prerequisite"]),
+            "time": ("Schedule time blocks for {target}", "Create protected calendar time so this goal has room in the week.", "digital", ["planning", "time"]),
+            "location": ("Find a nearby place for {target}", "Locate a feasible nearby option based on your city and transport constraints.", "digital", ["local", "planning"]),
+            "transport": ("Find a walkable or transit-accessible option for {target}", "Avoid car-dependency by finding a closer route or transit option.", "digital", ["transport", "local"]),
+        }
+
+        for gap in gaps:
+            tpl = templates.get(gap.get("type"), ("Prepare for {target}", "Close the prerequisite gap before attempting this step.", "hybrid", ["preparation"]))
+            title = tpl[0].format(target=target_title)
+            existing = await fetchrow(
+                """
+                SELECT id FROM ioo_nodes
+                WHERE lower(title) = lower($1) OR title ILIKE $2
+                LIMIT 1
+                """,
+                title,
+                f"%{title[:40]}%",
+            )
+            if existing:
+                created_or_found.append(str(existing["id"]))
+                continue
+            proposal = await fetchrow(
+                """
+                INSERT INTO ioo_node_proposals
+                    (title, description, goal_category, step_type, domain, tags, confidence, status)
+                VALUES ($1,$2,$3,$4,$5,$6,0.86,'approved')
+                RETURNING id
+                """,
+                title, tpl[1], category, tpl[2], domain, tpl[3],
+            )
+            row = await fetchrow(
+                """
+                INSERT INTO ioo_nodes
+                    (type, title, description, tags, domain, step_type, goal_category,
+                     requirements, difficulty_level)
+                VALUES ('activity',$1,$2,$3,$4,$5,$6,$7::jsonb,3)
+                RETURNING id
+                """,
+                title, tpl[1], tpl[3], domain, tpl[2], category,
+                json.dumps({"bridge_for_node_id": str(node_id), "gap_type": gap.get("type")}),
+            )
+            if row:
+                created_or_found.append(str(row["id"]))
+                await execute(
+                    "INSERT INTO ioo_edges (from_node_id, to_node_id) VALUES ($1::uuid,$2::uuid) ON CONFLICT DO NOTHING",
+                    str(row["id"]), str(node_id),
+                )
+        return created_or_found
+
+    async def build_personalised_path(
+        self,
+        user_id: str,
+        goal_node_id: str,
+        max_steps: int = 10,
+        preference: str = "mixed",
+    ) -> list[dict]:
+        """Full GPS-style route with dynamically spawned prerequisite bridge nodes."""
+        base_path = await self.find_path(user_id, goal_node_id, max_steps=max_steps, preference=preference)
+        personalised: list[dict] = []
+        seen: set[str] = set()
+        for step in base_path:
+            node_id = str(step["node_id"])
+            eligibility = await self.check_node_eligibility(user_id, node_id)
+            if not eligibility.get("eligible"):
+                for bridge in eligibility.get("bridge_nodes", []):
+                    bid = str(bridge["id"])
+                    if bid in seen:
+                        continue
+                    personalised.append({
+                        "step": len(personalised) + 1,
+                        "node_id": bid,
+                        "title": bridge.get("title"),
+                        "description": bridge.get("description"),
+                        "step_type": bridge.get("step_type") or "hybrid",
+                        "is_prerequisite": True,
+                        "unblocks_node_id": node_id,
+                        "why_this_step": "Ora spawned this bridge step because a requirement gap blocks the next node.",
+                    })
+                    seen.add(bid)
+            if node_id not in seen:
+                step["step"] = len(personalised) + 1
+                step["is_prerequisite"] = False
+                step["eligibility"] = {"eligible": eligibility.get("eligible"), "gaps": eligibility.get("gaps", [])}
+                personalised.append(step)
+                seen.add(node_id)
+        return personalised
+
+    async def build_user_ioo_vector(self, user_id: str) -> List[float]:
+        """Build and store the user's IOO fingerprint from completed/in-progress nodes."""
+        await self._ensure_vector_schema()
+        rows = await fetch(
+            """
+            SELECT p.status, p.started_at, p.completed_at, p.created_at,
+                   n.id, n.embedding, n.title, n.description, n.tags, n.domain, n.type, n.goal_category
+            FROM ioo_user_progress p
+            JOIN ioo_nodes n ON n.id = p.node_id
+            WHERE p.user_id = $1
+              AND p.status IN ('completed', 'started', 'viewed')
+            ORDER BY COALESCE(p.completed_at, p.started_at, p.created_at) DESC
+            LIMIT 50
+            """,
+            str(user_id),
+        )
+        if not rows:
+            return []
+
+        vectors: list[tuple[List[float], float]] = []
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            raw = row["embedding"]
+            if not raw:
+                node = dict(row)
+                emb = await self._embed_text(_node_embedding_text(node))
+                await execute(
+                    "UPDATE ioo_nodes SET embedding = $2::vector, updated_at = NOW() WHERE id = $1",
+                    str(row["id"]),
+                    _embedding_to_pgvector(emb),
+                )
+            else:
+                emb = _parse_pgvector(raw)
+            if not emb:
+                continue
+            event_at = row["completed_at"] or row["started_at"] or row["created_at"] or now
+            if event_at.tzinfo is None:
+                event_at = event_at.replace(tzinfo=timezone.utc)
+            age_days = max(0.0, (now - event_at).total_seconds() / 86400.0)
+            recency_weight = 1.0 / (1.0 + age_days / 30.0)
+            status_weight = {"completed": 1.0, "started": 0.65, "viewed": 0.35}.get(row["status"], 0.5)
+            vectors.append((emb, recency_weight * status_weight))
+
+        if not vectors:
+            return []
+        total_weight = sum(w for _, w in vectors) or 1.0
+        dim = len(vectors[0][0])
+        avg = [0.0] * dim
+        for emb, weight in vectors:
+            for i, val in enumerate(emb[:dim]):
+                avg[i] += val * weight
+        avg = _normalize_vector([v / total_weight for v in avg])
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, embedding, embedding_updated_at)
+            VALUES ($1::uuid, $2::vector, NOW())
+            ON CONFLICT (user_id) DO UPDATE
+            SET embedding = $2::vector, embedding_updated_at = NOW(), last_updated = NOW()
+            """,
+            str(user_id),
+            _embedding_to_pgvector(avg),
+        )
+        return avg
+
+    async def get_user_vector_summary(self, user_id: str) -> dict:
+        """Return a safe summary of the user's IOO fingerprint, not the raw vector."""
+        vector = await self.build_user_ioo_vector(user_id)
+        progress_counts = await fetch(
+            """
+            SELECT status, COUNT(*) AS count
+            FROM ioo_user_progress
+            WHERE user_id = $1
+            GROUP BY status
+            """,
+            str(user_id),
+        )
+        top_nodes = []
+        if vector:
+            try:
+                rows = await fetch(
+                    """
+                    SELECT title, type, domain, 1 - (embedding <=> $1::vector) AS similarity
+                    FROM ioo_nodes
+                    WHERE embedding IS NOT NULL AND is_active = TRUE
+                    ORDER BY embedding <=> $1::vector
+                    LIMIT 5
+                    """,
+                    _embedding_to_pgvector(vector),
+                )
+                top_nodes = [dict(r) for r in rows]
+            except Exception as e:
+                logger.debug(f"IOO vector summary nearest nodes failed: {e}")
+        return {
+            "has_vector": bool(vector),
+            "dimensions": len(vector) if vector else 0,
+            "progress_counts": {r["status"]: r["count"] for r in progress_counts},
+            "nearest_nodes": top_nodes,
+        }
 
     # ------------------------------------------------------------------
     # Traversal recording
@@ -470,6 +1201,18 @@ class IOOGraphAgent:
         node_ids: dict = {}
 
         for node in nodes:
+            tags_l = set(node.get("tags", []))
+            if "step_type" not in node:
+                if tags_l & {"fitness", "running", "travel", "community", "social", "music"}:
+                    node["step_type"] = "physical"
+                elif tags_l & {"tech", "product", "research", "writing", "planning"}:
+                    node["step_type"] = "digital"
+                else:
+                    node["step_type"] = "hybrid"
+            if node.get("step_type") == "physical":
+                node.setdefault("physical_context", "Requires real-world availability; may depend on local access.")
+                node.setdefault("best_time", "flexible")
+
             existing_id = await fetchval(
                 "SELECT id FROM ioo_nodes WHERE title = $1",
                 node["title"],
@@ -485,8 +1228,9 @@ class IOOGraphAgent:
                 INSERT INTO ioo_nodes
                     (type, title, description, tags, domain,
                      requires_finances, requires_fitness_level, requires_skills,
-                     requires_location, requires_time_hours)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+                     requires_location, requires_time_hours,
+                     step_type, physical_context, best_time)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
                 RETURNING id
                 """,
                 node["type"],
@@ -499,6 +1243,9 @@ class IOOGraphAgent:
                 skills,
                 node.get("requires_location"),
                 node.get("requires_time_hours"),
+                node.get("step_type", "hybrid"),
+                node.get("physical_context"),
+                node.get("best_time"),
             )
             if row:
                 node_ids[node["title"]] = str(row["id"])
