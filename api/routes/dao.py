@@ -99,37 +99,17 @@ def _serialize(d: Dict[str, Any]) -> Dict[str, Any]:
 @router.get("/leaderboard")
 async def get_leaderboard(limit: int = 20):
     """Public leaderboard — top contributors with tier, CP, and recent contribution."""
+    # Pull from user_cp_balance + users so all users with CP appear automatically
     rows = await fetch(
         """
         SELECT
-            co.id,
-            co.github_username,
-            co.display_name,
-            co.telegram_username,
-            co.total_cp,
-            co.tier,
-            co.joined_at,
-            co.is_founding_steward,
-            co.founding_steward_number,
-            (
-                SELECT title FROM contributions
-                WHERE contributor_id = co.id
-                  AND status = 'accepted'
-                ORDER BY submitted_at DESC
-                LIMIT 1
-            ) AS recent_contribution_title,
-            (
-                SELECT COUNT(*) FROM contributions
-                WHERE contributor_id = co.id AND status = 'accepted'
-            ) AS accepted_count,
-            COALESCE(
-                (SELECT SUM(cp_amount) FROM cp_ledger l2
-                 WHERE l2.contributor_id = co.id
-                   AND l2.created_at > NOW() - INTERVAL '30 days'),
-                0
-            ) AS cp_this_month
-        FROM contributors co
-        ORDER BY co.total_cp DESC
+            u.id, u.email,
+            COALESCE(u.profile->>'display_name', split_part(u.email, '@', 1)) AS display_name,
+            cp.cp_balance, cp.total_cp_earned, cp.last_updated
+        FROM user_cp_balance cp
+        JOIN users u ON u.id = cp.user_id
+        WHERE cp.total_cp_earned > 0
+        ORDER BY cp.total_cp_earned DESC
         LIMIT $1
         """,
         limit,
@@ -137,19 +117,27 @@ async def get_leaderboard(limit: int = 20):
 
     leaderboard = []
     for i, row in enumerate(rows):
-        d = _serialize(_record_to_dict(row))
-        d["rank"] = i + 1
-        d["github_avatar_url"] = f"https://github.com/{d['github_username']}.png?size=80"
-        d["tier_badge"] = _tier_badge(d["tier"], bool(d.get("is_founding_steward")))
-        leaderboard.append(d)
+        total_cp = int(row["total_cp_earned"] or 0)
+        tier = "steward" if total_cp >= 3000 else "contributor" if total_cp >= 500 else "builder" if total_cp >= 100 else "observer"
+        leaderboard.append({
+            "rank": i + 1,
+            "id": str(row["id"]),
+            "display_name": row["display_name"] or "Anonymous",
+            "total_cp": total_cp,
+            "cp_balance": int(row["cp_balance"] or 0),
+            "tier": tier,
+            "is_founding_steward": total_cp >= 3000,
+            "tier_badge": "👑" if total_cp >= 3000 else "⭐" if total_cp >= 500 else "🔨" if total_cp >= 100 else "👀",
+            "joined_at": row["last_updated"].isoformat() if row["last_updated"] else None,
+        })
 
-    total_contributors = await fetchval("SELECT COUNT(*) FROM contributors")
-    total_cp = await fetchval("SELECT COALESCE(SUM(cp_amount), 0) FROM cp_ledger")
+    total_contributors = await fetchval("SELECT COUNT(*) FROM user_cp_balance WHERE total_cp_earned > 0") or 0
+    total_cp = await fetchval("SELECT COALESCE(SUM(total_cp_earned), 0) FROM user_cp_balance") or 0
 
     return {
         "leaderboard": leaderboard,
-        "total_contributors": total_contributors,
-        "total_cp_awarded": total_cp,
+        "total_contributors": int(total_contributors),
+        "total_cp_awarded": int(total_cp),
     }
 
 
