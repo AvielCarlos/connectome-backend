@@ -6,13 +6,14 @@ Answers update the user profile for better personalisation.
 
 import logging
 import json
+import random
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from api.middleware import get_current_user_id
-from core.database import execute, fetchrow, fetchval
+from core.database import execute, fetch, fetchrow, fetchval
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -25,103 +26,67 @@ class DiscoveryAnswerBody(BaseModel):
     profile_field: str
 
 
-ONBOARDING_QUESTIONS = [
-    {"question_id": "onboarding_name", "field_name": "name", "question": "What's your name? I'd love to know who I'm talking to 😊"},
-    {
-        "question_id": "domain_selection",
-        "field_name": "domain_selection",
-        "question": (
-            "Okay [name], I see your life as having 3 dimensions — and fulfilment means tending to all of them:\n\n"
-            "🌱 iVive — Maintenance and growth of self: physical, mental, spiritual, creative, financial, skills, habits\n"
-            "🌊 Eviva — Contributing to the collective and receiving reward: work, volunteering, DAO, service, building for others\n"
-            "🚀 Aventi — Everything that makes life feel alive: fun, adventure, events, dating, travel, friendships, discovery, spontaneity\n\n"
-            "Which of these feel most alive to you right now? (You can mention all that resonate)"
-        ),
+ONBOARDING_VARIANTS = {
+    "A": {
+        "name": "Domain Explorer",
+        "description": "Current flow, broadened across iVive, Eviva, and Aventi with current-state framing.",
+        "weight": 25,
+        "questions": [
+            {"question_id": "onboarding_name", "field_name": "name", "kind": "identity", "question": "What's your name?"},
+            {"question_id": "domain_selection", "field_name": "domain_selection", "kind": "current", "render_hint": "domain_cards", "question": "Nice to meet you, [name]! I see your life in three dimensions:\n🌱 iVive — your vitality, health, mind, inner world\n🌊 Eviva — your work, contribution, social life, love\n🚀 Aventi — your adventures, fun, travel, experiences\n\nWhich of these feel most alive for you right now? And which feel quiet or neglected?"},
+            {"question_id": "top_domain_current_state", "field_name": "top_domain_current_state", "kind": "current", "question": "Tell me what you're actually doing day-to-day in [top domain]. What's working? What's stuck?"},
+            {"question_id": "three_month_activation", "field_name": "three_month_activation", "kind": "aspiration", "question": "And what would feel most exciting to activate in the next 3 months? Across any domain."},
+            {"question_id": "weekly_capacity", "field_name": "weekly_capacity", "kind": "capacity", "question": "How much time can you realistically dedicate each week?"},
+            {"question_id": "onboarding_constraints", "field_name": "constraints", "kind": "constraint", "question": "Anything holding you back right now — financial, time, location, health?"},
+        ],
     },
-    {
-        "question_id": "ivive_selection",
-        "field_name": "ivive_interests",
-        "question": (
-            "iVive is the maintenance and growth of you — body, mind, spirit, creativity, finances, skills, and habits. What would support you most here?\n"
-            "• 💪 Get physically stronger and fitter\n"
-            "• 🧠 Improve my mental health and emotional wellbeing\n"
-            "• ✨ Deepen my spiritual practice or sense of purpose\n"
-            "• 💤 Sleep better and have more energy\n"
-            "• 🎨 Develop a creative practice\n"
-            "• 💰 Get my finances stable and growing\n"
-            "• 📚 Learn something that makes me more capable\n"
-            "• 🧘 Build rituals and habits that ground me\n"
-            "• ✍️ Write your own..."
-        ),
+    "B": {
+        "name": "Current Life Snapshot",
+        "description": "Maps the user's current lived reality across all three domains before naming the highest-leverage shift.",
+        "weight": 25,
+        "questions": [
+            {"question_id": "onboarding_name", "field_name": "name", "kind": "identity", "question": "What's your name?"},
+            {"question_id": "ivive_snapshot", "field_name": "ivive_current_state", "kind": "current", "question": "Hey [name]! Let's map your life as it is RIGHT NOW. I'll ask about three areas:\nFirst — iVive. How are you feeling physically and mentally? What's your energy like day-to-day?"},
+            {"question_id": "eviva_snapshot", "field_name": "eviva_current_state", "kind": "current", "question": "Now Eviva — your connection to the world. Work, relationships, contribution. What's flowing? What's missing?"},
+            {"question_id": "aventi_snapshot", "field_name": "aventi_current_state", "kind": "current", "question": "And Aventi — the fun, aliveness side. Adventures, experiences, spontaneity. When did you last feel truly alive?"},
+            {"question_id": "biggest_difference", "field_name": "biggest_difference", "kind": "aspiration", "question": "Based on everything, what's the ONE thing that would make the biggest difference in how your life feels?"},
+            {"question_id": "onboarding_constraints", "field_name": "constraints", "kind": "constraint", "question": "What's your biggest constraint right now — time, money, location, or something else?"},
+        ],
     },
-    {
-        "question_id": "eviva_selection",
-        "field_name": "eviva_interests",
-        "question": (
-            "Eviva is about how you show up for the world — and how the world rewards you for it. What feels most meaningful here?\n"
-            "• 💼 Build a career that actually means something\n"
-            "• 🙌 Volunteer for a cause you care about\n"
-            "• 🏗 Contribute to an open-source or community project\n"
-            "• 🌱 Start something that gives back\n"
-            "• 💰 Create income from skills that serve others\n"
-            "• 🏛 Participate in governance or civic life\n"
-            "• 🤲 Mentor someone or teach what you know\n"
-            "• ✍️ Write your own..."
-        ),
+    "C": {
+        "name": "Future Pull",
+        "description": "Starts from a fulfilled 12-month vision, then grounds the gap in today's reality.",
+        "weight": 25,
+        "questions": [
+            {"question_id": "onboarding_name", "field_name": "name", "kind": "identity", "question": "What's your name?"},
+            {"question_id": "fulfilled_day", "field_name": "fulfilled_day_vision", "kind": "aspiration", "question": "[name], imagine waking up 12 months from now feeling completely fulfilled. Walk me through your day — what does it look like across iVive (your body/mind/soul), Eviva (your work/love/community), and Aventi (your adventures/fun/experiences)?"},
+            {"question_id": "domain_gap", "field_name": "domain_gap", "kind": "mixed", "question": "What's the gap between that vision and your life today? Which domain feels furthest from where you want to be?"},
+            {"question_id": "already_tried", "field_name": "already_tried", "kind": "current", "question": "What have you already tried in that area? What worked? What didn't?"},
+            {"question_id": "weekly_capacity", "field_name": "weekly_capacity", "kind": "capacity", "question": "How many hours per week could you actually dedicate to making this shift?"},
+            {"question_id": "onboarding_constraints", "field_name": "constraints", "kind": "constraint", "question": "Any hard constraints — health, money, location, relationships — that I need to account for?"},
+        ],
     },
-    {
-        "question_id": "aventi_selection",
-        "field_name": "aventi_interests",
-        "question": (
-            "Aventi is everything that makes life feel alive and engaged — fun, play, pleasure, dating, friendship, spontaneity, and experience. What would feel amazing here?\n"
-            "• 🌍 Travel somewhere new this year\n"
-            "• 🎉 Go to more events — concerts, festivals, markets\n"
-            "• 💘 Date intentionally and find real connection\n"
-            "• 🤝 Invest in a friendship you've been neglecting\n"
-            "• 🏄 Try a thrilling new physical experience\n"
-            "• 🌙 Make weeknights an adventure, not just weekends\n"
-            "• 🎲 Say yes to spontaneous plans more often\n"
-            "• ✍️ Write your own..."
-        ),
+    "D": {
+        "name": "Energy Mapping",
+        "description": "Uses quick self-ratings to identify low-energy and high-energy domains.",
+        "weight": 25,
+        "questions": [
+            {"question_id": "onboarding_name", "field_name": "name", "kind": "identity", "question": "What's your name?"},
+            {"question_id": "energy_scores", "field_name": "energy_scores", "kind": "current", "render_hint": "energy_sliders", "question": "Good to meet you, [name]. Let's do a quick energy audit. On a scale of 1-10:\n• iVive (body/mind/soul vitality): ___\n• Eviva (work/relationships/contribution): ___  \n• Aventi (fun/adventure/aliveness): ___\nTell me your scores and what's behind the numbers."},
+            {"question_id": "lowest_score_cause", "field_name": "lowest_score_cause", "kind": "mixed", "question": "Your lowest score — what's actually causing that? And what would a 9 or 10 look like?"},
+            {"question_id": "highest_score_pattern", "field_name": "highest_score_pattern", "kind": "current", "question": "Your highest score — what's working there that we could apply to the weaker areas?"},
+            {"question_id": "change_capacity", "field_name": "change_capacity", "kind": "capacity", "question": "What's your capacity for change right now — time, energy, money?"},
+            {"question_id": "onboarding_constraints", "field_name": "constraints", "kind": "constraint", "question": "Any constraints or context I should know about?"},
+        ],
     },
-    {"question_id": "onboarding_constraints", "field_name": "constraints", "question": "Any constraints I should know about — location, budget, health, family situation, access, or anything that would shape the path?"},
-]
+}
+
+ONBOARDING_QUESTIONS = ONBOARDING_VARIANTS["A"]["questions"]
 
 DOMAIN_ALIASES = {
-    "ivive": ["ivive", "self", "health", "fitness", "vitality", "energy", "nutrition", "sleep", "strong", "mental", "therapy", "emotional", "stress", "spiritual", "purpose", "meaning", "inner", "creative", "creativity", "finance", "budget", "saving", "skill", "learning", "habit", "ritual"],
-    "eviva": ["eviva", "career", "work", "job", "volunteer", "service", "contribution", "collective", "community project", "open source", "dao", "civic", "governance", "income", "recognition", "mentor", "teach", "build for others"],
-    "aventi": ["aventi", "adventure", "fun", "travel", "experience", "spontaneity", "spontaneous", "dating", "romance", "friendship", "friend", "event", "concert", "festival", "market", "play", "pleasure", "discovery"],
-}
-
-IVIVE_ALIASES = {
-    "Get physically stronger and fitter": ["strong", "fit", "fitness", "physical"],
-    "Improve my mental health and emotional wellbeing": ["mental", "therapy", "emotional", "wellbeing", "stress"],
-    "Deepen my spiritual practice or sense of purpose": ["spiritual", "purpose", "meaning", "inner peace"],
-    "Sleep better and have more energy": ["sleep", "energy"],
-    "Develop a creative practice": ["creative", "creativity", "art", "music", "writing"],
-    "Get my finances stable and growing": ["finance", "finances", "budget", "saving", "invest"],
-    "Learn something that makes me more capable": ["skill", "learn", "capable"],
-    "Build rituals and habits that ground me": ["ritual", "habit", "routine", "ground"],
-}
-
-EVIVA_ALIASES = {
-    "Build a career that actually means something": ["career", "work", "job", "meaning"],
-    "Volunteer for a cause you care about": ["volunteer", "cause", "service"],
-    "Contribute to an open-source or community project": ["open-source", "open source", "community project", "contribute"],
-    "Start something that gives back": ["gives back", "give back", "start something"],
-    "Create income from skills that serve others": ["income", "skills", "serve others"],
-    "Participate in governance or civic life": ["governance", "civic", "dao", "vote"],
-    "Mentor someone or teach what you know": ["mentor", "teach", "teaching"],
-}
-
-AVENTI_ALIASES = {
-    "Travel somewhere new this year": ["travel", "new places", "country", "trip"],
-    "Go to more events — concerts, festivals, markets": ["event", "concert", "festival", "market"],
-    "Date intentionally and find real connection": ["date", "dating", "romance", "romantic", "connection"],
-    "Invest in a friendship you've been neglecting": ["friend", "friendship", "neglect"],
-    "Try a thrilling new physical experience": ["thrilling", "surf", "ski", "skydive", "physical experience"],
-    "Make weeknights an adventure, not just weekends": ["weeknight", "weeknights", "weekend"],
-    "Say yes to spontaneous plans more often": ["spontaneous", "say yes", "plans"],
+    "ivive": ["ivive", "self", "health", "fitness", "vitality", "energy", "nutrition", "sleep", "strong", "mental", "therapy", "emotional", "stress", "spiritual", "purpose", "meaning", "inner", "creative", "creativity", "finance", "budget", "saving", "skill", "learning", "habit", "ritual", "body", "mind", "soul"],
+    "eviva": ["eviva", "career", "work", "job", "volunteer", "service", "contribution", "collective", "community", "open source", "dao", "civic", "governance", "income", "recognition", "mentor", "teach", "build for others", "relationship", "love"],
+    "aventi": ["aventi", "adventure", "fun", "travel", "experience", "spontaneity", "spontaneous", "dating", "romance", "friendship", "friend", "event", "concert", "festival", "market", "play", "pleasure", "discovery", "alive", "aliveness"],
 }
 
 
@@ -135,16 +100,26 @@ def _extract_selected_domains(answer: str) -> list[str]:
     return selected
 
 
-def _extract_picks(answer: str, aliases: dict[str, list[str]]) -> list[str]:
-    text = answer.lower()
-    picks = []
-    for label, terms in aliases.items():
-        if label.lower() in text or any(term in text for term in terms):
-            picks.append(label)
-    if not picks and answer.strip():
-        picks.append(answer.strip()[:240])
-    return picks
+def _infer_domain(text: str) -> str:
+    selected = _extract_selected_domains(text)
+    return selected[0] if selected else "Whole Life"
 
+
+def _render_question(question: dict, answers: list[str]) -> str:
+    text = question["question"]
+    name = answers[0].strip().split("\n")[0][:80] if answers else "there"
+    if name:
+        text = text.replace("[name]", name)
+    top_domain = "the area that feels most alive or neglected"
+    if len(answers) >= 2:
+        domains = _extract_selected_domains(answers[1])
+        if domains:
+            top_domain = domains[0]
+    return text.replace("[top domain]", top_domain)
+
+
+def _questions_for_variant(variant_id: str) -> list[dict]:
+    return ONBOARDING_VARIANTS.get(variant_id, ONBOARDING_VARIANTS["A"])["questions"]
 
 
 class OnboardingRequest(BaseModel):
@@ -156,6 +131,17 @@ class OnboardingResponse(BaseModel):
     is_complete: bool
     question_index: int
     total_questions: int = 6
+    variant_id: str = "A"
+    render_hint: Optional[str] = None
+
+
+class OnboardingVariantStats(BaseModel):
+    variant_id: str
+    name: Optional[str] = None
+    assigned_users: int = 0
+    completed_users: int = 0
+    completion_rate: float = 0.0
+    average_ioo_engagement_after_7_days: float = 0.0
 
 
 def _get_openai():
@@ -230,10 +216,10 @@ async def _ora_onboarding_message(
         return f"Thank you — that helps me understand you better. {fallback}"
 
 
-async def _store_onboarding_answers(user_id: str, answers: list[str]) -> None:
-    uid = UUID(user_id)
+async def _ensure_onboarding_schema() -> None:
     await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE")
     await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMP")
+    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_variant TEXT")
     await execute(
         """
         CREATE TABLE IF NOT EXISTS discovery_profile (
@@ -247,10 +233,144 @@ async def _store_onboarding_answers(user_id: str, answers: list[str]) -> None:
         )
         """
     )
+    await execute(
+        """
+        CREATE TABLE IF NOT EXISTS onboarding_variants (
+            id SERIAL PRIMARY KEY,
+            variant_id TEXT NOT NULL UNIQUE,
+            name TEXT,
+            description TEXT,
+            questions JSONB NOT NULL,
+            active BOOLEAN DEFAULT true,
+            weight INTEGER DEFAULT 25,
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+        """
+    )
+    for variant_id, config in ONBOARDING_VARIANTS.items():
+        await execute(
+            """
+            INSERT INTO onboarding_variants (variant_id, name, description, questions, active, weight)
+            VALUES ($1, $2, $3, $4::jsonb, true, $5)
+            ON CONFLICT (variant_id) DO UPDATE SET
+                name = EXCLUDED.name,
+                description = EXCLUDED.description,
+                questions = EXCLUDED.questions,
+                active = EXCLUDED.active,
+                weight = EXCLUDED.weight
+            """,
+            variant_id,
+            config["name"],
+            config["description"],
+            json.dumps(config["questions"]),
+            int(config.get("weight", 25)),
+        )
 
-    answer_map = {}
-    for idx, answer in enumerate(answers[: len(ONBOARDING_QUESTIONS)]):
-        q = ONBOARDING_QUESTIONS[idx]
+
+async def _assign_onboarding_variant(uid: UUID) -> str:
+    await _ensure_onboarding_schema()
+    row = await fetchrow("SELECT onboarding_variant FROM users WHERE id = $1", uid)
+    if row and row["onboarding_variant"] in ONBOARDING_VARIANTS:
+        return row["onboarding_variant"]
+
+    rows = await fetch("SELECT variant_id, weight FROM onboarding_variants WHERE active = true")
+    weighted = [(r["variant_id"], int(r["weight"] or 0)) for r in rows if r["variant_id"] in ONBOARDING_VARIANTS]
+    if not weighted:
+        weighted = [(vid, int(cfg.get("weight", 25))) for vid, cfg in ONBOARDING_VARIANTS.items()]
+    total = sum(max(weight, 0) for _, weight in weighted) or len(weighted)
+    pick = random.uniform(0, total)
+    cursor = 0.0
+    selected = weighted[-1][0]
+    for variant_id, weight in weighted:
+        cursor += max(weight, 0) or 1
+        if pick <= cursor:
+            selected = variant_id
+            break
+
+    await execute("UPDATE users SET onboarding_variant = $1, last_active = NOW() WHERE id = $2", selected, uid)
+    await execute(
+        """
+        INSERT INTO discovery_profile (user_id, field_name, field_value, question_id)
+        VALUES ($1, 'onboarding_variant', $2, 'onboarding_variant')
+        ON CONFLICT (user_id, field_name) DO UPDATE SET
+            field_value = EXCLUDED.field_value,
+            updated_at = NOW()
+        """,
+        uid,
+        selected,
+    )
+    return selected
+
+
+async def _seed_onboarding_ioo_nodes(uid: UUID, variant_id: str, answer_map: dict[str, str], questions: list[dict]) -> None:
+    current_items: list[tuple[str, str]] = []
+    aspiration_items: list[tuple[str, str]] = []
+    for q in questions:
+        answer = (answer_map.get(q["field_name"]) or "").strip()
+        if not answer:
+            continue
+        domain = _infer_domain(" ".join([q.get("field_name", ""), q.get("question", ""), answer]))
+        if q.get("kind") in {"current", "mixed"}:
+            current_items.append((domain, answer))
+        if q.get("kind") in {"aspiration", "mixed"}:
+            aspiration_items.append((domain, answer))
+
+    async def insert_seed(domain: str, text: str, seed_type: str) -> None:
+        title = f"{seed_type.title()}: {text[:72]}"
+        description = text[:1000]
+        progress_status = "started" if seed_type == "current" else "suggested"
+        row = await fetchrow(
+            """
+            INSERT INTO ioo_nodes (type, title, description, tags, domain, step_type, requirements, is_active)
+            VALUES ('activity', $1, $2, $3::text[], $4, 'hybrid', $5::jsonb, true)
+            RETURNING id
+            """,
+            title,
+            description,
+            ["onboarding", seed_type, variant_id],
+            domain,
+            json.dumps({"source": "onboarding", "seed_type": seed_type, "variant_id": variant_id}),
+        )
+        if row:
+            await execute(
+                """
+                INSERT INTO ioo_user_progress (user_id, node_id, status, started_at, surface_type, surface_id)
+                VALUES ($1, $2, $3, CASE WHEN $3 = 'started' THEN NOW() ELSE NULL END, 'onboarding', $4)
+                """,
+                uid,
+                row["id"],
+                progress_status,
+                variant_id,
+            )
+
+    try:
+        for domain, text in current_items[:4]:
+            await insert_seed(domain, text, "current")
+        for domain, text in aspiration_items[:3]:
+            await insert_seed(domain, text, "aspiration")
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, state_json, last_updated)
+            VALUES ($1, $2::jsonb, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || EXCLUDED.state_json,
+                last_updated = NOW()
+            """,
+            uid,
+            json.dumps({"onboarding_variant": variant_id, "current_seeds": [x[1] for x in current_items], "aspiration_seeds": [x[1] for x in aspiration_items]}),
+        )
+    except Exception as e:
+        logger.warning(f"Could not seed onboarding IOO nodes: {e}")
+
+
+async def _store_onboarding_answers(user_id: str, answers: list[str], variant_id: str) -> None:
+    uid = UUID(user_id)
+    await _ensure_onboarding_schema()
+    questions = _questions_for_variant(variant_id)
+
+    answer_map = {"onboarding_variant": variant_id}
+    for idx, answer in enumerate(answers[: len(questions)]):
+        q = questions[idx]
         answer_map[q["field_name"]] = answer
         await execute(
             """
@@ -267,6 +387,8 @@ async def _store_onboarding_answers(user_id: str, answers: list[str]) -> None:
             q["question_id"],
         )
 
+    current_state = {q["field_name"]: answer_map.get(q["field_name"], "") for q in questions if q.get("kind") in {"current", "mixed"}}
+    aspirations = {q["field_name"]: answer_map.get(q["field_name"], "") for q in questions if q.get("kind") in {"aspiration", "mixed"}}
     row = await fetchrow("SELECT profile FROM users WHERE id = $1", uid)
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
@@ -274,7 +396,10 @@ async def _store_onboarding_answers(user_id: str, answers: list[str]) -> None:
     raw_profile = row["profile"]
     if raw_profile:
         profile = json.loads(raw_profile) if isinstance(raw_profile, str) else dict(raw_profile)
+    profile["onboarding_variant"] = variant_id
     profile["onboarding_intake"] = answer_map
+    profile["onboarding_current_state"] = current_state
+    profile["onboarding_aspirations"] = aspirations
     if answer_map.get("name"):
         profile["display_name"] = answer_map["name"]
 
@@ -283,22 +408,26 @@ async def _store_onboarding_answers(user_id: str, answers: list[str]) -> None:
         UPDATE users
         SET profile = $1,
             display_name = COALESCE(NULLIF($2, ''), display_name),
+            onboarding_variant = $3,
             onboarding_completed = TRUE,
             onboarding_completed_at = NOW(),
             last_active = NOW()
-        WHERE id = $3
+        WHERE id = $4
         """,
         json.dumps(profile),
         answer_map.get("name", ""),
+        variant_id,
         uid,
     )
+
+    await _seed_onboarding_ioo_nodes(uid, variant_id, answer_map, questions)
 
     try:
         client = _get_openai()
         if client:
             intake_text = "\n".join(
-                f"{ONBOARDING_QUESTIONS[i]['field_name']}: {answer}"
-                for i, answer in enumerate(answers[: len(ONBOARDING_QUESTIONS)])
+                f"{questions[i]['field_name']}: {answer}"
+                for i, answer in enumerate(answers[: len(questions)])
             )
             embedding_response = await client.embeddings.create(
                 model="text-embedding-3-small",
@@ -409,28 +538,37 @@ async def onboarding_intake(
     Answers are stored in discovery_profile and used to seed IOO recommendations.
     """
     user_turns = _user_turns(body.conversation)
-    answered_count = min(len(user_turns), len(ONBOARDING_QUESTIONS))
-
-    row = await fetchrow("SELECT id, onboarding_completed FROM users WHERE id = $1", UUID(user_id))
+    uid = UUID(user_id)
+    await _ensure_onboarding_schema()
+    row = await fetchrow("SELECT id, onboarding_completed FROM users WHERE id = $1", uid)
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
+
+    variant_id = await _assign_onboarding_variant(uid)
+    questions = _questions_for_variant(variant_id)
+    answered_count = min(len(user_turns), len(questions))
 
     if bool(row["onboarding_completed"]):
         return OnboardingResponse(
             message="I've got what I need to start building your path. Let's go! ◈",
             is_complete=True,
-            question_index=len(ONBOARDING_QUESTIONS),
+            question_index=len(questions),
+            total_questions=len(questions),
+            variant_id=variant_id,
         )
 
-    if answered_count >= len(ONBOARDING_QUESTIONS):
-        await _store_onboarding_answers(user_id, user_turns)
+    if answered_count >= len(questions):
+        await _store_onboarding_answers(user_id, user_turns, variant_id)
         return OnboardingResponse(
             message="I've got what I need to start building your path. Let's go! ◈",
             is_complete=True,
-            question_index=len(ONBOARDING_QUESTIONS),
+            question_index=len(questions),
+            total_questions=len(questions),
+            variant_id=variant_id,
         )
 
-    next_question = ONBOARDING_QUESTIONS[answered_count]["question"]
+    next_question_obj = questions[answered_count]
+    next_question = _render_question(next_question_obj, user_turns)
     message = await _ora_onboarding_message(
         body.conversation,
         next_question=next_question,
@@ -440,18 +578,69 @@ async def onboarding_intake(
         message=message,
         is_complete=False,
         question_index=answered_count,
+        total_questions=len(questions),
+        variant_id=variant_id,
+        render_hint=next_question_obj.get("render_hint"),
     )
 
 
 @router.get("/onboarding/status")
 async def onboarding_status(user_id: str = Depends(get_current_user_id)):
-    row = await fetchrow("SELECT onboarding_completed FROM users WHERE id = $1", UUID(user_id))
+    await _ensure_onboarding_schema()
+    row = await fetchrow("SELECT onboarding_completed, onboarding_variant FROM users WHERE id = $1", UUID(user_id))
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
     completed = bool(row["onboarding_completed"])
+    variant_id = row["onboarding_variant"] or None
     try:
-        count = await fetchval("SELECT COUNT(*) FROM discovery_profile WHERE user_id = $1", UUID(user_id))
+        count = await fetchval(
+            """
+            SELECT COUNT(*) FROM discovery_profile
+            WHERE user_id = $1 AND field_name <> 'onboarding_variant'
+            """,
+            UUID(user_id),
+        )
     except Exception as e:
         logger.warning(f"Could not count discovery_profile rows for onboarding status: {e}")
         count = 0
-    return {"completed": completed, "question_index": int(count or 0)}
+    return {"completed": completed, "question_index": int(count or 0), "variant_id": variant_id}
+
+
+@router.get("/onboarding/variants")
+async def onboarding_variant_stats(user_id: str = Depends(get_current_user_id)):
+    """Return onboarding A/B variant stats for analytics dashboards."""
+    await _ensure_onboarding_schema()
+    variant_rows = await fetch("SELECT variant_id, name FROM onboarding_variants WHERE active = true ORDER BY variant_id")
+    stats = []
+    for variant in variant_rows:
+        variant_id = variant["variant_id"]
+        assigned = int(await fetchval("SELECT COUNT(*) FROM users WHERE onboarding_variant = $1", variant_id) or 0)
+        completed = int(await fetchval(
+            "SELECT COUNT(*) FROM users WHERE onboarding_variant = $1 AND onboarding_completed = true",
+            variant_id,
+        ) or 0)
+        engagement = float(await fetchval(
+            """
+            SELECT COALESCE(AVG(progress_count), 0) FROM (
+                SELECT u.id, COUNT(p.id)::float AS progress_count
+                FROM users u
+                LEFT JOIN ioo_user_progress p
+                    ON p.user_id = u.id
+                   AND p.created_at >= u.onboarding_completed_at
+                   AND p.created_at < u.onboarding_completed_at + INTERVAL '7 days'
+                WHERE u.onboarding_variant = $1
+                  AND u.onboarding_completed = true
+                GROUP BY u.id
+            ) s
+            """,
+            variant_id,
+        ) or 0.0)
+        stats.append({
+            "variant_id": variant_id,
+            "name": variant["name"],
+            "assigned_users": assigned,
+            "completed_users": completed,
+            "completion_rate": round(completed / assigned, 4) if assigned else 0.0,
+            "average_ioo_engagement_after_7_days": round(engagement, 4),
+        })
+    return {"variants": stats}
