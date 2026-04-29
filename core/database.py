@@ -774,6 +774,26 @@ async def run_migrations():
             ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMP
         """)
         await conn.execute("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS onboarding_variant TEXT
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS onboarding_variants (
+                id SERIAL PRIMARY KEY,
+                variant_id TEXT NOT NULL UNIQUE,
+                name TEXT,
+                description TEXT,
+                questions JSONB NOT NULL,
+                active BOOLEAN DEFAULT true,
+                weight INTEGER DEFAULT 25,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_onboarding_variant
+            ON users(onboarding_variant)
+        """)
+        await conn.execute("""
             CREATE TABLE IF NOT EXISTS discovery_profile (
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
                 field_name TEXT NOT NULL,

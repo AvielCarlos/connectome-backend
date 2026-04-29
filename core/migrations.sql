@@ -415,6 +415,21 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token_updated_at TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMP;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_variant TEXT;
+
+CREATE TABLE IF NOT EXISTS onboarding_variants (
+    id SERIAL PRIMARY KEY,
+    variant_id TEXT NOT NULL UNIQUE,
+    name TEXT,
+    description TEXT,
+    questions JSONB NOT NULL,
+    active BOOLEAN DEFAULT true,
+    weight INTEGER DEFAULT 25,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_onboarding_variant
+ON users(onboarding_variant);
 
 CREATE TABLE IF NOT EXISTS discovery_profile (
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
