@@ -121,24 +121,35 @@ class AIOSEvolutionAgent:
     async def _top_ioo_nodes_by_engagement(self) -> List[Dict[str, Any]]:
         rows = await fetch(
             """
+            WITH progress AS (
+                SELECT node_id, COUNT(*) FILTER (WHERE status = 'completed')::int AS completions
+                FROM ioo_user_progress
+                GROUP BY node_id
+            ), surface_engagement AS (
+                SELECT
+                    node_id,
+                    COALESCE(SUM(interaction_count), 0)::int AS feed_interactions,
+                    COALESCE(SUM(completion_count), 0)::int AS surface_completions
+                FROM ioo_surfaces
+                GROUP BY node_id
+            )
             SELECT
                 n.id::text,
                 n.title,
                 n.domain,
                 n.tags,
-                COUNT(DISTINCT p.id) FILTER (WHERE p.status = 'completed')::int AS completions,
-                COALESCE(SUM(s.interaction_count), 0)::int AS feed_interactions,
-                COALESCE(SUM(s.completion_count), 0)::int AS surface_completions,
+                COALESCE(p.completions, 0)::int AS completions,
+                COALESCE(se.feed_interactions, 0)::int AS feed_interactions,
+                COALESCE(se.surface_completions, 0)::int AS surface_completions,
                 (
-                    COUNT(DISTINCT p.id) FILTER (WHERE p.status = 'completed') * 3
-                    + COALESCE(SUM(s.interaction_count), 0)
-                    + COALESCE(SUM(s.completion_count), 0) * 2
+                    COALESCE(p.completions, 0) * 3
+                    + COALESCE(se.feed_interactions, 0)
+                    + COALESCE(se.surface_completions, 0) * 2
                 )::int AS engagement_score
             FROM ioo_nodes n
-            LEFT JOIN ioo_user_progress p ON p.node_id = n.id
-            LEFT JOIN ioo_surfaces s ON s.node_id = n.id
+            LEFT JOIN progress p ON p.node_id = n.id
+            LEFT JOIN surface_engagement se ON se.node_id = n.id
             WHERE n.is_active = true
-            GROUP BY n.id, n.title, n.domain, n.tags
             ORDER BY engagement_score DESC, n.updated_at DESC
             LIMIT 20
             """
