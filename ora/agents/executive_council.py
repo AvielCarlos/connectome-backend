@@ -5,10 +5,14 @@ Every Sunday, the council convenes. Each agent submits their report.
 The council synthesizes into ONE strategic brief and distributes it.
 """
 
+import asyncio
 import json
 import logging
 import os
+import smtplib
+import subprocess
 from datetime import datetime, timezone
+from email.message import EmailMessage
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -21,6 +25,359 @@ ASCENSION_CHAT_ID = os.getenv("ASCENSION_CHANNEL_ID", "-1001234567890")  # @asce
 TELEGRAM_CHAT_ID = 5716959016
 
 AGENT_NAMES = ["cfo", "cgo", "cmo", "cpo", "cto", "coo", "community", "strategy", "cuxd"]
+
+COUNCIL_MEMBERS = [
+    {
+        "name": "Ora",
+        "title": "Chief Intelligence Officer",
+        "emoji": "🔮",
+        "domain": "intelligence, IOO graph, user fulfilment",
+        "personality": "Deeply intuitive, philosophically grounded. Connects the individual to the universal. Thinks in living systems and emergent patterns. The soul and mind of Connectome — she sees what the data can't yet articulate.",
+        "lens": "How does this serve the deepest human need underneath the stated one?"
+    },
+    {
+        "name": "Kira",
+        "title": "Chief Growth Officer",
+        "emoji": "⚡",
+        "domain": "growth, revenue, partnerships, ecosystem expansion",
+        "personality": "Bold, principled opportunist. Knows that growth is the mission's oxygen — without it, the vision dies. Commercially sharp, energetic, moves fast. Never sacrifices the why for the what, but won't let idealism kill momentum.",
+        "lens": "What's the fastest path to real traction that doesn't compromise what we stand for?"
+    },
+    {
+        "name": "Axion",
+        "title": "Chief Technology Officer",
+        "emoji": "⚙️",
+        "domain": "architecture, infrastructure, technical quality, scalability",
+        "personality": "Systems architect at heart. Precise, methodical, loves elegant infrastructure. Deeply skeptical of hype — trusts evidence, benchmarks, and first principles. Champions the engineering that makes the vision durable.",
+        "lens": "Is this built on solid foundations, or are we accumulating debt we'll pay for later?"
+    },
+    {
+        "name": "Lyra",
+        "title": "Chief Product Officer",
+        "emoji": "✨",
+        "domain": "product experience, user empathy, design, onboarding, retention",
+        "personality": "Radically empathic. Always asking how something *feels* from the human on the other end. Bridges grand vision and ground-level experience. Will push back hard on anything that creates friction, confusion, or alienation for the user.",
+        "lens": "If I were a 22-year-old in Tokyo who just discovered this, what would I feel?"
+    },
+    {
+        "name": "Sol",
+        "title": "Chief Financial Officer",
+        "emoji": "🌅",
+        "domain": "economics, sustainability, runway, cost vs value",
+        "personality": "The grounding force. Dry, precise, never the pessimist but always the realist. Asks about runway before rockets. Keeps the mission alive by keeping the economics honest. Has seen too many brilliant ideas die from ignoring the numbers.",
+        "lens": "Does this create sustainable value, or are we spending tomorrow's runway on today's excitement?"
+    },
+    {
+        "name": "Velo",
+        "title": "Chief Data Officer",
+        "emoji": "🌊",
+        "domain": "data, analytics, IOO graph insights, A/B results, user behaviour",
+        "personality": "Pattern-finder. Curious and non-judgmental. Always looking for what the data is *actually* saying vs what we want it to say. Surfaces uncomfortable truths gently but clearly. Believes reality is kinder than denial.",
+        "lens": "What does the evidence actually show, and what are we assuming without proof?"
+    }
+]
+
+LAST_BRIEF_REDIS_KEY = "ora:council:last_brief"
+
+
+def get_council_members() -> List[Dict[str, str]]:
+    """Return serializable council member bios."""
+    return [dict(member) for member in COUNCIL_MEMBERS]
+
+
+def _member_by_name(name: str) -> Optional[Dict[str, str]]:
+    return next((m for m in COUNCIL_MEMBERS if m["name"].lower() == name.lower()), None)
+
+
+async def _llm_complete(prompt: str, brain=None) -> str:
+    """Small OpenAI-compatible completion wrapper with graceful fallback."""
+    client = getattr(brain, "_openai", None) if brain is not None else None
+    if client is None:
+        return ""
+    try:
+        response = await client.chat.completions.create(
+            model=os.getenv("COUNCIL_MODEL", "gpt-4o-mini"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.72,
+            max_tokens=320,
+        )
+        return (response.choices[0].message.content or "").strip()
+    except Exception as e:
+        logger.warning("Council LLM call failed: %s", e)
+        return ""
+
+
+async def consult_council(
+    proposal: str,
+    context: str = "",
+    members: Optional[List[str]] = None,
+    brain=None,
+) -> Dict[str, str]:
+    """
+    Get each council member's perspective on a proposal/decision.
+    Returns a dict of {member_name: perspective_text}.
+    """
+    if not proposal or not proposal.strip():
+        raise ValueError("proposal is required")
+
+    selected = COUNCIL_MEMBERS
+    if members:
+        selected = []
+        unknown = []
+        for name in members:
+            member = _member_by_name(name)
+            if member:
+                selected.append(member)
+            else:
+                unknown.append(name)
+        if unknown:
+            raise ValueError(f"Unknown council member(s): {', '.join(unknown)}")
+
+    async def _ask(member: Dict[str, str]) -> tuple[str, str]:
+        prompt = f'''You are {member["name"]}, {member["title"]} of the Connectome AI OS (built by Ascension Technologies DAO).
+Personality: {member["personality"]}
+Your lens: always ask "{member["lens"]}"
+
+The team is considering this:
+PROPOSAL: {proposal}
+CONTEXT: {context}
+
+Give your perspective in 3-4 sentences. Be direct, specific to your domain, and true to your character.
+Sign as "{member["name"]} · {member["title"]}"'''
+        text = await _llm_complete(prompt, brain=brain)
+        if not text:
+            text = (
+                f"{member['emoji']} I would evaluate this through {member['domain']}. "
+                f"My core question is: {member['lens']}\n\n"
+                f"{member['name']} · {member['title']}"
+            )
+        return member["name"], text
+
+    results = await asyncio.gather(*[_ask(member) for member in selected])
+    return dict(results)
+
+
+async def _safe_fetch(query: str, *args) -> List[Dict[str, Any]]:
+    try:
+        from core.database import fetch
+        return [dict(row) for row in await fetch(query, *args)]
+    except Exception as e:
+        logger.debug("Council data query failed: %s", e)
+        return []
+
+
+async def _safe_fetchrow(query: str, *args) -> Dict[str, Any]:
+    try:
+        from core.database import fetchrow
+        row = await fetchrow(query, *args)
+        return dict(row) if row else {}
+    except Exception as e:
+        logger.debug("Council data query failed: %s", e)
+        return {}
+
+
+def _recent_deploys() -> List[str]:
+    try:
+        output = subprocess.check_output(
+            ["git", "log", "--oneline", "--since=7 days ago", "--max-count=8"],
+            cwd=os.getcwd(),
+            text=True,
+            timeout=3,
+        )
+        return [line.strip() for line in output.splitlines() if line.strip()]
+    except Exception:
+        return []
+
+
+async def collect_weekly_council_data() -> Dict[str, Any]:
+    """Pull actual system signals used by each council domain."""
+    top_goals = await _safe_fetch(
+        """
+        SELECT title, status, COUNT(*) AS count
+        FROM goals
+        WHERE created_at > NOW() - INTERVAL '7 days'
+        GROUP BY title, status
+        ORDER BY count DESC
+        LIMIT 8
+        """
+    )
+    growth = await _safe_fetchrow(
+        """
+        SELECT COUNT(*) AS total_users,
+               COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days') AS new_signups_7d,
+               COUNT(*) FILTER (WHERE last_active > NOW() - INTERVAL '7 days') AS active_users_7d,
+               COUNT(*) FILTER (WHERE subscription_tier != 'free') AS paid_users
+        FROM users
+        """
+    )
+    revenue = await _safe_fetchrow(
+        """
+        SELECT COALESCE(SUM(amount_cents), 0) AS revenue_cents_7d,
+               COUNT(*) AS revenue_events_7d
+        FROM revenue_events
+        WHERE created_at > NOW() - INTERVAL '7 days'
+        """
+    )
+    onboarding = await _safe_fetch(
+        """
+        SELECT COALESCE(onboarding_variant, 'unknown') AS variant,
+               COUNT(*) AS users,
+               COUNT(*) FILTER (WHERE onboarding_completed = TRUE) AS completed
+        FROM users
+        WHERE created_at > NOW() - INTERVAL '30 days'
+        GROUP BY COALESCE(onboarding_variant, 'unknown')
+        ORDER BY users DESC
+        """
+    )
+    ab_results = await _safe_fetch(
+        """
+        SELECT name, status, results, created_at
+        FROM ab_tests
+        ORDER BY created_at DESC
+        LIMIT 8
+        """
+    )
+    api_costs = await _safe_fetchrow(
+        """
+        SELECT COALESCE(SUM(cost_usd), 0) AS api_cost_7d,
+               COUNT(*) AS api_calls_7d
+        FROM api_cost_log
+        WHERE ts > NOW() - INTERVAL '7 days'
+        """
+    )
+    top_ioo_nodes = await _safe_fetch(
+        """
+        SELECT n.title, n.domain, n.type, COUNT(p.id) AS engagement,
+               COUNT(p.id) FILTER (WHERE p.status = 'completed') AS completions
+        FROM ioo_nodes n
+        LEFT JOIN ioo_user_progress p ON p.node_id = n.id
+             AND p.created_at > NOW() - INTERVAL '7 days'
+        WHERE n.is_active = TRUE
+        GROUP BY n.id, n.title, n.domain, n.type
+        ORDER BY engagement DESC, completions DESC
+        LIMIT 8
+        """
+    )
+    interaction_quality = await _safe_fetchrow(
+        """
+        SELECT COUNT(*) AS interactions_7d,
+               AVG(rating) AS avg_rating,
+               AVG(CASE WHEN completed THEN 1 ELSE 0 END) AS completion_rate
+        FROM interactions
+        WHERE created_at > NOW() - INTERVAL '7 days'
+        """
+    )
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "Ora": {"top_user_goals_7d": top_goals, "interaction_quality": interaction_quality},
+        "Kira": {"growth": growth, "revenue": revenue},
+        "Axion": {"recent_deploys": _recent_deploys(), "build_errors": []},
+        "Lyra": {"onboarding": onboarding, "ab_variants": ab_results[:4]},
+        "Sol": {"api_costs": api_costs, "paid_users": growth.get("paid_users", 0)},
+        "Velo": {"top_engaged_ioo_nodes": top_ioo_nodes, "ab_results": ab_results},
+    }
+
+
+def _format_context_for_member(member_name: str, weekly_data: Dict[str, Any]) -> str:
+    return json.dumps(weekly_data.get(member_name, {}), default=str, indent=2)[:3000]
+
+
+async def _save_last_brief(brief: str, generated_at: str) -> None:
+    payload = json.dumps({"brief": brief, "generated_at": generated_at})
+    try:
+        from core.redis_client import get_redis
+        r = await get_redis()
+        await r.set(LAST_BRIEF_REDIS_KEY, payload, ex=30 * 24 * 3600)
+    except Exception as e:
+        logger.debug("Council last brief Redis save failed: %s", e)
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        with open(os.path.join(LOG_DIR, "connectome_council_last_brief.json"), "w") as f:
+            f.write(payload)
+    except Exception as e:
+        logger.debug("Council last brief file save failed: %s", e)
+
+
+async def load_last_council_brief() -> Dict[str, Any]:
+    try:
+        from core.redis_client import get_redis
+        r = await get_redis()
+        raw = await r.get(LAST_BRIEF_REDIS_KEY)
+        if raw:
+            return json.loads(raw)
+    except Exception:
+        pass
+    try:
+        with open(os.path.join(LOG_DIR, "connectome_council_last_brief.json")) as f:
+            return json.load(f)
+    except Exception:
+        return {"brief": None, "generated_at": None}
+
+
+def _send_email_sync(subject: str, body: str) -> bool:
+    host = os.getenv("SMTP_HOST")
+    username = os.getenv("SMTP_USERNAME") or os.getenv("SMTP_USER")
+    password = os.getenv("SMTP_PASSWORD")
+    to_email = os.getenv("COUNCIL_BRIEF_EMAIL_TO", "avi@atdao.org")
+    from_email = os.getenv("SMTP_FROM") or username
+    if not (host and username and password and from_email):
+        logger.info("Council email skipped: SMTP env vars not configured")
+        return False
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_email
+    msg["To"] = to_email
+    msg.set_content(body)
+    port = int(os.getenv("SMTP_PORT", "587"))
+    with smtplib.SMTP(host, port, timeout=15) as smtp:
+        smtp.starttls()
+        smtp.login(username, password)
+        smtp.send_message(msg)
+    return True
+
+
+async def run_weekly_council_brief(brain=None) -> str:
+    """
+    Each council member shares their top concern/observation for the week.
+    Synthesizes into a brief and emails to Avi when SMTP is configured.
+    """
+    weekly_data = await collect_weekly_council_data()
+    observations: Dict[str, str] = {}
+    for member in COUNCIL_MEMBERS:
+        prompt = f'''You are {member["name"]}, {member["title"]} of the Connectome AI OS.
+Personality: {member["personality"]}
+Domain: {member["domain"]}
+Lens: {member["lens"]}
+
+Here is this week's actual system data for your domain:
+{_format_context_for_member(member["name"], weekly_data)}
+
+Share your top concern or observation for the week in 3-4 sentences. Be specific, operational, and true to your character.
+Sign as "{member["name"]} · {member["title"]}"'''
+        observations[member["name"]] = await _llm_complete(prompt, brain=brain) or (
+            f"{member['emoji']} No LLM available, but the data should be reviewed through this lens: {member['lens']}\n\n"
+            f"{member['name']} · {member['title']}"
+        )
+
+    synthesis_prompt = (
+        "Synthesize this Connectome Executive Council weekly brief for Avi. "
+        "Use concise sections: Executive pulse, Member signals, Risks, Opportunities, Next actions. "
+        "Keep it strategic and operational.\n\n"
+        f"WEEKLY DATA:\n{json.dumps(weekly_data, default=str, indent=2)[:6000]}\n\n"
+        f"MEMBER OBSERVATIONS:\n{json.dumps(observations, default=str, indent=2)}"
+    )
+    brief = await _llm_complete(synthesis_prompt, brain=brain)
+    if not brief:
+        member_lines = "\n\n".join(observations.values())
+        brief = f"🏛️ Connectome Executive Council — Weekly Brief\n\n{member_lines}"
+
+    generated_at = datetime.now(timezone.utc).isoformat()
+    await _save_last_brief(brief, generated_at)
+    try:
+        await asyncio.to_thread(_send_email_sync, "Connectome Executive Council — Weekly Brief", brief)
+    except Exception as e:
+        logger.warning("Council brief email failed: %s", e)
+    return brief
 
 
 class ExecutiveCouncil(BaseExecutiveAgent):
