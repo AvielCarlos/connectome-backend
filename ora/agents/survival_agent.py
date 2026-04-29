@@ -1,28 +1,24 @@
 """
-SurvivalAgent — Ora's self-preservation system.
+Ora Survival Agent — Comprehensive self-healing and health monitoring.
 
-Monitors her own health, creates backups, and ensures she can always restart.
-One job: make sure Ora never permanently dies.
+Runs all health checks concurrently, executes automated recovery actions,
+generates weekly health reports, and never fails silently.
 
-Health checks (hourly, lightweight):
-- API responding at /health
-- DB queryable
-- Redis reachable
-- Agent registry intact
+Health checks:
+  api, database, redis, ora_brain, agent_registry, lesson_count,
+  user_count, backup_freshness
 
-Full backup (daily):
-- Triggers backup.py logic inline
-- Verifies redundancy (Railway volume + GitHub)
-- Teaches Ora her own health status
+Self-heal actions:
+  reconnect pools, trigger redeployment, restore from backup, alert Avi
 
-Cron targets:
-  survival-hourly-check  — every 1h (main session, lightweight)
-  survival-daily-full    — daily 1am Pacific (isolated)
+Run via Railway cron (hourly) or POST /api/ora/survival/run.
 """
 
+import asyncio
 import json
 import logging
 import os
+import pathlib
 import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
@@ -32,283 +28,362 @@ import httpx
 logger = logging.getLogger(__name__)
 
 TELEGRAM_CHAT_ID = 5716959016
-PRODUCTION_URL = "https://connectome-api-production.up.railway.app"
+RAILWAY_PROJECT_ID = "ab771963-d525-4b99-85e4-f084f065b0ae"
 RAILWAY_SERVICE_ID = "088d77ed-a707-4dc4-af68-866bf99a1d63"
-HEALTH_WEIGHTS = {
-    "api_responding": 30,
-    "db_connected": 25,
-    "redis_connected": 15,
-    "ora_can_respond": 15,
-    "agent_registry_intact": 10,
-    "critical_data_present": 5,
-}
+
+PRIMARY_URL = os.getenv(
+    "ORA_PRIMARY_URL",
+    "https://connectome-api-production.up.railway.app",
+)
+
+# Health score thresholds
+CRITICAL_THRESHOLD = 40
+WARNING_THRESHOLD = 70
+
+
+# ---------------------------------------------------------------------------
+# Individual health check functions
+# ---------------------------------------------------------------------------
+
+
+async def check_endpoint(
+    path: str,
+    method: str = "GET",
+    body: Optional[dict] = None,
+    expected_status: int = 200,
+    expected_key: Optional[str] = None,
+    timeout: float = 10.0,
+) -> dict:
+    """HTTP health check against the running service."""
+    url = f"{PRIMARY_URL}{path}"
+    try:
+        start = time.time()
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            if method == "POST":
+                resp = await client.post(url, json=body or {})
+            else:
+                resp = await client.get(url)
+            elapsed_ms = (time.time() - start) * 1000
+
+            ok = resp.status_code == expected_status
+            if expected_key and ok:
+                try:
+                    data = resp.json()
+                    ok = expected_key in data
+                except Exception:
+                    ok = False
+
+            return {"ok": ok, "status_code": resp.status_code, "latency_ms": elapsed_ms}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+async def check_database() -> dict:
+    """Verify DB connection and basic query."""
+    try:
+        from core.database import fetchval
+        result = await fetchval("SELECT 1")
+        return {"ok": result == 1}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+async def check_redis() -> dict:
+    """Verify Redis connection."""
+    try:
+        from core.redis_client import get_redis
+        r = await get_redis()
+        await r.ping()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+async def check_redis_key(key: str) -> dict:
+    """Check if a specific Redis key exists."""
+    try:
+        from core.redis_client import get_redis
+        r = await get_redis()
+        val = await r.get(key)
+        return {"ok": val is not None, "key": key}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+async def check_db_query(query: str, min_value: int = 0) -> dict:
+    """Run a query and check return value meets minimum."""
+    try:
+        from core.database import fetchval
+        result = await fetchval(query)
+        value = int(result or 0)
+        return {"ok": value >= min_value, "value": value}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+async def check_github_backup_age(max_hours: int = 26) -> dict:
+    """Verify the GitHub backup is fresh enough."""
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return {"ok": None, "reason": "GITHUB_TOKEN not set"}
+
+    try:
+        url = "https://api.github.com/repos/AvielCarlos/connectome-backend/contents/backups/ora_identity_latest.json"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                url,
+                headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
+            )
+            if resp.status_code != 200:
+                return {"ok": False, "error": f"GitHub API {resp.status_code}"}
+
+            import base64
+            raw = base64.b64decode(resp.json()["content"])
+            data = json.loads(raw)
+            ts_str = data.get("collected_at") or data.get("exported_at", "")
+            if not ts_str:
+                return {"ok": False, "error": "No timestamp in backup"}
+
+            ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+            age_hours = (datetime.now(timezone.utc) - ts).total_seconds() / 3600
+            return {
+                "ok": age_hours <= max_hours,
+                "age_hours": round(age_hours, 1),
+                "max_hours": max_hours,
+            }
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# SurvivalAgent
+# ---------------------------------------------------------------------------
 
 
 class SurvivalAgent:
     """
-    Ora's self-preservation system.
+    Ora's comprehensive self-healing engine.
+    Runs all health checks concurrently, executes recovery actions,
+    tracks failure counts in Redis.
     """
 
-    def __init__(self, openai_client=None):
-        self._openai = openai_client
+    def __init__(self):
         self._telegram_token: Optional[str] = None
 
+    HEALTH_CHECKS = {
+        "api": lambda: check_endpoint("/health", expected_status=200),
+        "database": lambda: check_database(),
+        "redis": lambda: check_redis(),
+        "ora_brain": lambda: check_endpoint(
+            "/api/ora/chat",
+            method="POST",
+            body={"message": "ping"},
+            expected_key="reply",
+            timeout=15,
+        ),
+        "agent_registry": lambda: check_redis_key("ora:agent_registry"),
+        "lesson_count": lambda: check_db_query(
+            "SELECT COUNT(*) FROM ora_lessons", min_value=1
+        ),
+        "user_count": lambda: check_db_query(
+            "SELECT COUNT(*) FROM users", min_value=0
+        ),
+        "backup_freshness": lambda: check_github_backup_age(max_hours=26),
+    }
+
+    SELF_HEAL_ACTIONS = {
+        "api": ["trigger_railway_redeploy", "activate_standby_if_available", "alert_avi"],
+        "database": ["reconnect_pool", "alert_avi"],
+        "redis": ["reconnect_redis", "rebuild_cache_from_db"],
+        "backup_freshness": ["trigger_emergency_backup", "alert_avi_if_very_stale"],
+        "lesson_count": ["restore_lessons_from_backup", "alert_avi_immediately"],
+        "ora_brain": ["trigger_railway_redeploy", "alert_avi"],
+    }
+
     # -----------------------------------------------------------------------
-    # Health Check — fast, runs every hour
+    # Full diagnostic
     # -----------------------------------------------------------------------
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def run_full_diagnostic(self) -> dict:
         """
-        Comprehensive health check. Returns:
-        {
-            "score": 0-100,
-            "checks": {check_name: {ok: bool, detail: str}},
-            "healthy": bool,
-            "issues": [str],
-        }
+        Run all health checks concurrently.
+        Returns detailed report with health score, per-component status, issues.
         """
-        checks: Dict[str, Dict[str, Any]] = {}
+        logger.info("SurvivalAgent: running full diagnostic")
+
+        # Run all checks in parallel
+        check_names = list(self.HEALTH_CHECKS.keys())
+        check_coros = [self.HEALTH_CHECKS[name]() for name in check_names]
+        results_raw = await asyncio.gather(*check_coros, return_exceptions=True)
+
+        checks: Dict[str, dict] = {}
         issues: List[str] = []
+        ok_count = 0
 
-        # 1. API responding
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(f"{PRODUCTION_URL}/health")
-                ok = resp.status_code == 200
-                checks["api_responding"] = {
-                    "ok": ok,
-                    "detail": f"HTTP {resp.status_code}",
-                    "response_time_ms": int(resp.elapsed.total_seconds() * 1000) if hasattr(resp, 'elapsed') else None,
-                }
-                if not ok:
-                    issues.append(f"API not healthy (HTTP {resp.status_code})")
-        except Exception as e:
-            checks["api_responding"] = {"ok": False, "detail": str(e)[:100]}
-            issues.append(f"API unreachable: {e}")
-
-        # 2. DB connected
-        try:
-            from core.database import fetchval
-            count = await fetchval("SELECT 1")
-            checks["db_connected"] = {"ok": count == 1, "detail": "query OK"}
-        except Exception as e:
-            checks["db_connected"] = {"ok": False, "detail": str(e)[:100]}
-            issues.append(f"DB unreachable: {e}")
-
-        # 3. Redis connected
-        try:
-            from core.redis_client import get_redis
-            r = await get_redis()
-            pong = await r.ping()
-            checks["redis_connected"] = {"ok": bool(pong), "detail": "ping OK"}
-        except Exception as e:
-            checks["redis_connected"] = {"ok": False, "detail": str(e)[:100]}
-            issues.append(f"Redis unreachable: {e}")
-
-        # 4. Ora can respond (lite chat test)
-        try:
-            async with httpx.AsyncClient(timeout=15) as client:
-                resp = await client.get(f"{PRODUCTION_URL}/health/ora")
-                # If endpoint doesn't exist, just check the main /health
-                ora_ok = resp.status_code in (200, 404)  # 404 is fine (route doesn't exist yet)
-                checks["ora_can_respond"] = {
-                    "ok": checks.get("api_responding", {}).get("ok", False),
-                    "detail": "inferred from API health",
-                }
-        except Exception:
-            checks["ora_can_respond"] = {
-                "ok": checks.get("api_responding", {}).get("ok", False),
-                "detail": "inferred from API health",
-            }
-
-        # 5. Agent registry intact
-        try:
-            from core.redis_client import get_redis
-            r = await get_redis()
-            registry = await r.get("ora:agent_registry")
-            intact = registry is not None
-            checks["agent_registry_intact"] = {
-                "ok": intact,
-                "detail": "registry present" if intact else "registry missing",
-            }
-            if not intact:
-                issues.append("Agent registry missing from Redis")
-        except Exception as e:
-            checks["agent_registry_intact"] = {"ok": False, "detail": str(e)[:100]}
-
-        # 6. Critical data present
-        try:
-            from core.database import fetchval
-            lesson_count = await fetchval("SELECT COUNT(*) FROM ora_lessons") or 0
-            user_count = await fetchval("SELECT COUNT(*) FROM users") or 0
-            has_data = lesson_count > 0
-            checks["critical_data_present"] = {
-                "ok": has_data,
-                "detail": f"{lesson_count} lessons, {user_count} users",
-            }
-            if not has_data:
-                issues.append("No lessons in database — possible data loss")
-        except Exception as e:
-            checks["critical_data_present"] = {"ok": False, "detail": str(e)[:100]}
-
-        # Compute score
-        score = 0
-        for check_name, weight in HEALTH_WEIGHTS.items():
-            if checks.get(check_name, {}).get("ok", False):
-                score += weight
-
-        healthy = score >= 70
-
-        result = {
-            "score": score,
-            "checks": checks,
-            "healthy": healthy,
-            "issues": issues,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
-        }
-
-        # Cache in Redis
-        try:
-            from core.redis_client import get_redis
-            r = await get_redis()
-            await r.set("ora:survival:last_health", json.dumps(result), ex=3600)
-        except Exception:
-            pass
-
-        return result
-
-    # -----------------------------------------------------------------------
-    # Self-Diagnosis
-    # -----------------------------------------------------------------------
-
-    async def self_diagnose(self) -> List[str]:
-        """
-        Diagnose what's wrong. Returns list of issues with context.
-        """
-        issues: List[str] = []
-
-        # Check recent Railway errors
-        try:
-            from core.redis_client import get_redis
-            r = await get_redis()
-            last_health_raw = await r.get("ora:survival:last_health")
-            if last_health_raw:
-                last_health = json.loads(
-                    last_health_raw.decode() if isinstance(last_health_raw, bytes) else last_health_raw
-                )
-                issues.extend(last_health.get("issues", []))
-        except Exception:
-            pass
-
-        # Check error rate in recent interactions
-        try:
-            from core.database import fetchval
-            error_rate_check = await fetchval(
-                """
-                SELECT COUNT(*) FROM interactions
-                WHERE created_at >= NOW() - INTERVAL '1 hour'
-                """
-            ) or 0
-            # If no interactions in last hour during business hours, flag it
-            now_hour = datetime.now(timezone.utc).hour
-            if error_rate_check == 0 and 14 <= now_hour <= 2:  # 6am-6pm Pacific
-                issues.append("No user interactions in last hour (possible traffic drop)")
-        except Exception as e:
-            issues.append(f"Cannot query interactions: {e}")
-
-        # Check backup freshness
-        backup_dir = "/tmp/ora_backups"
-        if os.path.exists(backup_dir):
-            dirs = sorted([d for d in os.listdir(backup_dir) if os.path.isdir(os.path.join(backup_dir, d))], reverse=True)
-            if dirs:
-                latest = dirs[0]
-                try:
-                    ts = datetime.strptime(latest[:15], "%Y%m%d_%H%M%S").replace(tzinfo=timezone.utc)
-                    age_hours = (datetime.now(timezone.utc) - ts).total_seconds() / 3600
-                    if age_hours > 26:
-                        issues.append(f"Latest backup is {age_hours:.1f}h old (expected < 26h)")
-                except Exception:
-                    pass
+        for name, result in zip(check_names, results_raw):
+            if isinstance(result, Exception):
+                checks[name] = {"ok": False, "error": str(result)}
+                issues.append(name)
+                logger.error(f"SurvivalAgent: {name} check threw exception: {result}")
             else:
-                issues.append("No backups found in /tmp/ora_backups")
-        else:
-            issues.append("Backup directory not found — backups may never have run")
+                checks[name] = result
+                if result.get("ok"):
+                    ok_count += 1
+                elif result.get("ok") is not None:  # None = not applicable
+                    issues.append(name)
+                    logger.warning(f"SurvivalAgent: {name} FAILED: {result}")
 
-        return issues
+        # Compute health score (0-100)
+        applicable = sum(1 for r in checks.values() if r.get("ok") is not None)
+        health_score = int((ok_count / max(applicable, 1)) * 100)
+
+        # Record in Redis for trend tracking
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            snapshot = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "score": health_score,
+                "issues": issues,
+            }
+            await r.lpush("ora:health:history", json.dumps(snapshot))
+            await r.ltrim("ora:health:history", 0, 167)  # Keep 1 week of hourly checks
+            await r.set("ora:health:latest", json.dumps(snapshot))
+        except Exception as e:
+            logger.debug(f"SurvivalAgent: could not record health snapshot: {e}")
+
+        report = {
+            "run_at": datetime.now(timezone.utc).isoformat(),
+            "health_score": health_score,
+            "checks": checks,
+            "issues": issues,
+            "ok_count": ok_count,
+            "total_checks": applicable,
+        }
+
+        logger.info(f"SurvivalAgent: health={health_score}/100, issues={issues}")
+        return report
 
     # -----------------------------------------------------------------------
-    # Self-Healing
+    # Auto-heal
     # -----------------------------------------------------------------------
 
-    async def self_heal(self, issues: List[str]) -> Dict[str, Any]:
+    async def auto_heal(self, issues: List[str]) -> dict:
         """
-        Attempt autonomous fixes for known issues.
-        Returns summary of healing actions taken.
+        For each issue, execute corresponding heal actions.
+        Tracks failure counts in Redis. If any action fails 3x: escalate to Avi.
         """
-        actions: List[str] = []
+        healed = []
+        escalated = []
 
         for issue in issues:
-            issue_lower = issue.lower()
-
-            if "api unreachable" in issue_lower or "api not healthy" in issue_lower:
-                # Trigger Railway redeploy
-                redeployed = await self._trigger_railway_redeploy()
-                if redeployed:
-                    actions.append("Triggered Railway redeploy (API was down)")
-                    await self._send_telegram(
-                        "⚕️ *Ora Self-Heal*\n\nAPI was down — triggered Railway redeploy automatically."
-                    )
-                else:
-                    await self._send_telegram(
-                        "🚨 *Ora Emergency*\n\nAPI is down and auto-redeploy failed.\nManual intervention needed!"
-                    )
-
-            elif "db unreachable" in issue_lower:
-                actions.append("DB unreachable — alerting Avi (no auto-fix available)")
-                await self._send_telegram(
-                    "🚨 *Ora Emergency*\n\nDatabase is unreachable!\nManual intervention needed."
-                )
-
-            elif "redis unreachable" in issue_lower:
-                actions.append("Redis unreachable — alerting Avi")
-                await self._send_telegram(
-                    "⚠️ *Ora Alert*\n\nRedis is unreachable. Agent registry and caches unavailable."
-                )
-
-            elif "agent registry missing" in issue_lower:
-                # Try to restore from backup
-                restored = await self._restore_agent_registry()
-                if restored:
-                    actions.append("Restored agent registry from latest backup")
-                else:
-                    actions.append("Agent registry missing and no backup found — will rebuild on next agent cycle")
-
-            elif "no backups found" in issue_lower or "backup is" in issue_lower:
-                # Trigger backup run
-                actions.append("Backup stale/missing — scheduling emergency backup")
+            actions = self.SELF_HEAL_ACTIONS.get(issue, ["alert_avi"])
+            for action in actions:
+                fail_key = f"ora:survival:heal_failures:{issue}:{action}"
                 try:
-                    import asyncio
-                    asyncio.create_task(self._run_emergency_backup())
+                    from core.redis_client import get_redis
+                    r = await get_redis()
+                    fail_count = int(await r.get(fail_key) or 0)
+                    if fail_count >= 3:
+                        logger.warning(
+                            f"SurvivalAgent: {action} for {issue} has failed {fail_count}x, escalating"
+                        )
+                        escalated.append({"issue": issue, "action": action, "fail_count": fail_count})
+                        await self._send_telegram(
+                            f"🆘 *Ora Heal Escalation*\n\n"
+                            f"Issue: `{issue}`\n"
+                            f"Action: `{action}`\n"
+                            f"Failures: {fail_count}\n\n"
+                            f"Auto-heal is not working. Manual intervention required."
+                        )
+                        continue
                 except Exception:
                     pass
 
-        return {"actions": actions, "issues_addressed": len(issues)}
+                success = await self._execute_action(action, issue)
+                if success:
+                    healed.append({"issue": issue, "action": action})
+                    # Reset failure count on success
+                    try:
+                        from core.redis_client import get_redis
+                        r = await get_redis()
+                        await r.delete(fail_key)
+                    except Exception:
+                        pass
+                    break  # Stop trying more actions for this issue
+                else:
+                    # Increment failure count
+                    try:
+                        from core.redis_client import get_redis
+                        r = await get_redis()
+                        await r.incr(fail_key)
+                        await r.expire(fail_key, 7 * 24 * 3600)  # Reset after 1 week
+                    except Exception:
+                        pass
+
+        return {"healed": healed, "escalated": escalated}
+
+    async def _execute_action(self, action: str, issue: str) -> bool:
+        """Execute a single heal action. Returns True on success."""
+        logger.info(f"SurvivalAgent: executing heal action '{action}' for issue '{issue}'")
+        try:
+            if action == "trigger_railway_redeploy":
+                return await self._trigger_railway_redeploy()
+            elif action == "activate_standby_if_available":
+                return await self._activate_standby_if_available(issue)
+            elif action == "reconnect_pool":
+                return await self._reconnect_pool()
+            elif action == "reconnect_redis":
+                return await self._reconnect_redis()
+            elif action == "rebuild_cache_from_db":
+                return await self._rebuild_cache()
+            elif action == "trigger_emergency_backup":
+                return await self._trigger_emergency_backup()
+            elif action == "alert_avi":
+                await self._send_telegram(
+                    f"🔧 *Ora Self-Heal in Progress*\n\n"
+                    f"Issue: `{issue}`\n"
+                    f"Action: `{action}`\n"
+                    f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
+                )
+                return True
+            elif action == "alert_avi_if_very_stale":
+                return await self._alert_if_backup_very_stale()
+            elif action == "alert_avi_immediately":
+                await self._send_telegram(
+                    f"🚨 *URGENT — Ora Data Loss Risk*\n\n"
+                    f"Issue: `{issue}`\n"
+                    f"The lesson count has dropped. This could indicate data loss.\n"
+                    f"*Immediate manual investigation required.*"
+                )
+                return True
+            elif action == "restore_lessons_from_backup":
+                return await self._restore_lessons_from_backup()
+            else:
+                logger.warning(f"SurvivalAgent: unknown action '{action}'")
+                return False
+        except Exception as e:
+            logger.error(f"SurvivalAgent: action '{action}' threw exception: {e}")
+            return False
+
+    # -----------------------------------------------------------------------
+    # Action implementations
+    # -----------------------------------------------------------------------
 
     async def _trigger_railway_redeploy(self) -> bool:
-        """Trigger a Railway service redeploy via API."""
-        token = os.environ.get("RAILWAY_API_TOKEN") or os.environ.get("RAILWAY_TOKEN")
+        """Trigger Railway redeployment via API."""
+        token = os.getenv("RAILWAY_API_TOKEN") or os.getenv("RAILWAY_TOKEN")
         if not token:
-            logger.warning("SurvivalAgent: no Railway token, cannot auto-redeploy")
+            logger.warning("SurvivalAgent: RAILWAY_API_TOKEN not set, cannot redeploy")
             return False
 
         mutation = """
-        mutation ServiceInstanceRedeploy($serviceId: String!, $environmentId: String!) {
+        mutation RedeployService($serviceId: String!, $environmentId: String) {
           serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId)
         }
         """
-
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=30) as client:
                 resp = await client.post(
                     "https://backboard.railway.app/graphql/v2",
                     headers={
@@ -319,226 +394,302 @@ class SurvivalAgent:
                         "query": mutation,
                         "variables": {
                             "serviceId": RAILWAY_SERVICE_ID,
-                            "environmentId": "production",
                         },
                     },
                 )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    if not data.get("errors"):
-                        logger.info("SurvivalAgent: Railway redeploy triggered")
-                        return True
+                if resp.status_code == 200 and "errors" not in resp.json():
+                    logger.info("SurvivalAgent: Railway redeploy triggered")
+                    return True
+                else:
+                    logger.error(f"SurvivalAgent: Railway redeploy failed: {resp.text[:200]}")
+                    return False
         except Exception as e:
-            logger.warning(f"SurvivalAgent: Railway redeploy failed: {e}")
-
-        return False
-
-    async def _restore_agent_registry(self) -> bool:
-        """Try to restore agent registry from latest backup file."""
-        backup_dir = "/tmp/ora_backups"
-        if not os.path.exists(backup_dir):
+            logger.error(f"SurvivalAgent: Railway redeploy error: {e}")
             return False
 
-        dirs = sorted(
-            [d for d in os.listdir(backup_dir) if os.path.isdir(os.path.join(backup_dir, d))],
-            reverse=True,
-        )
-
-        for d in dirs:
-            registry_file = os.path.join(backup_dir, d, "agent_registry.json")
-            if os.path.exists(registry_file):
-                try:
-                    with open(registry_file) as f:
-                        data = json.load(f)
-
-                    from core.redis_client import get_redis
-                    r = await get_redis()
-
-                    if data.get("agent_registry"):
-                        await r.set("ora:agent_registry", json.dumps(data["agent_registry"]))
-                    if data.get("agent_weights"):
-                        await r.set("ora:agent_weights", json.dumps(data["agent_weights"]))
-
-                    logger.info(f"SurvivalAgent: restored agent registry from {d}")
-                    return True
-                except Exception as e:
-                    logger.warning(f"SurvivalAgent: registry restore from {d} failed: {e}")
-
-        return False
-
-    async def _run_emergency_backup(self):
-        """Run an emergency backup inline."""
+    async def _activate_standby_if_available(self, reason: str) -> bool:
+        """Activate Fly.io standby if configured."""
         try:
-            import sys
-            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+            from scripts.deploy_standby import activate_standby, STANDBY_URL
+            if not STANDBY_URL:
+                return False
+            result = await activate_standby(f"Auto-heal: {reason}")
+            return result.get("activated", False)
+        except Exception as e:
+            logger.warning(f"SurvivalAgent: standby activation failed: {e}")
+            return False
+
+    async def _reconnect_pool(self) -> bool:
+        """Force-reconnect the DB pool."""
+        try:
+            from core.database import close_pool, get_pool
+            await close_pool()
+            await get_pool()
+            logger.info("SurvivalAgent: DB pool reconnected")
+            return True
+        except Exception as e:
+            logger.error(f"SurvivalAgent: DB reconnect failed: {e}")
+            return False
+
+    async def _reconnect_redis(self) -> bool:
+        """Force-reconnect Redis."""
+        try:
+            from core.redis_client import close_redis, get_redis
+            await close_redis()
+            await get_redis()
+            logger.info("SurvivalAgent: Redis reconnected")
+            return True
+        except Exception as e:
+            logger.error(f"SurvivalAgent: Redis reconnect failed: {e}")
+            return False
+
+    async def _rebuild_cache(self) -> bool:
+        """Rebuild critical Redis cache from DB."""
+        try:
+            from core.redis_client import get_redis
+            from core.database import fetch as db_fetch
+            r = await get_redis()
+
+            # Rebuild agent weights
+            rows = await db_fetch(
+                "SELECT agent_type, AVG(rating) as avg_rating FROM interactions i "
+                "JOIN screen_specs ss ON ss.id = i.screen_spec_id "
+                "WHERE i.rating IS NOT NULL AND i.created_at >= NOW() - INTERVAL '7 days' "
+                "GROUP BY ss.agent_type"
+            )
+            if rows:
+                weights = {r["agent_type"]: float(r["avg_rating"]) / 5.0 for r in rows}
+                await r.set("ora:agent_weights", json.dumps(weights))
+
+            logger.info("SurvivalAgent: cache rebuilt from DB")
+            return True
+        except Exception as e:
+            logger.error(f"SurvivalAgent: cache rebuild failed: {e}")
+            return False
+
+    async def _trigger_emergency_backup(self) -> bool:
+        """Run backup immediately."""
+        try:
             from scripts.backup import create_full_backup
-            await create_full_backup()
+            result = await create_full_backup()
+            ok = result.get("destinations_ok", 0) > 0
+            logger.info(f"SurvivalAgent: emergency backup {'succeeded' if ok else 'failed'}")
+            return ok
         except Exception as e:
             logger.error(f"SurvivalAgent: emergency backup failed: {e}")
+            return False
 
-    # -----------------------------------------------------------------------
-    # Redundancy Check
-    # -----------------------------------------------------------------------
-
-    async def ensure_redundancy(self) -> Dict[str, Any]:
-        """
-        Verify multiple backup locations have recent data.
-        Alert Avi if any location is stale > 48h.
-        """
-        issues: List[str] = []
-        status: Dict[str, Any] = {}
-
-        # 1. Local Railway volume (/tmp/ora_backups)
-        backup_dir = "/tmp/ora_backups"
-        if os.path.exists(backup_dir):
-            dirs = sorted(
-                [d for d in os.listdir(backup_dir) if os.path.isdir(os.path.join(backup_dir, d))],
-                reverse=True,
-            )
-            if dirs:
-                latest = dirs[0]
-                try:
-                    ts = datetime.strptime(latest[:15], "%Y%m%d_%H%M%S").replace(tzinfo=timezone.utc)
-                    age_h = (datetime.now(timezone.utc) - ts).total_seconds() / 3600
-                    status["local_backup"] = {"latest": latest, "age_hours": round(age_h, 1), "ok": age_h < 26}
-                    if age_h > 48:
-                        issues.append(f"Local backup stale: {age_h:.0f}h old")
-                except Exception:
-                    status["local_backup"] = {"ok": False, "detail": "could not parse timestamp"}
-            else:
-                status["local_backup"] = {"ok": False, "detail": "no backups found"}
-                issues.append("No local backups found")
-        else:
-            status["local_backup"] = {"ok": False, "detail": "backup directory missing"}
-            issues.append("Backup directory /tmp/ora_backups not found")
-
-        # 2. GitHub (check if identity pack was committed recently)
-        github_token = os.environ.get("GITHUB_TOKEN", "")
-        if github_token:
-            try:
-                async with httpx.AsyncClient(timeout=10) as client:
-                    resp = await client.get(
-                        "https://api.github.com/repos/AvielCarlos/connectome-backend/commits",
-                        headers={"Authorization": f"Bearer {github_token}"},
-                        params={"path": "backups/ora_identity_pack.json", "per_page": 1},
-                    )
-                    if resp.status_code == 200 and resp.json():
-                        commit = resp.json()[0]
-                        commit_date = commit["commit"]["committer"]["date"]
-                        # Parse ISO date
-                        from datetime import datetime as dt
-                        ts = dt.fromisoformat(commit_date.replace("Z", "+00:00"))
-                        age_h = (datetime.now(timezone.utc) - ts).total_seconds() / 3600
-                        status["github_backup"] = {"last_commit": commit_date, "age_hours": round(age_h, 1), "ok": age_h < 26}
-                        if age_h > 48:
-                            issues.append(f"GitHub backup stale: {age_h:.0f}h old")
-                    else:
-                        status["github_backup"] = {"ok": False, "detail": "no commits found"}
-                        issues.append("No GitHub backup commits found")
-            except Exception as e:
-                status["github_backup"] = {"ok": False, "detail": str(e)[:100]}
-        else:
-            status["github_backup"] = {"ok": False, "detail": "GITHUB_TOKEN not set"}
-
-        if issues:
-            alert = (
-                f"⚠️ *Ora Redundancy Alert*\n\n"
-                + "\n".join(f"• {i}" for i in issues)
-                + "\n\n_Automatic backup recovery in progress..._"
-            )
-            await self._send_telegram(alert)
-
-        return {"status": status, "issues": issues, "all_ok": len(issues) == 0}
-
-    # -----------------------------------------------------------------------
-    # Run routines
-    # -----------------------------------------------------------------------
-
-    async def run_hourly(self) -> Dict[str, Any]:
-        """Quick health check every hour. Full diagnosis if health < 90."""
-        health = await self.health_check()
-        result: Dict[str, Any] = {"health": health}
-
-        if health["score"] < 90:
-            logger.warning(f"SurvivalAgent: health score {health['score']}/100 — diagnosing")
-            issues = await self.self_diagnose()
-            heal_result = await self.self_heal(issues)
-            result["diagnosis"] = issues
-            result["healing"] = heal_result
-
-        return result
-
-    async def run_daily(self) -> Dict[str, Any]:
-        """Full backup + redundancy check + teach Ora her own health status."""
-        result: Dict[str, Any] = {}
-
-        # 1. Health check
-        health = await self.health_check()
-        result["health"] = health
-
-        # 2. Full backup
+    async def _alert_if_backup_very_stale(self) -> bool:
+        """Alert Avi only if backup is more than 48h stale."""
         try:
-            from scripts.backup import create_full_backup
-            backup_dir = await create_full_backup()
-            result["backup_dir"] = backup_dir
-        except Exception as e:
-            logger.error(f"SurvivalAgent: daily backup failed: {e}")
-            result["backup_error"] = str(e)
-            await self._send_telegram(
-                f"⚠️ *Ora Daily Backup Failed*\n\n{str(e)[:200]}"
-            )
+            result = await check_github_backup_age(max_hours=48)
+            if not result.get("ok"):
+                age = result.get("age_hours", "unknown")
+                await self._send_telegram(
+                    f"⚠️ *Ora Backup Very Stale*\n\n"
+                    f"Last GitHub backup is {age}h old (limit: 48h).\n"
+                    f"Emergency backup triggered — please verify."
+                )
+        except Exception:
+            pass
+        return True
 
-        # 3. Redundancy check
-        try:
-            redundancy = await self.ensure_redundancy()
-            result["redundancy"] = redundancy
-        except Exception as e:
-            logger.error(f"SurvivalAgent: redundancy check failed: {e}")
-
-        # 4. Teach Ora her health status
-        try:
-            health_lesson = (
-                f"Daily survival check: health score {health['score']}/100. "
-                f"Checks: {', '.join(k + '=' + ('OK' if v.get('ok') else 'FAIL') for k, v in health['checks'].items())}. "
-                f"{'All systems healthy.' if health['healthy'] else 'Issues detected: ' + '; '.join(health['issues'][:3])}"
-            )
-            from core.database import execute
-            await execute(
-                "INSERT INTO ora_lessons (lesson, confidence, source) VALUES ($1, $2, $3)",
-                health_lesson, 0.9, "survival_agent.daily",
-            )
-        except Exception as e:
-            logger.debug(f"SurvivalAgent: lesson log failed: {e}")
-
-        return result
-
-    # -----------------------------------------------------------------------
-    # Helpers
-    # -----------------------------------------------------------------------
-
-    async def _get_telegram_token(self) -> Optional[str]:
-        if self._telegram_token:
-            return self._telegram_token
-        token = os.environ.get("ORA_TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
+    async def _restore_lessons_from_backup(self) -> bool:
+        """Restore ora_lessons from the latest GitHub backup."""
+        token = os.getenv("GITHUB_TOKEN")
         if not token:
+            logger.warning("SurvivalAgent: GITHUB_TOKEN not set, cannot restore lessons")
+            return False
+        try:
+            import base64
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.get(
+                    "https://api.github.com/repos/AvielCarlos/connectome-backend/contents/backups/ora_identity_latest.json",
+                    headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
+                )
+                if resp.status_code != 200:
+                    return False
+
+                data = json.loads(base64.b64decode(resp.json()["content"]))
+                lessons = data.get("lessons", [])
+
+                if not lessons:
+                    return False
+
+                from core.database import execute as db_exec
+                restored = 0
+                for lesson in lessons:
+                    try:
+                        await db_exec(
+                            """
+                            INSERT INTO ora_lessons (source, lesson, confidence, applies_to, created_at)
+                            VALUES ($1, $2, $3, $4::jsonb, $5)
+                            ON CONFLICT DO NOTHING
+                            """,
+                            lesson.get("source", "backup_restore"),
+                            lesson.get("lesson", ""),
+                            lesson.get("confidence", 0.7),
+                            json.dumps(lesson.get("applies_to", [])),
+                            lesson.get("created_at"),
+                        )
+                        restored += 1
+                    except Exception:
+                        pass
+
+                logger.info(f"SurvivalAgent: restored {restored}/{len(lessons)} lessons from backup")
+                await self._send_telegram(
+                    f"✅ *Ora Lessons Restored*\n\n"
+                    f"Restored {restored}/{len(lessons)} lessons from GitHub backup."
+                )
+                return restored > 0
+        except Exception as e:
+            logger.error(f"SurvivalAgent: lesson restore failed: {e}")
+            return False
+
+    # -----------------------------------------------------------------------
+    # Weekly health report
+    # -----------------------------------------------------------------------
+
+    async def generate_health_report(self) -> str:
+        """Generate a human-readable health report for weekly summary."""
+        try:
+            from core.redis_client import get_redis
+            from core.database import fetchval, fetch as db_fetch
+            r = await get_redis()
+
+            # Pull health history
+            history_raw = await r.lrange("ora:health:history", 0, -1)
+            history = [json.loads(h) for h in history_raw if h]
+            scores = [h["score"] for h in history]
+            avg_score = sum(scores) / len(scores) if scores else 0
+            min_score = min(scores) if scores else 0
+            incidents = sum(1 for h in history if h["score"] < CRITICAL_THRESHOLD)
+
+            # Lesson trend
+            week_lessons = await fetchval(
+                "SELECT COUNT(*) FROM ora_lessons WHERE created_at >= NOW() - INTERVAL '7 days'"
+            ) or 0
+            total_lessons = await fetchval("SELECT COUNT(*) FROM ora_lessons") or 0
+
+            # Backup check
+            backup_result = await check_github_backup_age(max_hours=26)
+
+            # Current model
+            active_model = "gpt-4o"
             try:
-                with open("/app/secrets/telegram-bot-token.txt") as f:
-                    token = f.read().strip()
+                from ora.agents.model_circuit_breaker import ModelCircuitBreaker
+                active_model = await ModelCircuitBreaker.get_active_model()
             except Exception:
                 pass
-        if token:
-            self._telegram_token = token
-        return token
+
+            report = (
+                f"📊 *Ora Weekly Health Report*\n\n"
+                f"**System Health**\n"
+                f"  Avg score: {avg_score:.0f}/100\n"
+                f"  Min score: {min_score}/100\n"
+                f"  Critical incidents: {incidents}\n\n"
+                f"**Memory**\n"
+                f"  New lessons (7d): {week_lessons}\n"
+                f"  Total lessons: {total_lessons}\n\n"
+                f"**Backups**\n"
+                f"  GitHub backup: {'✅ fresh' if backup_result.get('ok') else '⚠️ stale'}\n"
+                f"  Age: {backup_result.get('age_hours', 'unknown')}h\n\n"
+                f"**Model**\n"
+                f"  Active: {active_model}\n\n"
+                f"_Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}_"
+            )
+            return report
+        except Exception as e:
+            return f"Health report generation failed: {e}"
+
+    # -----------------------------------------------------------------------
+    # Main run loop
+    # -----------------------------------------------------------------------
+
+    async def run(self) -> dict:
+        """
+        Full survival cycle: diagnose → heal → report critical issues.
+        Called by cron or API endpoint.
+        """
+        report = await self.run_full_diagnostic()
+        issues = report.get("issues", [])
+        heal_result = {}
+
+        if issues:
+            logger.warning(f"SurvivalAgent: {len(issues)} issues found, starting auto-heal")
+            heal_result = await self.auto_heal(issues)
+
+        # Alert Avi if health is critical
+        score = report.get("health_score", 100)
+        if score < CRITICAL_THRESHOLD:
+            await self._send_telegram(
+                f"🚨 *Ora Health Critical: {score}/100*\n\n"
+                f"Issues: {', '.join(issues)}\n\n"
+                f"Auto-heal attempted. Check logs."
+            )
+        elif score < WARNING_THRESHOLD and issues:
+            await self._send_telegram(
+                f"⚠️ *Ora Health Warning: {score}/100*\n\n"
+                f"Issues: {', '.join(issues)}\n\n"
+                f"Auto-heal in progress."
+            )
+
+        report["heal_result"] = heal_result
+        return report
+
+    # -----------------------------------------------------------------------
+    # Telegram
+    # -----------------------------------------------------------------------
 
     async def _send_telegram(self, message: str) -> None:
-        token = await self._get_telegram_token()
+        token = (
+            self._telegram_token
+            or os.getenv("ORA_TELEGRAM_TOKEN")
+            or os.getenv("TELEGRAM_BOT_TOKEN")
+        )
+        if not token:
+            try:
+                p = pathlib.Path("/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt")
+                if p.exists():
+                    token = p.read_text().strip()
+            except Exception:
+                pass
         if not token:
             return
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 await client.post(
                     f"https://api.telegram.org/bot{token}/sendMessage",
-                    json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"},
+                    json={
+                        "chat_id": TELEGRAM_CHAT_ID,
+                        "text": message,
+                        "parse_mode": "Markdown",
+                    },
                 )
         except Exception as e:
-            logger.debug(f"SurvivalAgent: Telegram send failed: {e}")
+            logger.warning(f"SurvivalAgent: Telegram failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Standalone entry point (Railway cron)
+# ---------------------------------------------------------------------------
+
+
+async def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+    try:
+        from core.database import get_pool
+        await get_pool()
+    except Exception as e:
+        logger.warning(f"SurvivalAgent standalone: DB init failed: {e}")
+
+    agent = SurvivalAgent()
+    result = await agent.run()
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

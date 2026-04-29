@@ -120,9 +120,14 @@ async def track_affiliate_conversion(
 
 @router.get("/admin/insights", response_model=AdminInsights)
 async def admin_insights(
-    # In production this would require an admin role check
     user_id: str = Depends(get_current_user_id),
 ):
+    # Enforce admin-only access
+    user_row = await fetchrow(
+        "SELECT is_admin FROM users WHERE id = $1", UUID(user_id)
+    )
+    if not user_row or not user_row["is_admin"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
     """
     Aggregate insights for the admin dashboard.
     Returns user stats, revenue, and top-performing agents.

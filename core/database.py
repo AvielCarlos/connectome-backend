@@ -1503,6 +1503,93 @@ async def run_migrations():
             ON ioo_surfaces(status)
         """)
 
+        # ─── Migration 008: Gamification — Streaks, XP, Badges, Collections ───
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_streaks (
+                id                  SERIAL PRIMARY KEY,
+                user_id             UUID REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+                current_streak      INT DEFAULT 0,
+                longest_streak      INT DEFAULT 0,
+                last_activity_date  DATE,
+                streak_frozen_until DATE,
+                created_at          TIMESTAMPTZ DEFAULT NOW(),
+                updated_at          TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS streaks_user_idx ON user_streaks(user_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS streaks_last_activity_idx ON user_streaks(last_activity_date)")
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS xp_log (
+                id          BIGSERIAL PRIMARY KEY,
+                user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+                amount      INT NOT NULL,
+                reason      VARCHAR(80) NOT NULL,
+                ref_id      VARCHAR(120),
+                created_at  TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS xp_log_user_idx ON xp_log(user_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS xp_log_created_at_idx ON xp_log(created_at)")
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_badges (
+                id          BIGSERIAL PRIMARY KEY,
+                user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+                badge_key   VARCHAR(60) NOT NULL,
+                badge_name  VARCHAR(80) NOT NULL,
+                badge_emoji VARCHAR(8)  NOT NULL,
+                earned_at   TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(user_id, badge_key)
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS badges_user_idx ON user_badges(user_id)")
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS collections (
+                id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id     UUID REFERENCES users(id) ON DELETE CASCADE,
+                name        VARCHAR(120) NOT NULL,
+                emoji       VARCHAR(8) DEFAULT '\u2746',
+                color       VARCHAR(20) DEFAULT '#00d4aa',
+                created_at  TIMESTAMPTZ DEFAULT NOW(),
+                updated_at  TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS collections_user_idx ON collections(user_id)")
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS collection_items (
+                id              BIGSERIAL PRIMARY KEY,
+                collection_id   UUID REFERENCES collections(id) ON DELETE CASCADE,
+                screen_spec_id  VARCHAR(120),
+                card_title      VARCHAR(255),
+                card_body       TEXT,
+                card_domain     VARCHAR(60),
+                card_color      VARCHAR(20),
+                saved_at        TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(collection_id, screen_spec_id)
+            )
+        """)
+        await conn.execute("CREATE INDEX IF NOT EXISTS collection_items_col_idx ON collection_items(collection_id)")
+
+        # DAO LTV columns — idempotent, added after initial DAO migration
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS ltv_cp_total INTEGER DEFAULT 0
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS ltv_last_evaluated_at TIMESTAMPTZ
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS ltv_monthly_rate INTEGER DEFAULT 0
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS is_ltv_active BOOLEAN DEFAULT false
+        """)
+        await conn.execute("""
+            ALTER TABLE contributions ADD COLUMN IF NOT EXISTS months_active INTEGER DEFAULT 0
+        """)
+
         logger.info("Database migrations complete")
 
 

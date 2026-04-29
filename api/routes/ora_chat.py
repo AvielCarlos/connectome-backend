@@ -213,8 +213,12 @@ async def get_latest_reflection(
         brain = get_brain()
         consciousness = getattr(brain, "consciousness", None)
         if consciousness:
-            reflection = await consciousness.reflect()
-            return reflection.to_dict()
+            try:
+                reflection = await consciousness.reflect()
+                return reflection.to_dict()
+            except Exception as _ref_err:
+                logger.error(f"Reflection generation failed: {_ref_err}")
+                raise HTTPException(status_code=500, detail="Could not generate reflection")
         return {"message": "No reflections yet"}
 
     r = dict(row)

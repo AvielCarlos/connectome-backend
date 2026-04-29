@@ -65,14 +65,14 @@ async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> str:
 async def require_premium(
     user_id: str = Depends(get_current_user_id),
 ) -> str:
-    """FastAPI dependency: require premium subscription."""
+    """FastAPI dependency: require explorer or sovereign subscription."""
     row = await fetchrow(
         "SELECT subscription_tier FROM users WHERE id = $1", UUID(user_id)
     )
-    if not row or row["subscription_tier"] != "premium":
+    if not row or row["subscription_tier"] not in ("explorer", "sovereign", "premium"):
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail="Premium subscription required",
+            detail="Explorer or Sovereign subscription required",
         )
     return user_id
 

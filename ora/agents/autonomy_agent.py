@@ -60,10 +60,70 @@ class OraAutonomyAgent:
     # Entry point
     # -----------------------------------------------------------------------
 
+    async def _watchdog_step(
+        self,
+        step_name: str,
+        coro,
+        report: Dict[str, Any],
+        report_key: str,
+        failed_steps: list,
+    ) -> None:
+        """
+        Wraps every autonomy step with:
+        - Logging on failure
+        - Continuation regardless (never abort the whole cycle)
+        - Redis failure count tracking per step
+        - Alert Avi if a step fails 5x in a row
+        """
+        try:
+            result = await coro
+            report[report_key] = result
+            # Reset failure count on success
+            try:
+                from core.redis_client import get_redis
+                r = await get_redis()
+                await r.delete(f"ora:autonomy:failures:{step_name}")
+            except Exception:
+                pass
+        except Exception as e:
+            logger.error(f"OraAutonomy {step_name} failed: {e}")
+            report[report_key] = {"error": str(e)}
+            failed_steps.append(step_name)
+
+            # Track consecutive failures in Redis
+            try:
+                from core.redis_client import get_redis
+                r = await get_redis()
+                fail_key = f"ora:autonomy:failures:{step_name}"
+                fail_count = await r.incr(fail_key)
+                await r.expire(fail_key, 7 * 24 * 3600)
+
+                if fail_count >= 5:
+                    # Disable this step and alert Avi
+                    await r.set(f"ora:autonomy:disabled:{step_name}", "1", ex=48 * 3600)
+                    await self._send_telegram(
+                        f"⚠️ *Ora Autonomy Step Disabled*\n\n"
+                        f"Step `{step_name}` has failed {fail_count}× in a row.\n"
+                        f"Disabled for 48h. Error: {str(e)[:200]}"
+                    )
+                    logger.warning(f"OraAutonomy: {step_name} disabled after {fail_count} failures")
+            except Exception as redis_err:
+                logger.debug(f"OraAutonomy watchdog redis tracking failed: {redis_err}")
+
+    async def _is_step_disabled(self, step_name: str) -> bool:
+        """Check if a step has been disabled due to repeated failures."""
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            return bool(await r.get(f"ora:autonomy:disabled:{step_name}"))
+        except Exception:
+            return False
+
     async def run(self) -> Dict[str, Any]:
         """
         Execute the full autonomy cycle. Returns a summary dict.
         This is called by POST /api/ora/autonomy/run.
+        Every step is isolated — one failure never aborts the cycle.
         """
         logger.info("OraAutonomy: starting full cycle")
         report: Dict[str, Any] = {
@@ -77,29 +137,57 @@ class OraAutonomyAgent:
             "user_count": 0,
             "active_users": 0,
         }
+        failed_steps: list = []
 
         # A. A/B Test Auto-Promotion
-        try:
-            ab_result = await self._ab_auto_promote()
-            report["ab_winner"] = ab_result.get("winner")
-            report["ab_scores"] = ab_result.get("scores", {})
-        except Exception as e:
-            logger.error(f"OraAutonomy A/B promotion failed: {e}")
+        if not await self._is_step_disabled("ab_auto_promote"):
+            try:
+                ab_result = await self._ab_auto_promote()
+                report["ab_winner"] = ab_result.get("winner")
+                report["ab_scores"] = ab_result.get("scores", {})
+                try:
+                    from core.redis_client import get_redis
+                    r = await get_redis()
+                    await r.delete("ora:autonomy:failures:ab_auto_promote")
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"OraAutonomy A/B promotion failed: {e}")
+                failed_steps.append("ab_auto_promote")
+                await self._track_step_failure("ab_auto_promote", e)
 
         # B. Bug Detection & Auto-Fix
-        try:
-            bug_result = await self._detect_and_fix_bugs()
-            report["bugs_found"] = bug_result.get("found", [])
-            report["bugs_fixed"] = bug_result.get("fixed", [])
-        except Exception as e:
-            logger.error(f"OraAutonomy bug detection failed: {e}")
+        if not await self._is_step_disabled("detect_and_fix_bugs"):
+            try:
+                bug_result = await self._detect_and_fix_bugs()
+                report["bugs_found"] = bug_result.get("found", [])
+                report["bugs_fixed"] = bug_result.get("fixed", [])
+                try:
+                    from core.redis_client import get_redis
+                    r = await get_redis()
+                    await r.delete("ora:autonomy:failures:detect_and_fix_bugs")
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"OraAutonomy bug detection failed: {e}")
+                failed_steps.append("detect_and_fix_bugs")
+                await self._track_step_failure("detect_and_fix_bugs", e)
 
         # C. Feed Quality Optimizer
-        try:
-            weight_result = await self._optimize_feed_weights()
-            report["weight_changes"] = weight_result.get("changes", [])
-        except Exception as e:
-            logger.error(f"OraAutonomy weight optimizer failed: {e}")
+        if not await self._is_step_disabled("optimize_feed_weights"):
+            try:
+                weight_result = await self._optimize_feed_weights()
+                report["weight_changes"] = weight_result.get("changes", [])
+                try:
+                    from core.redis_client import get_redis
+                    r = await get_redis()
+                    await r.delete("ora:autonomy:failures:optimize_feed_weights")
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"OraAutonomy weight optimizer failed: {e}")
+                failed_steps.append("optimize_feed_weights")
+                await self._track_step_failure("optimize_feed_weights", e)
 
         # D. Daily Autonomy Report
         try:
@@ -113,67 +201,88 @@ class OraAutonomyAgent:
             logger.error(f"OraAutonomy daily report failed: {e}")
 
         # E. Self-improvement cycle
-        try:
-            from ora.agents.self_improvement_agent import SelfImprovementAgent
-            self_agent = SelfImprovementAgent(self._openai, self._telegram_token)
-            improvement_result = await self_agent.run()
-            report["self_improvement"] = improvement_result
-        except Exception as e:
-            logger.error(f"OraAutonomy self-improvement cycle failed: {e}")
-            report["self_improvement"] = {"error": str(e)}
+        if not await self._is_step_disabled("self_improvement"):
+            try:
+                from ora.agents.self_improvement_agent import SelfImprovementAgent
+                self_agent = SelfImprovementAgent(self._openai, self._telegram_token)
+                improvement_result = await self_agent.run()
+                report["self_improvement"] = improvement_result
+                try:
+                    from core.redis_client import get_redis
+                    r = await get_redis()
+                    await r.delete("ora:autonomy:failures:self_improvement")
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.error(f"OraAutonomy self-improvement cycle failed: {e}")
+                report["self_improvement"] = {"error": str(e)}
+                failed_steps.append("self_improvement")
+                await self._track_step_failure("self_improvement", e)
 
         # F. Self-improvement eval loop (Loop 2: did last change actually help?)
-        try:
-            from ora.agents.self_improvement_agent import SelfImprovementAgent
-            eval_agent = SelfImprovementAgent(self._openai, self._telegram_token)
-            eval_result = await eval_agent.run_eval_loop()
-            report["self_improvement_eval"] = eval_result
-        except Exception as e:
-            logger.error(f"OraAutonomy eval_loop failed: {e}")
-            report["self_improvement_eval"] = {"error": str(e)}
+        if not await self._is_step_disabled("self_improvement_eval"):
+            try:
+                from ora.agents.self_improvement_agent import SelfImprovementAgent
+                eval_agent = SelfImprovementAgent(self._openai, self._telegram_token)
+                eval_result = await eval_agent.run_eval_loop()
+                report["self_improvement_eval"] = eval_result
+            except Exception as e:
+                logger.error(f"OraAutonomy eval_loop failed: {e}")
+                report["self_improvement_eval"] = {"error": str(e)}
+                failed_steps.append("self_improvement_eval")
+                await self._track_step_failure("self_improvement_eval", e)
 
         # G. Self-improvement meta loop (Loop 3: learn to improve better)
-        try:
-            from ora.agents.self_improvement_agent import SelfImprovementAgent
-            meta_agent = SelfImprovementAgent(self._openai, self._telegram_token)
-            meta_result = await meta_agent.run_meta_loop()
-            report["self_improvement_meta"] = meta_result
-        except Exception as e:
-            logger.error(f"OraAutonomy meta_loop failed: {e}")
-            report["self_improvement_meta"] = {"error": str(e)}
+        if not await self._is_step_disabled("self_improvement_meta"):
+            try:
+                from ora.agents.self_improvement_agent import SelfImprovementAgent
+                meta_agent = SelfImprovementAgent(self._openai, self._telegram_token)
+                meta_result = await meta_agent.run_meta_loop()
+                report["self_improvement_meta"] = meta_result
+            except Exception as e:
+                logger.error(f"OraAutonomy meta_loop failed: {e}")
+                report["self_improvement_meta"] = {"error": str(e)}
+                failed_steps.append("self_improvement_meta")
+                await self._track_step_failure("self_improvement_meta", e)
 
         # H. Agent evolution cycle
-        try:
-            from ora.agents.evolution_agent import OraEvolutionAgent
-            evolution_agent = OraEvolutionAgent(self._openai, self._telegram_token)
-            evolution_result = await evolution_agent.run()
-            report["evolution"] = evolution_result
-        except Exception as e:
-            logger.error(f"OraAutonomy evolution cycle failed: {e}")
-            report["evolution"] = {"error": str(e)}
+        if not await self._is_step_disabled("evolution"):
+            try:
+                from ora.agents.evolution_agent import OraEvolutionAgent
+                evolution_agent = OraEvolutionAgent(self._openai, self._telegram_token)
+                evolution_result = await evolution_agent.run()
+                report["evolution"] = evolution_result
+            except Exception as e:
+                logger.error(f"OraAutonomy evolution cycle failed: {e}")
+                report["evolution"] = {"error": str(e)}
+                failed_steps.append("evolution")
+                await self._track_step_failure("evolution", e)
 
         # I. Product design cycle (UX research → UI evolution → feature spawn)
-        try:
-            from ora.agents.ux_research_agent import UXResearchAgent
-            from ora.agents.ui_evolution_agent import UIEvolutionAgent
-            from ora.agents.feature_spawn_agent import FeatureSpawnAgent
+        if not await self._is_step_disabled("product_design"):
+            try:
+                from ora.agents.ux_research_agent import UXResearchAgent
+                from ora.agents.ui_evolution_agent import UIEvolutionAgent
+                from ora.agents.feature_spawn_agent import FeatureSpawnAgent
 
-            ux_agent = UXResearchAgent(self._openai)
-            ui_agent = UIEvolutionAgent(self._openai, self._telegram_token)
-            feature_agent = FeatureSpawnAgent(self._openai, self._telegram_token)
+                ux_agent = UXResearchAgent(self._openai)
+                ui_agent = UIEvolutionAgent(self._openai, self._telegram_token)
+                feature_agent = FeatureSpawnAgent(self._openai, self._telegram_token)
 
-            ux_insights = await ux_agent.analyze()
-            ui_result = await ui_agent.run()
-            feature_result = await feature_agent.run()
+                ux_insights = await ux_agent.analyze()
+                ui_result = await ui_agent.run()
+                feature_result = await feature_agent.run()
 
-            report["product_design"] = {
-                "ux_insights": ux_insights.get("insights", [])[:3],
-                "ui_changes": ui_result.get("applied", []),
-                "feature_proposals": feature_result.get("proposals", []),
-            }
-        except Exception as e:
-            logger.error(f"OraAutonomy product design cycle failed: {e}")
-            report["product_design"] = {"error": str(e)}
+                report["product_design"] = {
+                    "ux_insights": ux_insights.get("insights", [])[:3],
+                    "ui_changes": ui_result.get("applied", []),
+                    "feature_proposals": feature_result.get("proposals", []),
+                }
+            except Exception as e:
+                logger.error(f"OraAutonomy product design cycle failed: {e}")
+                report["product_design"] = {"error": str(e)}
+                failed_steps.append("product_design")
+                await self._track_step_failure("product_design", e)
 
         # J. Home choice analytics — learn from the directed vs exploratory split
         try:
@@ -258,25 +367,32 @@ class OraAutonomyAgent:
             logger.error(f"OraAutonomy K: CTO health check failed: {e}")
             report["cto_health"] = {"healthy": None, "error": str(e)}
 
-        # L. Survival check — Ora's self-preservation system
+        # L. Survival check — Ora's comprehensive self-healing system
         try:
             from ora.agents.survival_agent import SurvivalAgent
-            survival = SurvivalAgent(self._openai)
-            survival_health = await survival.health_check()
+            survival = SurvivalAgent()
+            survival_report = await survival.run()
             report["survival_health"] = {
-                "score": survival_health.get("score"),
-                "healthy": survival_health.get("healthy"),
+                "score": survival_report.get("health_score"),
+                "issues": survival_report.get("issues", []),
+                "healed": survival_report.get("heal_result", {}).get("healed", []),
             }
-            if survival_health.get("score", 100) < 80:
-                logger.warning(
-                    f"OraAutonomy L: survival health score {survival_health.get('score')}/100 — self-healing"
-                )
-                issues = await survival.self_diagnose()
-                heal_result = await survival.self_heal(issues)
-                report["survival_healing"] = heal_result
         except Exception as e:
             logger.error(f"OraAutonomy L: survival check failed: {e}")
             report["survival_health"] = {"error": str(e)}
+            failed_steps.append("survival")
+            await self._track_step_failure("survival", e)
+
+        # Alert Avi if too many steps failed in this cycle
+        if len(failed_steps) > 3:
+            await self._send_telegram(
+                f"⚠️ *Ora Autonomy Degraded*\n\n"
+                f"{len(failed_steps)} steps failed in this cycle:\n"
+                + "\n".join(f"• {s}" for s in failed_steps)
+                + f"\n\nChecking failure counts — some steps may be auto-disabled."
+            )
+
+        report["failed_steps"] = failed_steps
 
         # Persist last run metadata to Redis
         try:
@@ -294,6 +410,39 @@ class OraAutonomyAgent:
 
         logger.info(f"OraAutonomy: cycle complete — {report}")
         return report
+
+    # -----------------------------------------------------------------------
+    # Watchdog helper
+    # -----------------------------------------------------------------------
+
+    async def _track_step_failure(self, step_name: str, error: Exception) -> None:
+        """
+        Track consecutive failures per autonomy step.
+        If a step fails 5x in a row: disable it for 48h and alert Avi.
+        """
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            fail_key = f"ora:autonomy:failures:{step_name}"
+            fail_count = await r.incr(fail_key)
+            await r.expire(fail_key, 7 * 24 * 3600)  # Reset after 1 week
+
+            if fail_count >= 5:
+                disabled_key = f"ora:autonomy:disabled:{step_name}"
+                already_disabled = await r.get(disabled_key)
+                if not already_disabled:
+                    await r.set(disabled_key, "1", ex=48 * 3600)
+                    await self._send_telegram(
+                        f"⚠️ *Ora Step Auto-Disabled*\n\n"
+                        f"Step `{step_name}` failed {fail_count}× in a row.\n"
+                        f"Auto-disabled for 48h.\n"
+                        f"Last error: `{str(error)[:200]}`"
+                    )
+                    logger.warning(
+                        f"OraAutonomy: {step_name} auto-disabled after {fail_count} failures"
+                    )
+        except Exception as redis_err:
+            logger.debug(f"OraAutonomy: failure tracking redis error: {redis_err}")
 
     # -----------------------------------------------------------------------
     # A. A/B Test Auto-Promotion
