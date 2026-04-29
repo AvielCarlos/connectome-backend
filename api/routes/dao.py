@@ -99,8 +99,11 @@ def _serialize(d: Dict[str, Any]) -> Dict[str, Any]:
 @router.get("/leaderboard")
 async def get_leaderboard(limit: int = 20):
     """Public leaderboard — top contributors with tier, CP, and recent contribution."""
-    # Pull from user_cp_balance + users so all users with CP appear automatically
-    rows = await fetch(
+    # CP can come from two legacy systems:
+    # - user_cp_balance (email/user-based rewards)
+    # - contributors.total_cp (DAO task/PR rewards backed by cp_ledger)
+    # Merge them so task submitters and legacy CP recipients both appear.
+    balance_rows = await fetch(
         """
         SELECT
             u.id, u.email,
@@ -109,35 +112,85 @@ async def get_leaderboard(limit: int = 20):
         FROM user_cp_balance cp
         JOIN users u ON u.id = cp.user_id
         WHERE cp.total_cp_earned > 0
-        ORDER BY cp.total_cp_earned DESC
-        LIMIT $1
-        """,
-        limit,
+        """
     )
 
-    leaderboard = []
-    for i, row in enumerate(rows):
+    contributor_rows = await fetch(
+        """
+        SELECT
+            id, github_username, display_name, email,
+            total_cp, tier, joined_at, is_founding_steward
+        FROM contributors
+        WHERE total_cp > 0
+        """
+    )
+
+    def leaderboard_tier(total_cp: int, contributor_tier: Optional[str] = None) -> str:
+        if contributor_tier and contributor_tier != "observer":
+            return contributor_tier
+        return "steward" if total_cp >= 3000 else "builder" if total_cp >= 500 else "contributor" if total_cp >= 100 else "observer"
+
+    def badge_for(total_cp: int) -> str:
+        return "👑" if total_cp >= 3000 else "⭐" if total_cp >= 500 else "🔨" if total_cp >= 100 else "👀"
+
+    merged: Dict[str, Dict[str, Any]] = {}
+
+    for row in balance_rows:
+        email = (row["email"] or "").lower()
+        key = f"email:{email}" if email else f"user:{row['id']}"
         total_cp = int(row["total_cp_earned"] or 0)
-        tier = "steward" if total_cp >= 3000 else "contributor" if total_cp >= 500 else "builder" if total_cp >= 100 else "observer"
-        leaderboard.append({
-            "rank": i + 1,
+        merged[key] = {
             "id": str(row["id"]),
             "display_name": row["display_name"] or "Anonymous",
             "total_cp": total_cp,
             "cp_balance": int(row["cp_balance"] or 0),
-            "tier": tier,
+            "tier": leaderboard_tier(total_cp),
             "is_founding_steward": total_cp >= 3000,
-            "tier_badge": "👑" if total_cp >= 3000 else "⭐" if total_cp >= 500 else "🔨" if total_cp >= 100 else "👀",
             "joined_at": row["last_updated"].isoformat() if row["last_updated"] else None,
-        })
+        }
 
-    total_contributors = await fetchval("SELECT COUNT(*) FROM user_cp_balance WHERE total_cp_earned > 0") or 0
-    total_cp = await fetchval("SELECT COALESCE(SUM(total_cp_earned), 0) FROM user_cp_balance") or 0
+    for row in contributor_rows:
+        email = (row["email"] or "").lower()
+        github_username = (row["github_username"] or "").lower()
+        key = f"email:{email}" if email else f"github:{github_username}" if github_username else f"contributor:{row['id']}"
+        contributor_cp = int(row["total_cp"] or 0)
+        existing = merged.get(key)
+
+        if existing:
+            total_cp = int(existing["total_cp"] or 0) + contributor_cp
+            existing.update({
+                "total_cp": total_cp,
+                "cp_balance": int(existing["cp_balance"] or 0) + contributor_cp,
+                "tier": leaderboard_tier(total_cp, row["tier"]),
+                "is_founding_steward": bool(row["is_founding_steward"]) or total_cp >= 3000,
+                "joined_at": existing["joined_at"] or (row["joined_at"].isoformat() if row["joined_at"] else None),
+            })
+        else:
+            total_cp = contributor_cp
+            merged[key] = {
+                "id": str(row["id"]),
+                "display_name": row["display_name"] or row["github_username"] or "Anonymous",
+                "total_cp": total_cp,
+                "cp_balance": total_cp,
+                "tier": leaderboard_tier(total_cp, row["tier"]),
+                "is_founding_steward": bool(row["is_founding_steward"]) or total_cp >= 3000,
+                "joined_at": row["joined_at"].isoformat() if row["joined_at"] else None,
+            }
+
+    leaderboard = sorted(
+        (entry for entry in merged.values() if int(entry["total_cp"] or 0) > 0),
+        key=lambda entry: int(entry["total_cp"] or 0),
+        reverse=True,
+    )[:limit]
+
+    for i, entry in enumerate(leaderboard):
+        entry["rank"] = i + 1
+        entry["tier_badge"] = badge_for(int(entry["total_cp"] or 0))
 
     return {
         "leaderboard": leaderboard,
-        "total_contributors": int(total_contributors),
-        "total_cp_awarded": int(total_cp),
+        "total_contributors": len(merged),
+        "total_cp_awarded": sum(int(entry["total_cp"] or 0) for entry in merged.values()),
     }
 
 
@@ -937,37 +990,8 @@ async def submit_task(
     """
     Submit a completed task:
     - Create a GitHub issue in connectome-backend for tracking
-    - Award 50 CP immediately (pending full review)
-    - Update contributor CP record
+    - CP is awarded later when the PR is reviewed and merged
     """
-    # Look up the contributor linked to this user — use email/id in contributors table.
-    # Contributors are currently linked by github_username, not user_id directly.
-    # We'll look up by user identity (user_id is a UUID from JWT).
-    contributor = await fetchrow(
-        """
-        SELECT id, github_username, total_cp, tier
-        FROM contributors
-        LIMIT 1
-        """
-    )
-    # Ideally we'd join on user_id, but the current schema links contributors by
-    # github_username. We'll do a best-effort lookup and fall back gracefully.
-    contributor_by_user = await fetchrow(
-        "SELECT id, github_username, total_cp, tier FROM contributors WHERE user_id = $1::uuid",
-        user_id,
-    ) if False else None  # placeholder; column may not exist
-
-    # Try to find contributor by user_id if the column exists
-    try:
-        contributor_by_user = await fetchrow(
-            "SELECT id, github_username, total_cp, tier FROM contributors WHERE user_id = $1::uuid",
-            user_id,
-        )
-    except Exception:
-        contributor_by_user = None
-
-    effective_contributor = contributor_by_user or contributor
-
     # Create a GitHub issue to track the submission
     issue_title = f"DAO submission: {task_id}"
     issue_body = (
@@ -994,49 +1018,11 @@ async def submit_task(
     except Exception as exc:
         logger.warning(f"DAO submit: could not create GitHub issue: {exc}")
 
-    # Award 50 CP immediately to the contributor
-    cp_awarded = 0
-    if effective_contributor:
-        contributor_id = str(effective_contributor["id"])
-        try:
-            await execute(
-                """
-                INSERT INTO cp_ledger (contributor_id, cp_amount, reason)
-                VALUES ($1::uuid, 50, $2)
-                """,
-                contributor_id,
-                f"DAO task submission: {task_id} (pending review)",
-            )
-            # Recalculate total_cp and tier
-            new_total = await fetchval(
-                "SELECT COALESCE(SUM(cp_amount), 0) FROM cp_ledger WHERE contributor_id = $1::uuid",
-                contributor_id,
-            )
-            # Determine new tier
-            new_tier = "observer"
-            for tier_name, threshold in [("steward", 3000), ("builder", 500), ("contributor", 100)]:
-                if int(new_total) >= threshold:
-                    new_tier = tier_name
-                    break
-            await execute(
-                "UPDATE contributors SET total_cp = $1, tier = $2 WHERE id = $3::uuid",
-                int(new_total),
-                new_tier,
-                contributor_id,
-            )
-            cp_awarded = 50
-            logger.info(f"DAO: awarded 50 CP to contributor {contributor_id} for task {task_id}")
-        except Exception as exc:
-            logger.warning(f"DAO submit: could not award CP: {exc}")
-
     return {
         "status": "submitted",
         "task_id": task_id,
-        "cp_awarded": cp_awarded,
-        "message": (
-            f"Submission received! {cp_awarded} CP awarded immediately. "
-            "Ora will review your PR and award the full CP on merge."
-        ),
+        "cp_awarded": 0,
+        "message": "Submission received! CP will be awarded when your PR is reviewed and merged.",
     }
 
 

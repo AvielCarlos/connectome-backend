@@ -89,7 +89,8 @@ CP_RATE_RANGES = {
     "viral_content":        (100, 300, 1000),
     "press_coverage":       (150, 400, 1200),
     # General
-    "suggestion_accepted":  (25,   50,  150),
+    # No CP for suggestions that haven't been implemented yet
+    "suggestion_accepted":  (0,     0,    0),
     "suggestion_implemented":(100, 200,  600),
     "custom":               (1,     0, 99999),  # fully custom
 }
