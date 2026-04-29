@@ -129,15 +129,45 @@ async def _try_ioo_card(
     try:
         from ora.agents.ioo_graph_agent import get_graph_agent as _get_ioo
         _ioo = _get_ioo()
-        nodes = await _ioo.recommend_next_nodes(
-            user_id=str(user_id),
-            goal_id=goal_id,
-            limit=5,
-        )
+        if goal_id:
+            # Goal-specific: recommend nodes aligned to that goal
+            nodes = await _ioo.recommend_next_nodes(
+                user_id=str(user_id),
+                goal_id=goal_id,
+                limit=8,
+            )
+        else:
+            # Discovery mode: surface diverse nodes from across all domains
+            # Mix: 60% personalised (vector recommend) + 40% random exploration
+            if random.random() < 0.6:
+                try:
+                    nodes = await _ioo.vector_recommend(
+                        user_id=str(user_id),
+                        goal_context="life improvement discovery exploration",
+                        limit=10,
+                        preference="mixed",
+                    )
+                except Exception:
+                    nodes = await _ioo.recommend_next_nodes(user_id=str(user_id), goal_id=None, limit=8)
+            else:
+                # Pure exploration: pick from any domain the user hasn't seen recently
+                nodes = await _ioo.recommend_next_nodes(user_id=str(user_id), goal_id=None, limit=8)
+
         if not nodes:
             return None
 
-        node = random.choice(nodes)
+        # Semi-random selection with slight weighting toward higher-difficulty nodes
+        # (easier nodes are boring; discovery should stretch people slightly)
+        weights = [1 + (n.get('difficulty_level', 5) * 0.1) for n in nodes]
+        total = sum(weights)
+        r = random.random() * total
+        cumulative = 0
+        node = nodes[-1]
+        for n, w in zip(nodes, weights):
+            cumulative += w
+            if r <= cumulative:
+                node = n
+                break
         spec_dict = _ioo_node_to_screen_dict(node)
         db_id = await _store_ioo_screen_spec(spec_dict)
         screens_today = await increment_daily_screen_count(user_id)
@@ -222,8 +252,9 @@ async def get_next_screen(
     # ── Smart IOO routing ──────────────────────────────────────────────────
     # When the user has an active goal, 40 % of cards come from the IOO graph;
     # the remaining 60 % (and all cards for goal-less users) use the brain.
-    has_goals = bool(body.goal_id) or await _get_user_has_goals(user_id)
-    if has_goals and random.random() < 0.4:
+    # Feed is primarily IOO discovery — ~75% IOO nodes, ~25% brain coaching content
+    # No goals gate: discovery mode surfaces nodes across all domains, not just goal-aligned ones
+    if random.random() < 0.75:
         ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
         if ioo_response is not None:
             return ioo_response
@@ -327,13 +358,12 @@ async def get_screen_batch(
         pass
 
     # Check if user has active goals (once, shared across batch)
-    batch_has_goals = await _get_user_has_goals(user_id)
-
     # Fetch screens sequentially to respect rate limits and user model updates
     for _ in range(count):
         try:
-            # Smart IOO routing: 40 % of batch cards from graph when user has goals
-            if batch_has_goals and random.random() < 0.4:
+            # Feed is primarily IOO discovery — ~75% IOO nodes, ~25% brain coaching content
+            # No goals gate: anyone can discover IOO nodes regardless of whether they have active goals
+            if random.random() < 0.75:
                 ioo_resp = await _try_ioo_card(user_id, None, tier, daily_limit)
                 if ioo_resp is not None:
                     results.append(ioo_resp)
