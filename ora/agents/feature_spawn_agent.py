@@ -120,7 +120,7 @@ class FeatureSpawnAgent:
 
         prompt = f"""You are Ora's feature detection agent for Connectome — a personalized growth app with:
 - AI-powered content feed (articles, coaching cards)
-- Goal tracking (iVive health, Eviva social, Animus mental)
+- Goal tracking (iVive self-growth, Eviva contribution, Aventi aliveness)
 - Ora AI chat assistant
 - DAO community features
 - Twitter/X integration for personalization

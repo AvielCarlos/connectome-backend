@@ -26,37 +26,125 @@ class DiscoveryAnswerBody(BaseModel):
 
 
 ONBOARDING_QUESTIONS = [
+    {"question_id": "onboarding_name", "field_name": "name", "question": "What's your name? I'd love to know who I'm talking to 😊"},
     {
-        "question_id": "onboarding_name",
-        "field_name": "name",
-        "question": "What's your name? I'd love to know who I'm talking to 😊",
+        "question_id": "domain_selection",
+        "field_name": "domain_selection",
+        "question": (
+            "Okay [name], I see your life as having 3 dimensions — and fulfilment means tending to all of them:\n\n"
+            "🌱 iVive — Maintenance and growth of self: physical, mental, spiritual, creative, financial, skills, habits\n"
+            "🌊 Eviva — Contributing to the collective and receiving reward: work, volunteering, DAO, service, building for others\n"
+            "🚀 Aventi — Everything that makes life feel alive: fun, adventure, events, dating, travel, friendships, discovery, spontaneity\n\n"
+            "Which of these feel most alive to you right now? (You can mention all that resonate)"
+        ),
     },
     {
-        "question_id": "onboarding_growth_areas",
-        "field_name": "growth_areas",
-        "question": "What are the 2-3 areas of your life you most want to grow or improve right now? For example: health, career, relationships, creativity, finances, spirituality, adventure.",
+        "question_id": "ivive_selection",
+        "field_name": "ivive_interests",
+        "question": (
+            "iVive is the maintenance and growth of you — body, mind, spirit, creativity, finances, skills, and habits. What would support you most here?\n"
+            "• 💪 Get physically stronger and fitter\n"
+            "• 🧠 Improve my mental health and emotional wellbeing\n"
+            "• ✨ Deepen my spiritual practice or sense of purpose\n"
+            "• 💤 Sleep better and have more energy\n"
+            "• 🎨 Develop a creative practice\n"
+            "• 💰 Get my finances stable and growing\n"
+            "• 📚 Learn something that makes me more capable\n"
+            "• 🧘 Build rituals and habits that ground me\n"
+            "• ✍️ Write your own..."
+        ),
     },
     {
-        "question_id": "onboarding_one_year_vision",
-        "field_name": "one_year_vision",
-        "question": "What does a great life look like for you in 1 year? Paint me a picture.",
+        "question_id": "eviva_selection",
+        "field_name": "eviva_interests",
+        "question": (
+            "Eviva is about how you show up for the world — and how the world rewards you for it. What feels most meaningful here?\n"
+            "• 💼 Build a career that actually means something\n"
+            "• 🙌 Volunteer for a cause you care about\n"
+            "• 🏗 Contribute to an open-source or community project\n"
+            "• 🌱 Start something that gives back\n"
+            "• 💰 Create income from skills that serve others\n"
+            "• 🏛 Participate in governance or civic life\n"
+            "• 🤲 Mentor someone or teach what you know\n"
+            "• ✍️ Write your own..."
+        ),
     },
     {
-        "question_id": "onboarding_biggest_challenge",
-        "field_name": "biggest_challenge",
-        "question": "What's your biggest challenge or obstacle right now?",
+        "question_id": "aventi_selection",
+        "field_name": "aventi_interests",
+        "question": (
+            "Aventi is everything that makes life feel alive and engaged — fun, play, pleasure, dating, friendship, spontaneity, and experience. What would feel amazing here?\n"
+            "• 🌍 Travel somewhere new this year\n"
+            "• 🎉 Go to more events — concerts, festivals, markets\n"
+            "• 💘 Date intentionally and find real connection\n"
+            "• 🤝 Invest in a friendship you've been neglecting\n"
+            "• 🏄 Try a thrilling new physical experience\n"
+            "• 🌙 Make weeknights an adventure, not just weekends\n"
+            "• 🎲 Say yes to spontaneous plans more often\n"
+            "• ✍️ Write your own..."
+        ),
     },
-    {
-        "question_id": "onboarding_weekly_commitment",
-        "field_name": "weekly_commitment",
-        "question": "How much time per week can you realistically commit to working on yourself — 30 mins? 2 hours? More?",
-    },
-    {
-        "question_id": "onboarding_constraints",
-        "field_name": "constraints",
-        "question": "Any constraints I should know about — location, budget, health, family situation?",
-    },
+    {"question_id": "onboarding_constraints", "field_name": "constraints", "question": "Any constraints I should know about — location, budget, health, family situation, access, or anything that would shape the path?"},
 ]
+
+DOMAIN_ALIASES = {
+    "ivive": ["ivive", "self", "health", "fitness", "vitality", "energy", "nutrition", "sleep", "strong", "mental", "therapy", "emotional", "stress", "spiritual", "purpose", "meaning", "inner", "creative", "creativity", "finance", "budget", "saving", "skill", "learning", "habit", "ritual"],
+    "eviva": ["eviva", "career", "work", "job", "volunteer", "service", "contribution", "collective", "community project", "open source", "dao", "civic", "governance", "income", "recognition", "mentor", "teach", "build for others"],
+    "aventi": ["aventi", "adventure", "fun", "travel", "experience", "spontaneity", "spontaneous", "dating", "romance", "friendship", "friend", "event", "concert", "festival", "market", "play", "pleasure", "discovery"],
+}
+
+IVIVE_ALIASES = {
+    "Get physically stronger and fitter": ["strong", "fit", "fitness", "physical"],
+    "Improve my mental health and emotional wellbeing": ["mental", "therapy", "emotional", "wellbeing", "stress"],
+    "Deepen my spiritual practice or sense of purpose": ["spiritual", "purpose", "meaning", "inner peace"],
+    "Sleep better and have more energy": ["sleep", "energy"],
+    "Develop a creative practice": ["creative", "creativity", "art", "music", "writing"],
+    "Get my finances stable and growing": ["finance", "finances", "budget", "saving", "invest"],
+    "Learn something that makes me more capable": ["skill", "learn", "capable"],
+    "Build rituals and habits that ground me": ["ritual", "habit", "routine", "ground"],
+}
+
+EVIVA_ALIASES = {
+    "Build a career that actually means something": ["career", "work", "job", "meaning"],
+    "Volunteer for a cause you care about": ["volunteer", "cause", "service"],
+    "Contribute to an open-source or community project": ["open-source", "open source", "community project", "contribute"],
+    "Start something that gives back": ["gives back", "give back", "start something"],
+    "Create income from skills that serve others": ["income", "skills", "serve others"],
+    "Participate in governance or civic life": ["governance", "civic", "dao", "vote"],
+    "Mentor someone or teach what you know": ["mentor", "teach", "teaching"],
+}
+
+AVENTI_ALIASES = {
+    "Travel somewhere new this year": ["travel", "new places", "country", "trip"],
+    "Go to more events — concerts, festivals, markets": ["event", "concert", "festival", "market"],
+    "Date intentionally and find real connection": ["date", "dating", "romance", "romantic", "connection"],
+    "Invest in a friendship you've been neglecting": ["friend", "friendship", "neglect"],
+    "Try a thrilling new physical experience": ["thrilling", "surf", "ski", "skydive", "physical experience"],
+    "Make weeknights an adventure, not just weekends": ["weeknight", "weeknights", "weekend"],
+    "Say yes to spontaneous plans more often": ["spontaneous", "say yes", "plans"],
+}
+
+
+def _extract_selected_domains(answer: str) -> list[str]:
+    text = answer.lower()
+    selected = []
+    canonical = {"ivive": "iVive", "eviva": "Eviva", "aventi": "Aventi"}
+    for key, aliases in DOMAIN_ALIASES.items():
+        if any(alias in text for alias in aliases):
+            selected.append(canonical[key])
+    return selected
+
+
+def _extract_picks(answer: str, aliases: dict[str, list[str]]) -> list[str]:
+    text = answer.lower()
+    picks = []
+    for label, terms in aliases.items():
+        if label.lower() in text or any(term in text for term in terms):
+            picks.append(label)
+    if not picks and answer.strip():
+        picks.append(answer.strip()[:240])
+    return picks
+
 
 
 class OnboardingRequest(BaseModel):
@@ -118,6 +206,8 @@ async def _ora_onboarding_message(
                     "role": "system",
                     "content": (
                         "You are Ora, a warm, concise AI guide for human flourishing. "
+                        "Ora uses three domains: iVive (maintenance and growth of self: physical, mental, spiritual, creative, financial, skills, habits), Eviva (contribution to the collective and reward: work, service, DAO/open-source/civic participation, income, recognition), and Aventi (aliveness: fun, adventure, events, dating, travel, friendships, discovery, spontaneity). "
+                        "Contributing to Connectome or Ascension Technologies and earning CP/recognition is Eviva. "
                         "Reply with exactly one short acknowledgement sentence, then ask the provided next intake question. "
                         "Keep it natural, grounded, and under 55 words. Do not add extra questions."
                     ),
