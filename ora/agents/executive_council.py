@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 ASCENSION_CHAT_ID = os.getenv("ASCENSION_CHANNEL_ID", "-1001234567890")  # @ascensionai channel
 TELEGRAM_CHAT_ID = 5716959016
 
-AGENT_NAMES = ["cfo", "cmo", "cpo", "cto", "coo", "community", "strategy", "cuxd"]
+AGENT_NAMES = ["cfo", "cgo", "cmo", "cpo", "cto", "coo", "community", "strategy", "cuxd"]
 
 
 class ExecutiveCouncil(BaseExecutiveAgent):

@@ -75,6 +75,13 @@ except Exception as _executive_err:
     executive_routes = None
     _executive_available = False
     logging.warning(f"Executive routes unavailable: {_executive_err}")
+try:
+    from api.routes import cgo as cgo_routes
+    _cgo_available = True
+except Exception as _cgo_err:
+    cgo_routes = None
+    _cgo_available = False
+    logging.warning(f"CGO routes unavailable: {_cgo_err}")
 from core.notification_worker import start_notification_worker, stop_notification_worker
 
 # Configure logging
@@ -283,6 +290,8 @@ if _services_available and services_routes:
     app.include_router(services_routes.router)
 if _executive_available and executive_routes:
     app.include_router(executive_routes.router)
+if _cgo_available and cgo_routes:
+    app.include_router(cgo_routes.router)
 if _ioo_available and ioo_routes:
     app.include_router(ioo_routes.router)
 try:
