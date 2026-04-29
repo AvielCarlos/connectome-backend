@@ -29,9 +29,15 @@ class COOAgent(BaseExecutiveAgent):
 
     name = "coo"
     display_name = "COO Agent"
+    domain = "ops"
+    personality = (
+        "Operations orchestrator. Makes sure council decisions execute, owns agent "
+        "coordination, and cross-references every domain for blockers."
+    )
 
     async def analyze(self) -> Dict[str, Any]:
         """Review operational health of all autonomous systems."""
+        await self.compound_context()
         now = datetime.now(timezone.utc)
         metrics: Dict[str, Any] = {
             "analyzed_at": now.isoformat(),

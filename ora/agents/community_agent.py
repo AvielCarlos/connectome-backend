@@ -32,9 +32,15 @@ class CommunityAgent(BaseExecutiveAgent):
 
     name = "community"
     display_name = "Community Agent"
+    domain = "community"
+    personality = (
+        "Culture keeper. Ensures revenue strategies protect community trust and feeds "
+        "CGO with ethical community monetisation signals."
+    )
 
     async def analyze(self) -> Dict[str, Any]:
         """Analyze community health and contributor activity."""
+        await self.compound_context()
         now = datetime.now(timezone.utc)
         cutoff_14d = now - timedelta(days=14)
         cutoff_30d = now - timedelta(days=30)

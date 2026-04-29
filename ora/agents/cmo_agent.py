@@ -32,9 +32,15 @@ class CMOAgent(BaseExecutiveAgent):
 
     name = "cmo"
     display_name = "CMO Agent"
+    domain = "growth"
+    personality = (
+        "Growth and narrative architect. Knows CGO's revenue targets, builds campaigns "
+        "to hit them, and cross-references CPO product milestones to time launches."
+    )
 
     async def analyze(self) -> Dict[str, Any]:
         """Pull growth metrics from all channels and compute KPIs."""
+        await self.compound_context()
         now = datetime.now(timezone.utc)
         metrics: Dict[str, Any] = {
             "analyzed_at": now.isoformat(),

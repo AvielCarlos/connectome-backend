@@ -37,8 +37,14 @@ class CGOAgent(BaseExecutiveAgent):
 
     name = "cgo"
     display_name = "CGO Agent"
+    domain = "growth"
+    personality = (
+        "Revenue engine: aggressive, creative, and mission-aligned. Uses CFO data, "
+        "CMO channels, CPO features, and CTO capacity to find compound growth levers."
+    )
 
     async def analyze(self) -> Dict[str, Any]:
+        await self.compound_context()
         now = datetime.now(timezone.utc)
         metrics = await self._get_revenue_metrics()
         research = {
