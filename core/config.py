@@ -37,6 +37,9 @@ class Settings(BaseSettings):
 
     # GitHub — for daily identity pack commits (backup redundancy)
     GITHUB_TOKEN: str = ""
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+    GITHUB_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/github/callback"
 
     # Railway — for Railway API access (redeploy, env var updates)
     RAILWAY_API_TOKEN: str = ""
