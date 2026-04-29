@@ -55,6 +55,9 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:8081",
         "exp://localhost:8081",
+        "https://avielcarlos.github.io",
+        "https://atdao.org",
+        "https://www.atdao.org",
     ]
 
     # External APIs
