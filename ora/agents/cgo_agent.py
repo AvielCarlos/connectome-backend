@@ -1,5 +1,5 @@
 """
-CGO Agent — Chief Growth Officer for Ascension Technologies / Ora.
+CGO Agent — Chief Growth Officer for Ascension Technologies / Connectome.
 
 Mandate: aggressively and creatively grow revenue while protecting the
 non-profit mission. The CGO never assumes a surface is impossible to monetize;
@@ -36,23 +36,26 @@ class CGOAgent(BaseExecutiveAgent):
     """
 
     ecosystem_thesis = (
-        "We are Ascension Technologies. Connectome/iDo is ONE product. We also "
-        "have The Scilence, AI music, community, consulting, grants, corporate "
-        "clients, developer API access, Ora Sessions, DAO Founding Stewards, "
-        "events/retreats, and white-label Ora licensing. Revenue serves human "
-        "flourishing, not the reverse."
+        "Ascension Technologies is the DAO layer: governance, ownership, community, "
+        "CP/XP, and the distributed mission. Connectome is the AI OS — the nervous "
+        "system of the internet, where every app, agent, and human moment is a synapse. "
+        "Connectome is to human fulfilment what TCP/IP is to the internet. The CGO grows "
+        "the full ecosystem: iDo, Aventi, iVive, Eviva, Ora Sessions, developer access, "
+        "DAO Founding Stewards, corporate partnerships, events, grants, The Scilence, "
+        "AI music, consulting, and white-label Ora. Revenue serves human flourishing, "
+        "not the reverse."
     )
 
     revenue_streams = [
         {
-            "stream": "App subscriptions",
-            "target": "iDo / Connectome users",
+            "stream": "Connectome OS subscriptions",
+            "target": "Users across iDo, Aventi, iVive, Eviva, and future Connectome surfaces",
             "vehicle": "Stripe recurring subscriptions",
-            "near_term_offer": "Explorer/Premium personal fulfilment plan",
+            "near_term_offer": "Explorer/Premium personal fulfilment plan across the AI OS",
         },
         {
-            "stream": "Community membership",
-            "target": "Ascension community",
+            "stream": "Ascension DAO membership",
+            "target": "Ascension community, contributors, and future stewards",
             "vehicle": "Stripe recurring membership",
             "near_term_offer": "Founding Steward membership and reflection circles",
         },
@@ -63,8 +66,8 @@ class CGOAgent(BaseExecutiveAgent):
             "near_term_offer": "Ora for Teams pilot at $8/seat/month",
         },
         {
-            "stream": "Developer API",
-            "target": "AI/wellness builders",
+            "stream": "Connectome developer API",
+            "target": "AI, wellness, experience, vitality, and civic builders",
             "vehicle": "Stripe API subscription",
             "near_term_offer": "$29/month developer tier",
         },
@@ -105,8 +108,8 @@ class CGOAgent(BaseExecutiveAgent):
             "near_term_offer": "Founding Steward pledge/membership",
         },
         {
-            "stream": "White-label Ora",
-            "target": "Wellness/health/coaching companies",
+            "stream": "White-label Connectome/Ora infrastructure",
+            "target": "Wellness, health, coaching, community, and civic organisations",
             "vehicle": "B2B licensing",
             "near_term_offer": "$500-$2,000/month pilot license",
         },
@@ -160,7 +163,7 @@ class CGOAgent(BaseExecutiveAgent):
             "structured_growth_report": {
                 "stage": self._stage(metrics),
                 "top_3_revenue_streams": [s["name"] for s in streams[:3]],
-                "north_star": "First $1,000 MRR without compromising trust or mission alignment.",
+                "north_star": "First $1,000 MRR for the Connectome AI OS ecosystem without compromising trust or mission alignment.",
                 "legal_guardrails": [
                     "No deceptive billing or forced continuity.",
                     "Clear cancellation path for every subscription.",
@@ -195,7 +198,7 @@ class CGOAgent(BaseExecutiveAgent):
         await self.set_redis_report(summary)
         await self.teach_ora(
             "CGO growth state: "
-            "Ascension Technologies ecosystem mandate active; "
+            "Ascension DAO → Connectome AI OS ecosystem mandate active; "
             f"{data['metrics'].get('total_users', 0)} users, "
             f"${data['metrics'].get('total_revenue_cents', 0) / 100:.2f} lifetime revenue, "
             f"top streams={', '.join(data['structured_growth_report']['top_3_revenue_streams'])}.",
@@ -217,7 +220,7 @@ class CGOAgent(BaseExecutiveAgent):
         metrics: Optional[Dict[str, Any]] = None,
         research: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Return a concrete 30-day plan across all Ascension revenue streams."""
+        """Return a concrete 30-day plan across the Ascension DAO and Connectome AI OS revenue streams."""
         metrics = metrics or {}
         research = research or {}
         return {
@@ -232,7 +235,7 @@ class CGOAgent(BaseExecutiveAgent):
                 "Developer API and Ora Sessions checkout links verified",
             ],
             "week_1_foundation": [
-                "Audit all existing Stripe checkout paths: app, sessions, API, corporate.",
+                "Audit all existing Stripe checkout paths: Connectome OS subscriptions, sessions, API, corporate, and DAO membership.",
                 "Create/update target_streams.json for community, corporate, grants, media, consulting, and developer API.",
                 "Draft The Scilence one-page pitch and sample-pages request flow.",
                 "Draft Aviel's speaking/consulting topic menu: AI, consciousness, human flourishing, practical transformation.",
@@ -253,7 +256,7 @@ class CGOAgent(BaseExecutiveAgent):
                 "Follow up with every warm lead using one useful new artifact, not pressure.",
                 "Convert one channel into money: corporate pilot, paid session, Founding Steward, or consulting discovery call.",
                 "Review response rates by stream; cut weak channels and double down on the top two.",
-                "Teach Ora the validated growth thesis and update the next 30-day plan.",
+                "Teach Ora the validated Ascension DAO → Connectome AI OS growth thesis and update the next 30-day plan.",
             ],
             "active_research_refs": sorted(research.keys()),
             "current_metrics_source": metrics.get("source", "unknown"),
