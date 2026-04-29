@@ -511,7 +511,11 @@ async def sustainability_dashboard(x_admin_token: str = Header(default="")):
     if x_admin_token != _token:
         raise HTTPException(status_code=403, detail="Admin token required")
 
-    # API costs from log
+    # API costs from log (create table if not exists)
+    try:
+        await fetch("CREATE TABLE IF NOT EXISTS api_cost_log (id BIGSERIAL PRIMARY KEY, ts TIMESTAMPTZ DEFAULT NOW(), model TEXT, input_tokens INT DEFAULT 0, output_tokens INT DEFAULT 0, cost_usd NUMERIC(10,6) DEFAULT 0, context TEXT)")
+    except Exception:
+        pass
     cost_row = await fetchrow(
         """
         SELECT 
@@ -590,5 +594,115 @@ async def sustainability_dashboard(x_admin_token: str = Header(default="")):
         "daily_api_costs": [
             {"day": str(r["day"]), "cost_usd": round(float(r["cost"]), 4), "calls": int(r["calls"])}
             for r in daily_costs
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Master Dashboard — everything in one call
+# ---------------------------------------------------------------------------
+
+@router.get("/dashboard")
+async def admin_dashboard(x_admin_token: str = Header(default="")):
+    """Complete admin dashboard — users, revenue, API costs, agents, activity."""
+    import os as _os
+    _token = _os.getenv("ADMIN_SECRET", "connectome-admin-secret")
+    if x_admin_token != _token:
+        raise HTTPException(status_code=403, detail="Admin token required")
+
+    # Ensure tables exist
+    try:
+        await fetch("CREATE TABLE IF NOT EXISTS api_cost_log (id BIGSERIAL PRIMARY KEY, ts TIMESTAMPTZ DEFAULT NOW(), model TEXT, input_tokens INT DEFAULT 0, output_tokens INT DEFAULT 0, cost_usd NUMERIC(10,6) DEFAULT 0, context TEXT)")
+    except Exception:
+        pass
+
+    # Users
+    user_row = await fetchrow("""
+        SELECT
+            COUNT(*) as total,
+            COUNT(CASE WHEN created_at > NOW() - INTERVAL '24 hours' THEN 1 END) as new_24h,
+            COUNT(CASE WHEN created_at > NOW() - INTERVAL '7 days' THEN 1 END) as new_7d,
+            COUNT(CASE WHEN last_active > NOW() - INTERVAL '24 hours' THEN 1 END) as active_24h,
+            COUNT(CASE WHEN last_active > NOW() - INTERVAL '7 days' THEN 1 END) as active_7d,
+            COUNT(CASE WHEN subscription_tier NOT IN ('free') THEN 1 END) as paying
+        FROM users
+    """)
+
+    # Revenue
+    rev_row = await fetchrow("""
+        SELECT COUNT(*) as subs FROM users WHERE subscription_tier NOT IN ('free')
+    """)
+    paying = int(rev_row["subs"] or 0) if rev_row else 0
+
+    # API costs
+    try:
+        cost_row = await fetchrow("""
+            SELECT
+                COALESCE(SUM(cost_usd), 0) as total_30d,
+                COALESCE(SUM(CASE WHEN ts > NOW() - INTERVAL '24 hours' THEN cost_usd ELSE 0 END), 0) as cost_24h,
+                COUNT(*) as calls_30d,
+                COUNT(CASE WHEN ts > NOW() - INTERVAL '24 hours' THEN 1 END) as calls_24h
+            FROM api_cost_log WHERE ts > NOW() - INTERVAL '30 days'
+        """)
+    except Exception:
+        cost_row = None
+
+    # Top agents
+    agent_rows = await fetch("""
+        SELECT agent_type, COUNT(*) as screens, AVG(CASE WHEN rating > 0 THEN rating END) as avg_rating
+        FROM screen_specs GROUP BY agent_type ORDER BY screens DESC LIMIT 8
+    """)
+
+    # Goals
+    goal_row = await fetchrow("""
+        SELECT COUNT(*) as total, COUNT(CASE WHEN status='completed' THEN 1 END) as completed
+        FROM goals
+    """)
+
+    # Sessions / screens today
+    session_row = await fetchrow("""
+        SELECT COUNT(DISTINCT user_id) as users_with_screens, COUNT(*) as total_screens
+        FROM screen_specs WHERE created_at > NOW() - INTERVAL '24 hours'
+    """)
+
+    burn = 20.0 + float(cost_row["total_30d"] or 0 if cost_row else 0)
+    mrr = paying * 9
+
+    return {
+        "generated_at": __import__('datetime').datetime.utcnow().isoformat(),
+        "users": {
+            "total": int(user_row["total"] or 0) if user_row else 0,
+            "new_24h": int(user_row["new_24h"] or 0) if user_row else 0,
+            "new_7d": int(user_row["new_7d"] or 0) if user_row else 0,
+            "active_24h": int(user_row["active_24h"] or 0) if user_row else 0,
+            "active_7d": int(user_row["active_7d"] or 0) if user_row else 0,
+            "paying": paying,
+        },
+        "revenue": {
+            "mrr_est_usd": mrr,
+            "paying_users": paying,
+        },
+        "costs": {
+            "api_cost_30d_usd": round(float(cost_row["total_30d"] or 0), 4) if cost_row else 0,
+            "api_cost_24h_usd": round(float(cost_row["cost_24h"] or 0), 6) if cost_row else 0,
+            "api_calls_30d": int(cost_row["calls_30d"] or 0) if cost_row else 0,
+            "api_calls_24h": int(cost_row["calls_24h"] or 0) if cost_row else 0,
+            "railway_30d_usd": 20.0,
+            "total_burn_30d_usd": round(burn, 2),
+        },
+        "sustainability": {
+            "mrr_vs_burn": f"${mrr:.0f} / ${burn:.0f}",
+            "ratio": round(mrr / burn, 3) if burn > 0 else 0,
+            "status": "profitable" if mrr > burn else ("building" if mrr > 0 else "pre-revenue"),
+        },
+        "activity": {
+            "screens_today": int(session_row["total_screens"] or 0) if session_row else 0,
+            "users_with_screens_today": int(session_row["users_with_screens"] or 0) if session_row else 0,
+            "goals_total": int(goal_row["total"] or 0) if goal_row else 0,
+            "goals_completed": int(goal_row["completed"] or 0) if goal_row else 0,
+        },
+        "top_agents": [
+            {"name": r["agent_type"], "screens": int(r["screens"]), "avg_rating": round(float(r["avg_rating"] or 0), 2)}
+            for r in agent_rows
         ],
     }
