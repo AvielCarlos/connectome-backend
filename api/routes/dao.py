@@ -58,6 +58,30 @@ class VoteProposalRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 TIER_ORDER = {"observer": 0, "contributor": 1, "builder": 2, "steward": 3, "founding_steward": 4}
+VALID_CONTRIBUTION_TYPES = {
+    "code", "agent", "design", "doc", "research", "feedback", "community",
+    "review", "ops", "security", "implemented_idea", "spec",
+}
+
+
+def _tier_for_cp(total_cp: int, founding: bool = False) -> str:
+    if founding or total_cp >= 3000:
+        return "steward"
+    if total_cp >= 500:
+        return "builder"
+    if total_cp >= 100:
+        return "contributor"
+    return "observer"
+
+
+def _tier_badge_for_cp(total_cp: int) -> str:
+    if total_cp >= 3000:
+        return "👑"
+    if total_cp >= 500:
+        return "🔨"
+    if total_cp >= 100:
+        return "⭐"
+    return "👀"
 
 
 def _tier_badge(tier: str, is_founding_steward: bool = False) -> str:
@@ -306,11 +330,10 @@ async def submit_contribution(
     user_id: str = Depends(get_current_user_id),
 ):
     """Submit a contribution for Ora's review."""
-    valid_types = {"code", "agent", "design", "doc", "research", "feedback", "community"}
-    if body.contribution_type not in valid_types:
+    if body.contribution_type not in VALID_CONTRIBUTION_TYPES:
         raise HTTPException(
             status_code=400,
-            detail=f"contribution_type must be one of: {', '.join(sorted(valid_types))}",
+            detail=f"contribution_type must be one of: {', '.join(sorted(VALID_CONTRIBUTION_TYPES))}",
         )
 
     # Find contributor — need their contributor record
@@ -376,8 +399,7 @@ async def submit_contribution_for_user(
     if not contributor:
         raise HTTPException(status_code=404, detail=f"Contributor '{github_username}' not registered")
 
-    valid_types = {"code", "agent", "design", "doc", "research", "feedback", "community"}
-    if body.contribution_type not in valid_types:
+    if body.contribution_type not in VALID_CONTRIBUTION_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid contribution_type")
 
     row = await fetchrow(
@@ -990,7 +1012,7 @@ async def submit_task(
     """
     Submit a completed task:
     - Create a GitHub issue in connectome-backend for tracking
-    - CP is awarded later when the PR is reviewed and merged
+    - Do not award CP immediately; final CP is awarded only after review/merge
     """
     # Create a GitHub issue to track the submission
     issue_title = f"DAO submission: {task_id}"
@@ -1018,6 +1040,8 @@ async def submit_task(
     except Exception as exc:
         logger.warning(f"DAO submit: could not create GitHub issue: {exc}")
 
+    # No immediate CP for task submissions.
+    # Reviewed, merged, or explicitly adopted work earns CP; raw submissions and ideas do not.
     return {
         "status": "submitted",
         "task_id": task_id,
