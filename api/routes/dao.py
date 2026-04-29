@@ -37,10 +37,12 @@ class RegisterContributorRequest(BaseModel):
 
 
 class SubmitContributionRequest(BaseModel):
-    contribution_type: str  # code, agent, design, doc, research, feedback, community
+    contribution_type: str  # code, design, research, content, community, idea, feedback
     title: str
-    description: Optional[str] = None
-    github_pr_url: Optional[str] = None
+    description: str  # required — must describe what you did
+    github_pr_url: Optional[str] = None  # optional, for code contributors
+    external_link: Optional[str] = None  # link to design file, doc, video, etc.
+    evidence_text: Optional[str] = None  # screenshots, notes, detailed proof of work
 
 
 class SubmitProposalRequest(BaseModel):
@@ -59,7 +61,7 @@ class VoteProposalRequest(BaseModel):
 
 TIER_ORDER = {"observer": 0, "contributor": 1, "builder": 2, "steward": 3, "founding_steward": 4}
 VALID_CONTRIBUTION_TYPES = {
-    "code", "agent", "design", "doc", "research", "feedback", "community",
+    "code", "agent", "design", "doc", "content", "research", "feedback", "community", "idea",
     "review", "ops", "security", "implemented_idea", "spec",
 }
 
@@ -375,6 +377,16 @@ async def submit_contribution(
         )
 
     logger.info(f"DAO: new contribution submitted: '{body.title}' ({body.contribution_type})")
+
+    # Award XP for submitting a contribution — encourages participation
+    try:
+        await execute(
+            "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, $3, $4)",
+            UUID(user_id), 50, "contribution_submit", row["id"],
+        )
+    except Exception:
+        pass  # Non-critical
+
     return {
         "contribution": _serialize(_record_to_dict(row)),
         "message": "Contribution submitted. Ora will evaluate it within 24 hours.",

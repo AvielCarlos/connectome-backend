@@ -89,6 +89,16 @@ async def submit_feedback(
     # Update IOO graph weights if this was a graph-sourced card
     await _record_ioo_outcome_if_applicable(user_id, body.screen_spec_id, body.rating)
 
+    # Award XP for giving feedback — feedback fuels the learning loop
+    try:
+        await execute(
+            "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, $3, $4)",
+            UUID(user_id), 10, "feedback_submit",
+            UUID(body.screen_spec_id) if body.screen_spec_id and len(body.screen_spec_id) == 36 else None,
+        )
+    except Exception:
+        pass  # Non-critical — don't block feedback response
+
     # Build a human-readable message based on the insight
     signal = insight.get("signal_type", "neutral")
     delta = insight.get("fulfilment_delta", 0.0)

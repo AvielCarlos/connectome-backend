@@ -33,17 +33,22 @@ router = APIRouter(prefix="/api/gamification", tags=["gamification"])
 
 # ─── XP amounts ──────────────────────────────────────────────────────────────
 XP_TABLE = {
-    "daily_login":    30,
-    "card_view":       5,
-    "card_rate":      15,
-    "card_save":      20,
-    "goal_create":    50,
-    "goal_step":      40,
-    "goal_complete": 200,
-    "ioo_node_complete": 100,
-    "journal_entry":  25,
-    "chat_message":   10,
-    "collection_create": 15,
+    "daily_login":         30,
+    "card_view":            5,
+    "card_rate":           15,
+    "card_save":           20,
+    "goal_create":         50,
+    "goal_step":           40,
+    "goal_complete":      200,
+    "ioo_node_complete":  100,
+    "journal_entry":       25,
+    "chat_message":        10,
+    "collection_create":   15,
+    # Contribution + social
+    "feedback_submit":     10,
+    "contribution_submit": 50,
+    "challenge_completed": 100,
+    "challenge_sent_completed": 50,
 }
 
 # ─── Badge definitions ────────────────────────────────────────────────────────
