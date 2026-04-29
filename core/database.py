@@ -765,6 +765,21 @@ async def run_migrations():
             ALTER TABLE users
             ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMP
         """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS discovery_profile (
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                field_name TEXT NOT NULL,
+                field_value TEXT,
+                question_id TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (user_id, field_name)
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_discovery_profile_user_id
+            ON discovery_profile(user_id)
+        """)
 
         # ---------------------------------------------------------------
         # Coaching streaks table
@@ -1796,6 +1811,5 @@ async def fetchval(query: str, *args) -> Any:
     pool = await get_pool()
     async with pool.acquire() as conn:
         return await conn.fetchval(query, *args)
-
 
 

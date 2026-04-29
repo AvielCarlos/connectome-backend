@@ -411,6 +411,19 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token_updated_at TIMESTAMP;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_completed_at TIMESTAMP;
 
+CREATE TABLE IF NOT EXISTS discovery_profile (
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    field_name TEXT NOT NULL,
+    field_value TEXT,
+    question_id TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (user_id, field_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_discovery_profile_user_id
+ON discovery_profile(user_id);
+
 CREATE INDEX IF NOT EXISTS idx_users_push_token
 ON users(push_token) WHERE push_token IS NOT NULL;
 
