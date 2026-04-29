@@ -18,6 +18,19 @@ Generated screens are durable pathway/interface nodes. A screen is not merely a 
 
 A generated screen should be stored with its own embedding and graph relationships. The same underlying IOO node may produce many different screen nodes depending on user context, timing, domain, and presentation strategy.
 
+## Screen Pattern Library
+
+Screen patterns are reusable interface/pathway templates that Ora can adapt into generated screen nodes. A pattern is not the final screen; it is the learned shape of an interaction that tends to help a certain user/context move forward.
+
+Patterns should support variants so Ora can test different presentations without losing the underlying intent. The lightweight lifecycle is:
+
+1. **Create/reuse** — create a new pattern only when no existing pattern fits; otherwise reuse and adapt the closest successful pattern.
+2. **Test variants** — generate small variants for layout, copy, sequencing, or interaction mechanism.
+3. **Reinforce winners** — increase usage/weight for variants that produce completion, clarity, execution, or other positive outcomes.
+4. **Trim stale/unused/low-outcome patterns** — deprecate or prune patterns and variants that are not used, have not been used recently, or consistently underperform.
+
+Useful pruning fields include `last_used_at`, `usage_count`, `success_score` / `outcome_score`, `deprecated_at`, and `pruned_at`. Pruning should be conservative: prefer marking stale assets as deprecated/pruned before permanent deletion so Ora can preserve learning history.
+
 Important screen relationships:
 
 - `leads_to` — this screen naturally routes toward another screen or outcome.

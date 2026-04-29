@@ -148,6 +148,63 @@ async def run_migrations():
             ALTER TABLE screen_specs ADD COLUMN IF NOT EXISTS screen_role TEXT
         """)
 
+        # Screen Pattern Library — reusable pathway/interface patterns and
+        # variants. Lifecycle: create/reuse → test variants → reinforce
+        # winners → trim stale/unused/low-outcome patterns.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS screen_patterns (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                name TEXT NOT NULL,
+                pattern_type TEXT,
+                intent TEXT,
+                domain TEXT,
+                template JSONB DEFAULT '{}',
+                embedding vector(1536),
+                usage_count INT DEFAULT 0,
+                success_score FLOAT DEFAULT 0.0,
+                outcome_score FLOAT DEFAULT 0.0,
+                last_used_at TIMESTAMP,
+                deprecated_at TIMESTAMP,
+                pruned_at TIMESTAMP,
+                prune_reason TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_screen_patterns_active
+            ON screen_patterns(domain, pattern_type)
+            WHERE pruned_at IS NULL AND deprecated_at IS NULL
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_screen_patterns_prune
+            ON screen_patterns(last_used_at, usage_count, outcome_score)
+            WHERE pruned_at IS NULL
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS screen_pattern_variants (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                pattern_id UUID REFERENCES screen_patterns(id) ON DELETE CASCADE,
+                name TEXT,
+                variant_key TEXT,
+                spec_patch JSONB DEFAULT '{}',
+                usage_count INT DEFAULT 0,
+                success_score FLOAT DEFAULT 0.0,
+                outcome_score FLOAT DEFAULT 0.0,
+                last_used_at TIMESTAMP,
+                deprecated_at TIMESTAMP,
+                pruned_at TIMESTAMP,
+                prune_reason TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_screen_pattern_variants_pattern
+            ON screen_pattern_variants(pattern_id)
+            WHERE pruned_at IS NULL
+        """)
+
         # Screen Graph — durable generated-screen pathway edges between user
         # state, IOO nodes, clarifying screens, and execution screens.
         await conn.execute("""

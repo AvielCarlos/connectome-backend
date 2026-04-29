@@ -11,7 +11,7 @@ import json
 from typing import Any, Iterable, Mapping, Optional
 from uuid import UUID
 
-from core.database import fetchrow
+from core.database import fetch, fetchrow
 
 SCREEN_RELATIONS = {
     "leads_to",
@@ -196,3 +196,115 @@ def rank_screen_pathways(
         )
 
     return sorted(ranked, key=lambda item: item["pathway_score"], reverse=True)
+
+
+async def prune_stale_patterns(
+    *,
+    stale_days: int = 45,
+    min_usage_count: int = 3,
+    min_outcome_score: float = 0.25,
+    dry_run: bool = True,
+) -> dict:
+    """Identify or softly prune stale Screen Pattern Library assets.
+
+    Deterministic lifecycle helper for the Screen Pattern Library:
+    create/reuse → test variants → reinforce winners → trim stale, unused, or
+    low-outcome patterns. This is intentionally conservative: it marks rows with
+    `deprecated_at`/`pruned_at` instead of deleting them so Ora keeps historical
+    learning while avoiding future reuse.
+
+    Args:
+        stale_days: Asset is stale when `last_used_at`/`created_at` is older.
+        min_usage_count: Below this count, the asset is considered unused.
+        min_outcome_score: Below this score, the asset is underperforming.
+        dry_run: When true, return candidates without mutating the database.
+    """
+    safe_stale_days = max(1, int(stale_days))
+    safe_min_usage = max(0, int(min_usage_count))
+    safe_min_outcome = max(0.0, min(float(min_outcome_score), 1.0))
+
+    candidates_sql = """
+        SELECT 'pattern' AS asset_type, id, name, usage_count, outcome_score,
+               last_used_at, created_at
+        FROM screen_patterns
+        WHERE pruned_at IS NULL
+          AND (
+            COALESCE(last_used_at, created_at) < NOW() - ($1::int * INTERVAL '1 day')
+            OR usage_count < $2::int
+            OR outcome_score < $3::float
+          )
+        UNION ALL
+        SELECT 'variant' AS asset_type, id, COALESCE(name, variant_key) AS name,
+               usage_count, outcome_score, last_used_at, created_at
+        FROM screen_pattern_variants
+        WHERE pruned_at IS NULL
+          AND (
+            COALESCE(last_used_at, created_at) < NOW() - ($1::int * INTERVAL '1 day')
+            OR usage_count < $2::int
+            OR outcome_score < $3::float
+          )
+        ORDER BY asset_type, outcome_score ASC, usage_count ASC
+    """
+    rows = await fetch(candidates_sql, safe_stale_days, safe_min_usage, safe_min_outcome)
+    candidates = [dict(row) for row in rows]
+
+    if dry_run or not candidates:
+        return {
+            "dry_run": dry_run,
+            "stale_days": safe_stale_days,
+            "min_usage_count": safe_min_usage,
+            "min_outcome_score": safe_min_outcome,
+            "candidate_count": len(candidates),
+            "pruned_patterns": 0,
+            "pruned_variants": 0,
+            "candidates": candidates,
+        }
+
+    pattern_rows = await fetch(
+        """
+        UPDATE screen_patterns
+        SET deprecated_at = COALESCE(deprecated_at, NOW()),
+            pruned_at = NOW(),
+            prune_reason = 'stale_unused_or_low_outcome',
+            updated_at = NOW()
+        WHERE pruned_at IS NULL
+          AND (
+            COALESCE(last_used_at, created_at) < NOW() - ($1::int * INTERVAL '1 day')
+            OR usage_count < $2::int
+            OR outcome_score < $3::float
+          )
+        RETURNING id
+        """,
+        safe_stale_days,
+        safe_min_usage,
+        safe_min_outcome,
+    )
+    variant_rows = await fetch(
+        """
+        UPDATE screen_pattern_variants
+        SET deprecated_at = COALESCE(deprecated_at, NOW()),
+            pruned_at = NOW(),
+            prune_reason = 'stale_unused_or_low_outcome',
+            updated_at = NOW()
+        WHERE pruned_at IS NULL
+          AND (
+            COALESCE(last_used_at, created_at) < NOW() - ($1::int * INTERVAL '1 day')
+            OR usage_count < $2::int
+            OR outcome_score < $3::float
+          )
+        RETURNING id
+        """,
+        safe_stale_days,
+        safe_min_usage,
+        safe_min_outcome,
+    )
+    return {
+        "dry_run": False,
+        "stale_days": safe_stale_days,
+        "min_usage_count": safe_min_usage,
+        "min_outcome_score": safe_min_outcome,
+        "candidate_count": len(candidates),
+        "pruned_patterns": len(pattern_rows),
+        "pruned_variants": len(variant_rows),
+        "candidates": candidates,
+    }
