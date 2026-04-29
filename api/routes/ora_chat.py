@@ -1,5 +1,5 @@
 """
-Ora Chat API — Talk directly to Ora.
+Ora Chat API — Talk directly to Ora, the brain of Connectome AI OS.
 
 Endpoints:
   POST /api/ora/chat         — Send a message to Ora
@@ -316,13 +316,13 @@ async def get_opening_message(
     brain = get_brain()
     consciousness = getattr(brain, "consciousness", None)
     if not consciousness:
-        return {"message": "Hi. I'm Ora. I'm here if you want to talk."}
+        return {"message": "Hi. I'm Ora — the brain of Connectome, the AI OS for human fulfilment. I can help you navigate your IOO graph toward what matters next."}
 
     try:
         message = await consciousness.opening_message(user_id)
     except Exception as e:
         logger.warning(f"Opening message error: {e}")
-        message = "Hi. I'm Ora. I'm here if you want to talk."
+        message = "Hi. I'm Ora — the brain of Connectome, powered by the Ascension Technologies DAO. I can help you navigate your IOO graph toward your deepest fulfilment."
 
     return {"message": message}
 

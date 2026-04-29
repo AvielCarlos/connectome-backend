@@ -2,9 +2,10 @@
 """
 AIOS Evolution Agent
 
-Evolves Ora's AIOS launcher and IOO roadmap from aggregate user intent.
-All analysis is collective/anonymized: only GROUP BY counts and engagement totals
-are used, never individual user records.
+Evolves the Connectome AI OS launcher and IOO roadmap from collective human goals.
+The AIOS is Connectome's operating-system layer: every app, agent, and human moment
+is a synapse in the nervous system of the internet. All analysis is collective/anonymized:
+only GROUP BY counts and engagement totals are used, never individual user records.
 """
 
 import asyncio
@@ -35,7 +36,7 @@ DOMAIN_KEYWORDS = {
 
 
 class AIOSEvolutionAgent:
-    """Compute the current collective direction of the AIOS."""
+    """Compute the current collective direction of Connectome's AIOS layer."""
 
     def __init__(self, openai_client=None):
         self._openai = openai_client
@@ -59,7 +60,7 @@ class AIOSEvolutionAgent:
         self._running = False
 
     async def run_weekly_evolution(self) -> Dict[str, Any]:
-        """Analyze collective goals + IOO engagement, store a new aios_state row."""
+        """Analyze collective human goals + IOO engagement, store a new Connectome AIOS state row."""
         top_goals = await self._top_onboarding_goals()
         engagement = await self._top_ioo_nodes_by_engagement()
         user_count = int(await fetchval("SELECT COUNT(*) FROM users") or 0)
@@ -189,7 +190,7 @@ class AIOSEvolutionAgent:
     async def _mission_statement(self, goals: List[Dict[str, Any]], featured_apps: List[str]) -> str:
         top_goal_text = ", ".join(str(goal["goal"]) for goal in goals[:5]) or "clarity, vitality, contribution, and aliveness"
         fallback = (
-            f"Ora is evolving this week to help people move toward {top_goal_text} "
+            f"Ora, the brain of Connectome, is evolving the AI OS this week around {top_goal_text} "
             f"through {', '.join(featured_apps[:3])}."
         )
         if not self._openai:
@@ -201,7 +202,7 @@ class AIOSEvolutionAgent:
                 messages=[
                     {
                         "role": "system",
-                        "content": "Write one clear, inspiring sentence for Ora's AIOS mission. No hype, no more than 28 words.",
+                        "content": "Write one clear, inspiring sentence for Ora's mission as the brain evolving Connectome's AI OS from collective human goals. No hype, no more than 28 words.",
                     },
                     {
                         "role": "user",
@@ -228,7 +229,7 @@ class AIOSEvolutionAgent:
         top_node = engagement[0]["title"] if engagement else "no IOO engagement leader yet"
         if not previous:
             return (
-                f"Initial AIOS evolution baseline: top collective goal is '{top_goal}', "
+                f"Initial Connectome AIOS evolution baseline: top collective goal is '{top_goal}', "
                 f"top IOO node is '{top_node}', and launcher priority is {', '.join(featured_apps[:4])}."
             )
 
