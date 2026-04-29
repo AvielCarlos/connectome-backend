@@ -53,6 +53,7 @@ from api.routes import github_oauth as github_oauth_routes
 from api.routes import integrations as integrations_routes
 from api.routes import events as events_routes
 from api.routes import ora_autonomy as ora_autonomy_routes
+from api.routes import council as council_routes
 from api.routes import onboarding as onboarding_routes
 from api.routes import surfaces as surfaces_routes
 from api.routes import gamification as gamification_routes
@@ -292,6 +293,7 @@ app.include_router(google_auth_routes.router)
 app.include_router(github_oauth_routes.router)
 app.include_router(integrations_routes.router)
 app.include_router(ora_autonomy_routes.router)
+app.include_router(council_routes.router)
 app.include_router(onboarding_routes.router)
 app.include_router(surfaces_routes.router)
 app.include_router(gamification_routes.router)
