@@ -105,17 +105,48 @@ def _ioo_node_to_screen_dict(node: dict) -> dict:
 
 async def _store_ioo_screen_spec(spec_dict: dict) -> str:
     """Persist an IOO-sourced screen spec in screen_specs and return its DB id."""
+    metadata = spec_dict.get("metadata", {}) or {}
+    node_id = metadata.get("node_id")
+    screen_role = metadata.get("screen_role") or "recommend"
+    node_uuid = None
+    if node_id:
+        try:
+            node_uuid = UUID(str(node_id))
+        except ValueError:
+            node_uuid = None
+
     row = await fetchrow(
         """
-        INSERT INTO screen_specs (spec, agent_type, domain)
-        VALUES ($1, $2, $3)
+        INSERT INTO screen_specs (spec, agent_type, domain, ioo_node_id, screen_role)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING id
         """,
         json.dumps(spec_dict),
         "IOOGraphAgent",
-        spec_dict.get("metadata", {}).get("domain"),
+        metadata.get("domain"),
+        node_uuid,
+        screen_role,
     )
-    return str(row["id"])
+    db_id = str(row["id"])
+
+    # TODO(ScreenGraph): generated IOO screens are pathway nodes, not throwaway
+    # UI. This initial edge attaches the screen to its source IOO node; future
+    # generation should also create leads_to/requires/clarifies/executes edges
+    # between neighbouring generated screens and execution runs.
+    if node_uuid:
+        try:
+            from ora.agents.screen_graph_agent import create_screen_edge
+
+            await create_screen_edge(
+                from_screen_id=db_id,
+                relation_type="belongs_to_ioo_node",
+                ioo_node_id=node_uuid,
+                evidence={"source": "screens._store_ioo_screen_spec", "screen_role": screen_role},
+            )
+        except Exception as err:
+            logger.debug("Screen graph edge creation skipped for screen %s: %s", db_id[:8], err)
+
+    return db_id
 
 
 _STATIC_FALLBACK_CARDS = [
@@ -198,6 +229,9 @@ async def _static_fallback_card(
     # TODO(IOO): when the user chooses "do now", trigger the IOO Execution
     # Protocol for this fallback action. "do later" should schedule/resurface,
     # and "not interested" should become a graph-learning signal/refinement.
+    # TODO(ScreenGraph): once fallback cards are mapped to IOO candidate nodes,
+    # create screen_graph_edges here too so Do Now / Do Later / Not Interested
+    # can adjust user-specific pathway weights instead of only aggregate ratings.
 
     try:
         db_id = await _store_ioo_screen_spec(spec_dict)
@@ -548,6 +582,10 @@ async def save_screen_for_later(
     Bookmark a screen so Ora resurfaces it in ~24 hours.
     Upserts an interaction row with saved=true.
     """
+    # TODO(ScreenGraph): treat this as the explicit "Do Later" graph-learning
+    # signal. Increase the relevant user-specific screen_graph_edges weight,
+    # connect this screen to its resurfacing/reminder screen, and avoid treating
+    # a save as either completion or rejection.
     try:
         screen_uuid = UUID(body.screen_spec_id)
     except ValueError:
