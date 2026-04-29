@@ -562,3 +562,39 @@ CREATE INDEX IF NOT EXISTS idx_contributors_founding_steward
 CREATE INDEX IF NOT EXISTS idx_contributions_ltv_active
     ON contributions(is_ltv_active, ltv_last_evaluated_at)
     WHERE status = 'accepted' AND is_ltv_active = TRUE;
+
+-- ============================================================
+-- IOO Vector Integration (added 2026-04-29)
+-- ============================================================
+
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS embedding vector(1536);
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS goal_category TEXT;
+ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding vector(1536);
+ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding_updated_at TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS idx_ioo_nodes_embedding
+    ON ioo_nodes USING ivfflat (embedding vector_cosine_ops)
+    WITH (lists = 20);
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS step_type TEXT DEFAULT 'hybrid';
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS physical_context TEXT;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS best_time TEXT;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS requirements JSONB DEFAULT '{}';
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS estimated_duration_days INTEGER;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS difficulty_level INTEGER DEFAULT 5;
+
+CREATE TABLE IF NOT EXISTS ioo_node_proposals (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    description TEXT,
+    goal_category TEXT,
+    step_type TEXT DEFAULT 'hybrid',
+    domain TEXT,
+    tags TEXT[] DEFAULT '{}',
+    source_url TEXT,
+    confidence FLOAT DEFAULT 0.5,
+    status TEXT DEFAULT 'pending',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ioo_node_proposals_status
+    ON ioo_node_proposals(status, created_at DESC);
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}';

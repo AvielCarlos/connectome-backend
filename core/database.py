@@ -1413,6 +1413,14 @@ async def run_migrations():
                 requires_skills TEXT[] DEFAULT '{}',
                 requires_location TEXT,
                 requires_time_hours NUMERIC(5,1),
+                step_type TEXT DEFAULT 'hybrid'
+                    CHECK (step_type IN ('digital','physical','hybrid')),
+                physical_context TEXT,
+                best_time TEXT,
+                requirements JSONB DEFAULT '{}',
+                prerequisite_nodes UUID[] DEFAULT '{}',
+                estimated_duration_days INTEGER,
+                difficulty_level INTEGER DEFAULT 5,
                 attempt_count INT DEFAULT 0,
                 success_count INT DEFAULT 0,
                 avg_completion_hours NUMERIC(8,2),
@@ -1430,6 +1438,60 @@ async def run_migrations():
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ioo_nodes_active ON ioo_nodes(is_active)
         """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS embedding vector(1536)
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS goal_category TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS step_type TEXT DEFAULT 'hybrid'
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS physical_context TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS best_time TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS requirements JSONB DEFAULT '{}'
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}'
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS estimated_duration_days INTEGER
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS difficulty_level INTEGER DEFAULT 5
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_node_proposals (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                title TEXT NOT NULL,
+                description TEXT,
+                goal_category TEXT,
+                step_type TEXT DEFAULT 'hybrid',
+                domain TEXT,
+                tags TEXT[] DEFAULT '{}',
+                source_url TEXT,
+                confidence FLOAT DEFAULT 0.5,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_node_proposals_status
+            ON ioo_node_proposals(status, created_at DESC)
+        """)
+        try:
+            await conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_ioo_nodes_embedding
+                ON ioo_nodes USING ivfflat (embedding vector_cosine_ops)
+                WITH (lists = 20)
+            """)
+        except Exception:
+            pass  # Needs data first
 
         # Graph edges — weighted paths between nodes
         await conn.execute("""
@@ -1469,8 +1531,16 @@ async def run_migrations():
                 free_time_weekday_hours NUMERIC(4,1),
                 free_time_weekend_hours NUMERIC(4,1),
                 state_json JSONB DEFAULT '{}',
+                embedding vector(1536),
+                embedding_updated_at TIMESTAMPTZ,
                 last_updated TIMESTAMPTZ DEFAULT NOW()
             )
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding vector(1536)
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding_updated_at TIMESTAMPTZ
         """)
 
         # Per-user progress tracking through the graph

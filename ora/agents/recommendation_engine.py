@@ -54,6 +54,7 @@ EXPLOIT_RATIO = 0.80    # 80% from exploit pool
 # EMA alpha for user embedding updates
 EMA_ALPHA = 0.10        # new = alpha * card_emb + (1-alpha) * old_emb
 GOAL_BLEND_RATIO = 0.30  # 30% goal embedding, 70% behavioral
+IOO_BLEND_RATIO = 0.25   # 25% IOO graph fingerprint, 75% behavioral/goal blend
 
 
 def _hash_text_to_embedding(text: str, dim: int = EMBEDDING_DIM) -> List[float]:
@@ -468,10 +469,11 @@ class RecommendationEngine:
 
         Algorithm:
         1. Fetch user's combined_embedding
-        2. Vector similarity search against card_popularity
-        3. Re-rank by: similarity*0.6 + avg_rating/5*0.3 + recency_bonus*0.1
-        4. Insert explore cards (20%)
-        5. Return final ranked list
+        2. Pull the user's IOO vector profile and blend it in
+        3. Vector similarity search against card_popularity
+        4. Re-rank by similarity, quality, recency, and IOO alignment
+        5. Insert explore cards (20%)
+        6. Return final ranked list
         """
         try:
             # Fetch user embedding
@@ -479,6 +481,13 @@ class RecommendationEngine:
                 "SELECT combined_embedding, total_cards_rated FROM user_interest_vectors WHERE user_id = $1::uuid",
                 user_id,
             )
+
+            ioo_vector: List[float] = []
+            try:
+                from ora.agents.ioo_graph_agent import get_graph_agent
+                ioo_vector = await get_graph_agent().build_user_ioo_vector(user_id)
+            except Exception as ioe:
+                logger.debug(f"RecommendationEngine: IOO profile unavailable: {ioe}")
 
             # Get recently seen cards (last 7 days)
             recent_seen = await fetch(
@@ -500,9 +509,20 @@ class RecommendationEngine:
             explore_cards = []
 
             if uiv_row and uiv_row["combined_embedding"] and uiv_row["total_cards_rated"] > 5:
-                # Vector similarity search for exploit pool
+                # Vector similarity search for exploit pool. Blend Ora's
+                # behavioral/goal vector with the IOO graph fingerprint so feed
+                # cards preferentially align with where the user is in their
+                # achievement graph.
                 raw_emb = uiv_row["combined_embedding"]
-                emb_str = raw_emb if isinstance(raw_emb, str) else _embedding_to_pgvector(list(raw_emb))
+                behavior_emb = json.loads(raw_emb) if isinstance(raw_emb, str) else list(raw_emb)
+                if ioo_vector:
+                    combined_for_feed = _weighted_blend(
+                        ioo_vector, IOO_BLEND_RATIO,
+                        behavior_emb, 1.0 - IOO_BLEND_RATIO,
+                    )
+                else:
+                    combined_for_feed = behavior_emb
+                emb_str = _embedding_to_pgvector(combined_for_feed)
 
                 location_filter = ""
                 location_params = []
@@ -540,7 +560,8 @@ class RecommendationEngine:
                     avg_r = float(row["avg_rating"] or 0)
                     age = float(row["age_days"] or 30)
                     recency = max(0, 1.0 - age / 30.0)  # 1.0 for brand new, 0.0 for 30+ days
-                    score = sim * 0.6 + (avg_r / 5.0) * 0.3 + recency * 0.1
+                    ioo_bonus = 0.05 if ioo_vector else 0.0
+                    score = sim * 0.6 + (avg_r / 5.0) * 0.3 + recency * 0.1 + ioo_bonus
                     scored.append((card_id, score))
 
                 scored.sort(key=lambda x: x[1], reverse=True)

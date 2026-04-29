@@ -40,6 +40,7 @@ XP_TABLE = {
     "goal_create":    50,
     "goal_step":      40,
     "goal_complete": 200,
+    "ioo_node_complete": 100,
     "journal_entry":  25,
     "chat_message":   10,
     "collection_create": 15,

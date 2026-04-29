@@ -25,11 +25,32 @@ from pydantic import BaseModel
 from core.database import fetch, fetchrow, fetchval, execute
 from api.middleware import get_current_user_id
 from ora.agents.ioo_graph_agent import get_graph_agent
+from ora.agents.ioo_enrichment_agent import get_ioo_enrichment_agent
 from ora.agents.surface_generator import SurfaceGenerator
 from ora.agents.surface_lifecycle import SurfaceLifecycleManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ioo", tags=["ioo"])
+
+
+async def _ioo_xp_for_node(node_id: str, user_id: str) -> int:
+    """Calculate XP for completing an IOO node, scaled by difficulty."""
+    node = await fetchrow(
+        "SELECT difficulty_level, type, goal_category, step_type FROM ioo_nodes WHERE id = $1::uuid",
+        str(node_id),
+    )
+    if not node:
+        return 0
+
+    difficulty = int(node["difficulty_level"] or 5)
+    xp_by_difficulty = {
+        1: 25, 2: 40, 3: 60, 4: 80, 5: 100,
+        6: 150, 7: 200, 8: 300, 9: 400, 10: 500,
+    }
+    base_xp = xp_by_difficulty.get(difficulty, 100)
+    if (node["step_type"] or "digital") == "physical":
+        base_xp = int(base_xp * 1.5)
+    return base_xp
 
 
 # ---------------------------------------------------------------------------
@@ -164,9 +185,16 @@ async def update_user_state(
 async def get_graph_recommendations(
     goal_id: Optional[str] = Query(None),
     limit: int = Query(5, ge=1, le=20),
+    preference: str = Query("mixed", pattern="^(prefer_digital|prefer_physical|mixed)$"),
     user_id: str = Depends(get_current_user_id),
 ):
     """Return recommended next nodes toward a goal, filtered by user capabilities."""
+    if goal_id:
+        try:
+            UUID(goal_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid goal node ID")
+
     agent = get_graph_agent()
     try:
         nodes = await agent.recommend_next_nodes(
@@ -174,11 +202,103 @@ async def get_graph_recommendations(
             goal_id=goal_id,
             limit=limit,
         )
+        suggested_path = []
+        if goal_id:
+            suggested_path = await agent.build_personalised_path(
+                user_id=str(user_id),
+                goal_node_id=goal_id,
+                max_steps=10,
+                preference=preference,
+            )
     except Exception as e:
         logger.error(f"Graph recommendation error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Graph recommendation failed")
 
-    return {"nodes": nodes, "count": len(nodes)}
+    return {"nodes": nodes, "count": len(nodes), "preference": preference, "suggested_path": suggested_path}
+
+
+@router.get("/path")
+async def get_path_to_goal(
+    goal_id: str = Query(..., description="Destination IOO goal node ID"),
+    max_steps: int = Query(10, ge=1, le=25),
+    preference: str = Query("mixed", pattern="^(prefer_digital|prefer_physical|mixed)$"),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Return Google-Maps-style step-by-step path to a goal node."""
+    try:
+        UUID(goal_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid goal node ID")
+
+    agent = get_graph_agent()
+    try:
+        path = await agent.build_personalised_path(
+            user_id=str(user_id),
+            goal_node_id=goal_id,
+            max_steps=max_steps,
+            preference=preference,
+        )
+    except Exception as e:
+        logger.error(f"IOO pathfinding error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Pathfinding failed")
+    if not path:
+        goal_exists = await fetchval(
+            "SELECT EXISTS(SELECT 1 FROM ioo_nodes WHERE id = $1::uuid AND is_active = TRUE)",
+            goal_id,
+        )
+        if not goal_exists:
+            raise HTTPException(status_code=404, detail="Goal node not found")
+    return {"goal_id": goal_id, "preference": preference, "path": path, "steps": len(path)}
+
+
+@router.get("/eligibility/{node_id}")
+async def get_node_eligibility(
+    node_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Check whether current user can attempt a node and which bridge nodes they need."""
+    try:
+        UUID(node_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid node ID")
+    agent = get_graph_agent()
+    result = await agent.check_node_eligibility(str(user_id), node_id)
+    if result.get("gaps") and result["gaps"][0].get("type") == "missing_node":
+        raise HTTPException(status_code=404, detail="Node not found")
+    return result
+
+
+@router.get("/vector")
+async def get_my_ioo_vector_summary(user_id: str = Depends(get_current_user_id)):
+    """Return a safe summary of the current user's IOO vector fingerprint."""
+    agent = get_graph_agent()
+    return await agent.get_user_vector_summary(str(user_id))
+
+
+@router.get("/vector-recommend")
+async def get_vector_recommendations(
+    goal_context: str = Query(..., min_length=1),
+    limit: int = Query(10, ge=1, le=50),
+    preference: str = Query("mixed", pattern="^(prefer_digital|prefer_physical|mixed)$"),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Return IOO nodes ranked by semantic similarity to a goal/context string."""
+    agent = get_graph_agent()
+    nodes = await agent.vector_recommend(
+        str(user_id),
+        goal_context=goal_context,
+        limit=limit,
+        preference=preference,
+    )
+    return {"nodes": nodes, "count": len(nodes), "preference": preference}
+
+
+@router.post("/embed-nodes")
+async def embed_ioo_nodes(user_id: str = Depends(get_current_user_id)):
+    """Embed IOO nodes that do not have embeddings yet. Available to all for Phase 1."""
+    agent = get_graph_agent()
+    embedded = await agent.embed_all_nodes()
+    return {"ok": True, "embedded": embedded}
 
 
 # ---------------------------------------------------------------------------
@@ -259,12 +379,27 @@ async def record_progress(
             success=True,
             hours_taken=body.hours_taken or 0.0,
         )
+        xp_amount = await _ioo_xp_for_node(str(body.node_id), str(user_id))
+        if xp_amount > 0:
+            try:
+                await execute(
+                    "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, $3, $4)",
+                    UUID(str(user_id)), xp_amount, "ioo_node_complete", str(body.node_id),
+                )
+            except Exception as e:
+                logger.warning(f"IOO XP award failed: {e}")
     elif body.status == "abandoned":
         await agent.record_node_outcome(
             str(user_id),
             str(body.node_id),
             success=False,
         )
+
+    if body.status in ("viewed", "started", "completed"):
+        try:
+            await agent.build_user_ioo_vector(str(user_id))
+        except Exception as e:
+            logger.debug(f"IOO user vector update skipped: {e}")
 
     return {"ok": True, "status": body.status}
 
@@ -302,6 +437,84 @@ async def get_progress(
         *params,
     )
     return {"progress": [dict(r) for r in rows]}
+
+
+
+
+# ---------------------------------------------------------------------------
+# Proposals / Enrichment
+# ---------------------------------------------------------------------------
+
+@router.get("/proposals")
+async def list_node_proposals(
+    status: str = Query("pending", pattern="^(pending|approved|rejected|all)$"),
+    limit: int = Query(50, ge=1, le=200),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Return IOO node proposals for review. Admin-light for Phase 1."""
+    if status == "all":
+        rows = await fetch(
+            "SELECT * FROM ioo_node_proposals ORDER BY created_at DESC LIMIT $1",
+            limit,
+        )
+    else:
+        rows = await fetch(
+            "SELECT * FROM ioo_node_proposals WHERE status = $1 ORDER BY created_at DESC LIMIT $2",
+            status, limit,
+        )
+    return {"proposals": [dict(r) for r in rows], "count": len(rows)}
+
+
+@router.post("/proposals/{proposal_id}/approve")
+async def approve_node_proposal(
+    proposal_id: str,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Promote a pending proposal into a live IOO node."""
+    try:
+        UUID(proposal_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid proposal ID")
+
+    proposal = await fetchrow("SELECT * FROM ioo_node_proposals WHERE id = $1::uuid", proposal_id)
+    if not proposal:
+        raise HTTPException(status_code=404, detail="Proposal not found")
+
+    existing = await fetchrow(
+        "SELECT id FROM ioo_nodes WHERE lower(title) = lower($1) LIMIT 1",
+        proposal["title"],
+    )
+    if existing:
+        await execute("UPDATE ioo_node_proposals SET status = 'approved' WHERE id = $1::uuid", proposal_id)
+        return {"ok": True, "node_id": str(existing["id"]), "already_exists": True}
+
+    node = await fetchrow(
+        """
+        INSERT INTO ioo_nodes
+            (type, title, description, tags, domain, step_type, goal_category, difficulty_level)
+        VALUES ('activity', $1, $2, $3, $4, $5, $6, 5)
+        RETURNING id
+        """,
+        proposal["title"],
+        proposal["description"],
+        proposal["tags"] or [],
+        proposal["domain"],
+        proposal["step_type"] or "hybrid",
+        proposal["goal_category"],
+    )
+    await execute("UPDATE ioo_node_proposals SET status = 'approved' WHERE id = $1::uuid", proposal_id)
+    try:
+        await get_graph_agent().embed_all_nodes()
+    except Exception as e:
+        logger.debug(f"Embedding approved IOO proposal skipped: {e}")
+    return {"ok": True, "node_id": str(node["id"])}
+
+
+@router.post("/enrich")
+async def run_ioo_enrichment(user_id: str = Depends(get_current_user_id)):
+    """Run daily IOO graph enrichment now. Admin-light for Phase 1."""
+    result = await get_ioo_enrichment_agent().run_daily()
+    return result
 
 
 # ---------------------------------------------------------------------------
