@@ -101,6 +101,23 @@ async def run_migrations():
             )
         """)
 
+        # Social auth/profile columns — idempotent for existing users table
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider TEXT DEFAULT 'email'
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_id TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name TEXT
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_users_provider ON users(auth_provider, provider_id)
+        """)
+
         # Screen specs table
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS screen_specs (
@@ -1672,6 +1689,66 @@ async def run_migrations():
             )
         """)
         await conn.execute("CREATE INDEX IF NOT EXISTS collection_items_col_idx ON collection_items(collection_id)")
+
+        # ─── Migration 009: Social Layer — leaderboards, friends, challenges ───
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS weekly_xp_snapshot (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID NOT NULL REFERENCES users(id),
+                week_start DATE NOT NULL,
+                xp_earned INTEGER DEFAULT 0,
+                rank INTEGER,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(user_id, week_start)
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_weekly_xp_snapshot_week_rank
+            ON weekly_xp_snapshot(week_start, rank)
+        """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS friend_connections (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                requester_id UUID NOT NULL REFERENCES users(id),
+                addressee_id UUID NOT NULL REFERENCES users(id),
+                status TEXT DEFAULT 'pending'
+                    CHECK (status IN ('pending','accepted','declined','blocked')),
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(requester_id, addressee_id)
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_friend_connections_requester
+            ON friend_connections(requester_id, status)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_friend_connections_addressee
+            ON friend_connections(addressee_id, status)
+        """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_challenges (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                challenger_id UUID NOT NULL REFERENCES users(id),
+                challengee_id UUID NOT NULL REFERENCES users(id),
+                node_id UUID NOT NULL REFERENCES ioo_nodes(id),
+                message TEXT,
+                deadline TIMESTAMPTZ,
+                status TEXT DEFAULT 'active'
+                    CHECK (status IN ('active','completed','expired','declined')),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_challenges_users
+            ON ioo_challenges(challenger_id, challengee_id, status)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_challenges_node_status
+            ON ioo_challenges(node_id, status)
+        """)
 
         # DAO LTV columns — idempotent, added after initial DAO migration
         await conn.execute("""

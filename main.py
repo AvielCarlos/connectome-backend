@@ -54,6 +54,9 @@ from api.routes import ora_autonomy as ora_autonomy_routes
 from api.routes import onboarding as onboarding_routes
 from api.routes import surfaces as surfaces_routes
 from api.routes import gamification as gamification_routes
+from api.routes import leaderboard as leaderboard_routes
+from api.routes import friends as friends_routes
+from api.routes import social_auth as social_auth_routes
 from api.routes import knowledge as knowledge_routes
 try:
     from api.routes import ioo as ioo_routes
@@ -287,6 +290,9 @@ app.include_router(ora_autonomy_routes.router)
 app.include_router(onboarding_routes.router)
 app.include_router(surfaces_routes.router)
 app.include_router(gamification_routes.router)
+app.include_router(leaderboard_routes.router)
+app.include_router(friends_routes.router)
+app.include_router(social_auth_routes.router)
 app.include_router(knowledge_routes.router)
 if _services_available and services_routes:
     app.include_router(services_routes.router)

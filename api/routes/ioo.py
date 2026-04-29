@@ -374,6 +374,7 @@ async def record_progress(
 
     # Update node aggregate stats when completed/abandoned
     agent = get_graph_agent()
+    challenge_awards = []
     if body.status == "completed":
         await agent.record_node_outcome(
             str(user_id),
@@ -390,6 +391,13 @@ async def record_progress(
                 )
             except Exception as e:
                 logger.warning(f"IOO XP award failed: {e}")
+        try:
+            from api.routes.friends import award_completed_challenges
+
+            challenge_awards = await award_completed_challenges(str(user_id), str(body.node_id))
+        except Exception as e:
+            logger.warning(f"IOO challenge completion awards failed: {e}")
+            challenge_awards = []
     elif body.status == "abandoned":
         await agent.record_node_outcome(
             str(user_id),
@@ -403,7 +411,7 @@ async def record_progress(
         except Exception as e:
             logger.debug(f"IOO user vector update skipped: {e}")
 
-    return {"ok": True, "status": body.status}
+    return {"ok": True, "status": body.status, "challenge_awards": challenge_awards}
 
 
 @router.get("/progress")
