@@ -5,6 +5,7 @@ Includes experiment signal collection and implicit behaviour signals.
 """
 
 import logging
+import json
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -18,6 +19,182 @@ from uuid import UUID
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
+
+GLOBAL_FEEDBACK_CP = 10
+GLOBAL_FEEDBACK_XP = 10
+GLOBAL_FEEDBACK_CATEGORIES = {"Bug", "Confusing", "Idea", "Design", "Praise", "Other"}
+
+
+async def _ensure_global_feedback_schema() -> None:
+    """Idempotent schema hardening for the lightweight global feedback loop."""
+    await execute(
+        """
+        CREATE TABLE IF NOT EXISTS app_feedback (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+            category TEXT NOT NULL DEFAULT 'Other',
+            message TEXT NOT NULL,
+            route TEXT,
+            screenshot_data_url TEXT,
+            metadata JSONB DEFAULT '{}'::jsonb,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+        """
+    )
+    await execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS route TEXT")
+    await execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS screenshot_data_url TEXT")
+    await execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb")
+    await execute("CREATE INDEX IF NOT EXISTS idx_app_feedback_user_created ON app_feedback(user_id, created_at DESC)")
+
+    await execute("ALTER TABLE contributors ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)")
+    await execute("CREATE INDEX IF NOT EXISTS idx_contributors_user_id ON contributors(user_id)")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS external_link TEXT")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS evidence_text TEXT")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS attachment_urls JSONB DEFAULT '[]'")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'")
+    await execute("ALTER TABLE contributions ADD COLUMN IF NOT EXISTS source_id TEXT")
+
+
+async def _get_or_create_feedback_contributor(user_uuid: UUID) -> Any:
+    contributor = await fetchrow("SELECT id FROM contributors WHERE user_id = $1", user_uuid)
+    if contributor:
+        return contributor
+
+    user_row = await fetchrow("SELECT email, display_name, profile FROM users WHERE id = $1", user_uuid)
+    user_data = dict(user_row) if user_row else {}
+    email = user_data.get("email") or ""
+    profile = user_data.get("profile") or {}
+    if isinstance(profile, str):
+        try:
+            profile = json.loads(profile)
+        except Exception:
+            profile = {}
+    display = (
+        user_data.get("display_name")
+        or (profile.get("display_name") if isinstance(profile, dict) else None)
+        or (email.split("@")[0] if email else f"user_{str(user_uuid)[:8]}")
+    )
+
+    return await fetchrow(
+        """
+        INSERT INTO contributors (github_username, display_name, email, tier, user_id)
+        VALUES ($1, $2, $3, 'contributor', $4)
+        ON CONFLICT (github_username) DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            display_name = COALESCE(contributors.display_name, EXCLUDED.display_name),
+            email = COALESCE(contributors.email, EXCLUDED.email)
+        RETURNING id
+        """,
+        f"user_{str(user_uuid)[:8]}",
+        display,
+        email,
+        user_uuid,
+    )
+
+
+async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> FeedbackResponse:
+    message = (body.message or "").strip()
+    if len(message) < 3:
+        raise HTTPException(status_code=422, detail="message is required")
+
+    category = body.category or "Other"
+    if category not in GLOBAL_FEEDBACK_CATEGORIES:
+        raise HTTPException(status_code=422, detail="invalid feedback category")
+
+    user_uuid = UUID(user_id)
+    await _ensure_global_feedback_schema()
+
+    metadata = body.metadata if isinstance(body.metadata, dict) else {}
+    feedback = await fetchrow(
+        """
+        INSERT INTO app_feedback (user_id, category, message, route, screenshot_data_url, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+        RETURNING id
+        """,
+        user_uuid,
+        category,
+        message,
+        body.route,
+        body.screenshot_data_url,
+        json.dumps(metadata),
+    )
+    feedback_id = feedback["id"] if feedback else None
+
+    contributor = await _get_or_create_feedback_contributor(user_uuid)
+    contribution = None
+    try:
+        contribution = await fetchrow(
+            """
+            INSERT INTO contributions (
+                contributor_id, user_id, contribution_type, title, description,
+                status, base_cp, multiplier, final_cp, evidence_text, source, source_id, impact_data
+            )
+            VALUES ($1, $2, 'feedback', $3, $4, 'accepted', $5, 1.0, $5, $6, 'feedback', $7, $8::jsonb)
+            RETURNING id
+            """,
+            contributor["id"] if contributor else None,
+            user_uuid,
+            f"{category} feedback on {body.route or 'Ora'}",
+            message,
+            GLOBAL_FEEDBACK_CP,
+            message,
+            str(feedback_id) if feedback_id else None,
+            json.dumps({"route": body.route, "category": category, "feedback_id": str(feedback_id) if feedback_id else None}),
+        )
+    except Exception as err:
+        logger.warning(f"Feedback contribution write failed (non-fatal): {err}")
+
+    contribution_id = str(contribution["id"]) if contribution else (str(feedback_id) if feedback_id else None)
+
+    # Award XP + CP. These are non-critical after the feedback record itself exists.
+    try:
+        await execute(
+            "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, $3, $4)",
+            user_uuid, GLOBAL_FEEDBACK_XP, "global_feedback_submit", contribution["id"] if contribution else None,
+        )
+    except Exception as err:
+        logger.warning(f"Feedback XP award failed (non-fatal): {err}")
+
+    try:
+        await execute(
+            """
+            INSERT INTO user_cp_balance (user_id, cp_balance, total_cp_earned, last_updated)
+            VALUES ($1, $2, $2, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                cp_balance = user_cp_balance.cp_balance + $2,
+                total_cp_earned = user_cp_balance.total_cp_earned + $2,
+                last_updated = NOW()
+            """,
+            user_uuid, GLOBAL_FEEDBACK_CP,
+        )
+        await execute(
+            "INSERT INTO cp_transactions (user_id, amount, reason, reference_id, created_at) VALUES ($1, $2, $3, $4, NOW())",
+            user_uuid, GLOBAL_FEEDBACK_CP, "feedback_submit", contribution_id,
+        )
+        if contributor and contribution:
+            await execute(
+                "INSERT INTO cp_ledger (contributor_id, contribution_id, cp_amount, reason) VALUES ($1, $2, $3, $4)",
+                contributor["id"], contribution["id"], GLOBAL_FEEDBACK_CP, "global_feedback_submit",
+            )
+            await execute(
+                "UPDATE contributors SET total_cp = COALESCE(total_cp, 0) + $1 WHERE id = $2",
+                GLOBAL_FEEDBACK_CP, contributor["id"],
+            )
+    except Exception as err:
+        logger.warning(f"Feedback CP award failed (non-fatal): {err}")
+
+    cp_row = await fetchrow("SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1", user_uuid)
+    return FeedbackResponse(
+        ok=True,
+        fulfilment_delta=0.0,
+        message="+10 XP / feedback received",
+        xp_earned=GLOBAL_FEEDBACK_XP,
+        cp_earned=GLOBAL_FEEDBACK_CP,
+        cp_balance=int(cp_row["cp_balance"] or 0) if cp_row else None,
+        total_dao_cp=int(cp_row["total_cp_earned"] or 0) if cp_row else None,
+        contribution_id=contribution_id,
+    )
 
 
 async def _record_ioo_outcome_if_applicable(
@@ -61,16 +238,23 @@ async def _record_ioo_outcome_if_applicable(
         logger.warning(f"IOO outcome recording skipped: {_err}")
 
 
+@router.post("", response_model=FeedbackResponse)
 @router.post("/", response_model=FeedbackResponse)
 async def submit_feedback(
     body: FeedbackSubmit,
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Submit feedback for a screen.
-    Triggers the full learning loop: embedding update, rating update, A/B tracking.
-    Also updates IOO graph weights when the card was graph-sourced.
+    Submit feedback.
+    - Global app feedback (message/category/route) stores screenshot context and awards CP/XP.
+    - Legacy card feedback (screen_spec_id/rating) triggers the learning loop.
     """
+    if body.message is not None:
+        return await _handle_global_feedback(body, user_id)
+
+    if not body.screen_spec_id:
+        raise HTTPException(status_code=422, detail="screen_spec_id or message is required")
+
     brain = get_brain()
 
     try:
