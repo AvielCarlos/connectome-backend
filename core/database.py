@@ -977,7 +977,27 @@ async def run_migrations():
             ON contributions(submitted_at DESC)
         """)
 
-        # CP transaction ledger
+        # CP transactions — user-level audit trail for all CP earn/spend events
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS cp_transactions (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                amount INT NOT NULL,
+                reason TEXT NOT NULL,
+                reference_id TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cp_tx_user
+            ON cp_transactions(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_cp_tx_created
+            ON cp_transactions(created_at)
+        """)
+
+        # CP transaction ledger (DAO contributor level)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS cp_ledger (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

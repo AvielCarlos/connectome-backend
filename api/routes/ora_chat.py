@@ -230,8 +230,10 @@ async def get_latest_reflection(
             except Exception:
                 r[key] = []
     for key in ("period_start", "period_end", "created_at"):
-        if r.get(key):
+        if r.get(key) and hasattr(r[key], "isoformat"):
             r[key] = r[key].isoformat()
+        elif r.get(key) and not isinstance(r[key], str):
+            r[key] = str(r[key])
     return r
 
 
@@ -286,7 +288,18 @@ async def get_ora_self(
         state = await consciousness.get_self_state()
     except Exception as e:
         logger.error(f"get_self_state error: {e}")
-        raise HTTPException(status_code=500, detail="Could not retrieve Ora state")
+        # Return a minimal safe state rather than failing hard
+        from ora.consciousness import ORA_IDENTITY
+        state = {
+            "identity": ORA_IDENTITY,
+            "current_model": "unavailable",
+            "total_decisions": 0,
+            "users_served": 0,
+            "avg_fulfilment_score": 0.0,
+            "latest_reflection": None,
+            "uncertainty_global": "State temporarily unavailable.",
+            "error": str(e),
+        }
 
     return state
 
@@ -536,10 +549,40 @@ async def get_ora_lessons(
     limit: int = 20,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Return Ora's most recent lessons — what she knows and why."""
-    from core.database import fetch as _fetch
+    """Return Ora's most recent lessons — what she knows and why.
+    Sensitive lessons (founder sessions, directives, or those containing
+    credentials/admin details) are filtered out for non-admin users.
+    """
+    from core.database import fetch as _fetch, fetchrow as _fetchrow
+    from core.config import settings as _settings
+
+    # Determine if caller is admin
+    _user_row = await _fetchrow("SELECT email FROM users WHERE id = $1", __import__('uuid').UUID(user_id))
+    _is_admin = False
+    if _user_row:
+        _admin_list = getattr(_settings, "admin_email_list", ["carlosandromeda8@gmail.com"])
+        _is_admin = (_user_row["email"] or "").lower() in _admin_list
+
     rows = await _fetch(
         "SELECT source, lesson, confidence, applies_to, created_at FROM ora_lessons ORDER BY created_at DESC LIMIT $1",
-        limit
+        limit,
     )
-    return [dict(r) for r in rows]
+
+    if _is_admin:
+        return [dict(r) for r in rows]
+
+    # Filter sensitive content for non-admin users
+    _SENSITIVE_SOURCES = ("founder_session", "founder_directive")
+    _SENSITIVE_KEYWORDS = ("password", "passwd", "secret", "api_key", "apikey",
+                           "admin", "private_key", "token", "credential")
+
+    def _is_safe(row: dict) -> bool:
+        src = (row.get("source") or "").lower()
+        if any(s in src for s in _SENSITIVE_SOURCES):
+            return False
+        lesson_lower = (row.get("lesson") or "").lower()
+        if any(kw in lesson_lower for kw in _SENSITIVE_KEYWORDS):
+            return False
+        return True
+
+    return [dict(r) for r in rows if _is_safe(dict(r))]

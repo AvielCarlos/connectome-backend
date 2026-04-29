@@ -1238,7 +1238,11 @@ End with an invitation. Be genuine, warm, not sycophantic."""
                     r[key] = r[key].isoformat()
             latest_reflection = r
 
-        uncertainty_global = await self.notice_evolution()
+        try:
+            uncertainty_global = await self.notice_evolution()
+        except Exception as _ne:
+            logger.warning(f"get_self_state: notice_evolution failed: {_ne}")
+            uncertainty_global = "Not enough data yet to describe evolution."
 
         # Collective intelligence: what humanity is reaching for right now
         collective_voice = None

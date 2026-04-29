@@ -1050,3 +1050,58 @@ async def submit_task(
             "Ora will review your PR and award the full CP on merge."
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /api/dao/cp/history  — User's CP transaction history
+# ---------------------------------------------------------------------------
+
+@router.get("/cp/history")
+async def get_cp_history(
+    limit: int = 50,
+    user_id: str = Depends(get_current_user_id),
+) -> Dict[str, Any]:
+    """
+    Return the authenticated user's CP transaction history.
+    Ordered newest-first. Includes current balance summary.
+    """
+    uid = UUID(user_id)
+
+    try:
+        rows = await fetch(
+            """
+            SELECT id, amount, reason, reference_id, created_at
+            FROM cp_transactions
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+            """,
+            uid,
+            limit,
+        )
+    except Exception as e:
+        logger.warning(f"cp_transactions query failed (table may not exist yet): {e}")
+        rows = []
+
+    # Also get current balance
+    balance_row = await fetchrow(
+        "SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1",
+        uid,
+    )
+    cp_balance = int(balance_row["cp_balance"] or 0) if balance_row else 0
+    total_earned = int(balance_row["total_cp_earned"] or 0) if balance_row else 0
+
+    transactions = []
+    for r in rows:
+        tx = dict(r)
+        tx["id"] = str(tx["id"])
+        if tx.get("created_at") and hasattr(tx["created_at"], "isoformat"):
+            tx["created_at"] = tx["created_at"].isoformat()
+        transactions.append(tx)
+
+    return {
+        "cp_balance": cp_balance,
+        "total_cp_earned": total_earned,
+        "transactions": transactions,
+        "count": len(transactions),
+    }

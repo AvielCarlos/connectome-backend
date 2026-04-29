@@ -9,7 +9,12 @@ from uuid import UUID
 from datetime import datetime, timezone
 
 from core.config import settings
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, Request, status, Depends
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+# Module-level rate limiter keyed by client IP
+_limiter = Limiter(key_func=get_remote_address)
 
 from typing import Optional, List
 from pydantic import BaseModel
@@ -27,7 +32,8 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-async def register(body: UserCreate):
+@_limiter.limit("10/minute")
+async def register(request: Request, body: UserCreate):
     """Register a new user."""
     # Check if email already exists
     existing = await fetchrow(
@@ -64,7 +70,8 @@ async def register(body: UserCreate):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: UserLogin):
+@_limiter.limit("10/minute")
+async def login(request: Request, body: UserLogin):
     """Authenticate and return JWT token."""
     row = await fetchrow(
         "SELECT id, hashed_password FROM users WHERE email = $1", body.email

@@ -74,6 +74,7 @@ async def create_suggestion(
 
         # Credit CP to user_cp_balance
         cp_earned = int(row["cp_earned"] or 10)
+        suggestion_id = str(row["id"])
         try:
             await execute(
                 """
@@ -88,6 +89,18 @@ async def create_suggestion(
             )
         except Exception as _cp_err:
             logger.warning(f"CP credit failed (non-fatal): {_cp_err}")
+
+        # Record in cp_transactions ledger
+        try:
+            await execute(
+                """
+                INSERT INTO cp_transactions (user_id, amount, reason, reference_id)
+                VALUES ($1, $2, 'suggestion', $3)
+                """,
+                UUID(user_id), cp_earned, suggestion_id,
+            )
+        except Exception as _tx_err:
+            logger.warning(f"CP transaction ledger write failed (non-fatal): {_tx_err}")
 
         # Get updated totals
         cp_row = await fetchrow(

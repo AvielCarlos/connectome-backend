@@ -6,10 +6,15 @@ Entry point. Mounts all routes and manages lifespan.
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from core.config import settings
 from core.database import run_migrations, close_pool
@@ -204,6 +209,9 @@ async def _ora_error_recovery_middleware(request, call_next):
     return response
 
 
+# Rate limiter — keyed by IP address
+limiter = Limiter(key_func=get_remote_address, default_limits=[])
+
 # Create FastAPI app
 app = FastAPI(
     title="Connectome API",
@@ -213,6 +221,11 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Attach limiter state and error handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # CORS
 app.add_middleware(
