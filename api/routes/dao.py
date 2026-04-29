@@ -55,6 +55,11 @@ class VoteProposalRequest(BaseModel):
     vote: str  # "for" or "against"
 
 
+class ApproveContributionRequest(BaseModel):
+    cp_amount: int
+    admin_note: Optional[str] = None
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
