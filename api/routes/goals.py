@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, Body
+from pydantic import BaseModel, Field
 
 from core.models import GoalCreate, GoalUpdate, GoalOut
 from core.database import fetchrow, fetch, execute
@@ -252,6 +253,66 @@ def _build_goal_out(row) -> GoalOut:
 
 
 # ---------------------------------------------------------------------------
+# Clarification models/helpers
+# ---------------------------------------------------------------------------
+
+class GoalClarifyRequest(BaseModel):
+    goal_title: str = Field(..., min_length=1)
+    conversation: List[Dict[str, str]] = []
+    user_profile: Dict[str, Any] = {}
+
+
+class GoalClarifyResponse(BaseModel):
+    message: str
+    is_complete: bool
+    structured_goal: Dict[str, Any] = {}
+    suggested_ioo_path: List[Dict[str, Any]] = []
+
+
+def _extract_json_object(content: str) -> Optional[Dict[str, Any]]:
+    """Extract the first JSON object from a model response."""
+    try:
+        return json.loads(content)
+    except Exception:
+        pass
+
+    match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", content, re.DOTALL)
+    candidate = match.group(1) if match else None
+    if candidate is None:
+        match = re.search(r"\{.*\}", content, re.DOTALL)
+        candidate = match.group() if match else None
+    if candidate is None:
+        return None
+    try:
+        return json.loads(candidate)
+    except Exception:
+        return None
+
+
+def _fallback_structured_goal(title: str, conversation: List[Dict[str, str]]) -> Dict[str, Any]:
+    user_bits = [m.get("content", "") for m in conversation if m.get("role") == "user"]
+    specifics = " ".join(user_bits).strip() or "Clarified through conversation with Ora."
+    return {
+        "title": title,
+        "why": "To create meaningful momentum toward this goal.",
+        "specifics": specifics[:500],
+        "timeline": "Next 30-90 days",
+        "constraints": "As discussed",
+        "difficulty_estimate": 5,
+    }
+
+
+def _fallback_clarify_question(goal_title: str, turn_count: int) -> str:
+    questions = [
+        f"What would successfully achieving {goal_title} look like in real life?",
+        "Why does this matter to you right now?",
+        "What's the biggest constraint or obstacle we should design around?",
+        "What timeline feels both meaningful and realistic?",
+    ]
+    return questions[min(turn_count, len(questions) - 1)]
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -306,6 +367,107 @@ async def create_goal(
 
     logger.info(f"Goal created for user {user_id[:8]}: {body.title} ({len(steps)} steps)")
     return _build_goal_out(row)
+
+
+@router.post("/clarify", response_model=GoalClarifyResponse)
+async def clarify_goal(
+    body: GoalClarifyRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Interactive goal clarification conversation with Ora.
+    Each call advances the conversation one step.
+    After 3-5 exchanges, returns a structured goal + IOO path.
+    """
+    conversation = body.conversation or []
+    turn_count = len([m for m in conversation if m.get("role") == "user"])
+
+    system = """You are Ora, an AI life coach helping someone clarify their goal.
+Ask ONE focused clarifying question per turn. Be warm, concise, direct.
+After 3-4 user exchanges, you have enough info. When complete, respond with a JSON block:
+{"complete": true, "structured_goal": {"title": "...", "why": "...", "specifics": "...", "timeline": "...", "constraints": "...", "difficulty_estimate": 5}, "first_step": "..."}
+Before that, just ask your next question naturally.
+Do not ask multiple questions in one message."""
+
+    messages = [{"role": "system", "content": system}]
+    if body.user_profile:
+        messages.append({
+            "role": "system",
+            "content": "User profile context: " + json.dumps(body.user_profile)[:2000],
+        })
+    messages.append({"role": "user", "content": f"I want to: {body.goal_title}"})
+    for turn in conversation[-10:]:
+        role = "assistant" if turn.get("role") == "ora" else "user"
+        content = (turn.get("content") or "").strip()
+        if content:
+            messages.append({"role": role, "content": content})
+
+    content = ""
+    client = _get_openai()
+    if client:
+        try:
+            resp = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=350,
+            )
+            content = (resp.choices[0].message.content or "").strip()
+        except Exception as e:
+            logger.warning(f"Goal clarification LLM failed: {e}")
+
+    if not content:
+        content = _fallback_clarify_question(body.goal_title, turn_count)
+
+    parsed = _extract_json_object(content)
+    is_complete = bool(parsed and parsed.get("complete") is True) or turn_count >= 4
+    structured_goal: Dict[str, Any] = {}
+    suggested_path: List[Dict[str, Any]] = []
+
+    if is_complete:
+        if parsed:
+            structured_goal = parsed.get("structured_goal") or {}
+        if not structured_goal:
+            structured_goal = _fallback_structured_goal(body.goal_title, conversation)
+        structured_goal.setdefault("title", body.goal_title)
+        structured_goal.setdefault("difficulty_estimate", structured_goal.get("difficulty", 5))
+
+        try:
+            from ora.agents.ioo_graph_agent import get_graph_agent
+            agent = get_graph_agent()
+            nodes = await agent.vector_recommend(
+                user_id=str(user_id),
+                goal_context=body.goal_title + " " + json.dumps(structured_goal),
+                limit=5,
+            )
+            suggested_path = [
+                {
+                    "id": str(n.get("id", "")),
+                    "title": n.get("title", ""),
+                    "description": n.get("description"),
+                    "domain": n.get("domain"),
+                    "step_type": n.get("step_type"),
+                    "goal_category": n.get("goal_category"),
+                }
+                for n in (nodes or [])[:5]
+            ]
+        except Exception as e:
+            logger.warning(f"IOO path suggestion failed: {e}")
+            suggested_path = []
+
+        display_msg = re.sub(r"```(?:json)?\s*\{.*?\}\s*```", "", content, flags=re.DOTALL).strip()
+        display_msg = re.sub(r"\{.*\}", "", display_msg, flags=re.DOTALL).strip()
+        if not display_msg:
+            display_msg = "Perfect — I've built your personalised path. Let's start with your first step! 🎯"
+    else:
+        display_msg = content
+
+    return GoalClarifyResponse(
+        message=display_msg,
+        is_complete=is_complete,
+        structured_goal=structured_goal,
+        suggested_ioo_path=suggested_path,
+    )
 
 
 @router.get("/{goal_id}", response_model=GoalOut)
