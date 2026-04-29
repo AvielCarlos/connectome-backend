@@ -269,6 +269,7 @@ async def get_node_eligibility(
 
 
 @router.get("/vector")
+@router.get("/user-vector")
 async def get_my_ioo_vector_summary(user_id: str = Depends(get_current_user_id)):
     """Return a safe summary of the current user's IOO vector fingerprint."""
     agent = get_graph_agent()
@@ -276,6 +277,7 @@ async def get_my_ioo_vector_summary(user_id: str = Depends(get_current_user_id))
 
 
 @router.get("/vector-recommend")
+@router.get("/vector-recommendations")
 async def get_vector_recommendations(
     goal_context: str = Query(..., min_length=1),
     limit: int = Query(10, ge=1, le=50),
