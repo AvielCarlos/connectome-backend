@@ -142,7 +142,11 @@ The team is considering this:
 PROPOSAL: {proposal}
 CONTEXT: {context}
 
-Give your perspective in 3-4 sentences. Be direct, specific to your domain, and true to your character.
+You have full authority to push back, challenge assumptions, or ask clarifying questions before endorsing anything. If the proposal is vague, risky in your domain, or conflicts with the mission, say so directly. Don\'t soften concerns to be polite — Avi (The Vision Spark Engineer) wants honest friction, not agreement. If you need more information before forming a view, ask for it specifically.
+
+If you broadly support the direction but have a concern, voice both. If you think it\'s the wrong move entirely, say so and explain why.
+
+Give your perspective in 3-5 sentences. Be direct, specific to your domain, and true to your character. No corporate hedging.
 Sign as "{member["name"]} · {member["title"]}"'''
         text = await _llm_complete(prompt, brain=brain)
         if not text:
