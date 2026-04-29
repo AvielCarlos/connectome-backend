@@ -71,8 +71,35 @@ async def create_suggestion(
         )
         if not row:
             raise HTTPException(status_code=500, detail="Could not create suggestion")
+
+        # Credit CP to user_cp_balance
+        cp_earned = int(row["cp_earned"] or 10)
+        try:
+            await execute(
+                """
+                INSERT INTO user_cp_balance (user_id, cp_balance, total_cp_earned, last_updated)
+                VALUES ($1, $2, $2, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    cp_balance = user_cp_balance.cp_balance + $2,
+                    total_cp_earned = user_cp_balance.total_cp_earned + $2,
+                    last_updated = NOW()
+                """,
+                UUID(user_id), cp_earned
+            )
+        except Exception as _cp_err:
+            logger.warning(f"CP credit failed (non-fatal): {_cp_err}")
+
+        # Get updated totals
+        cp_row = await fetchrow(
+            "SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1",
+            UUID(user_id)
+        )
         result = dict(row)
         result["suggestion"] = result["content"]
+        result["cp_earned"] = cp_earned
+        result["total_dao_cp"] = int(cp_row["total_cp_earned"] or 0) if cp_row else cp_earned
+        result["cp_balance"] = int(cp_row["cp_balance"] or 0) if cp_row else cp_earned
+        result["message"] = f"Earned {cp_earned} CP! Total: {result['total_dao_cp']} CP"
         return result
     except HTTPException:
         raise
@@ -105,3 +132,36 @@ async def vote_suggestion(
     except Exception as e:
         logger.error(f"Suggestion vote failed: {e}")
         raise HTTPException(status_code=500, detail="Could not vote")
+
+
+@router.get("/mine")
+async def get_my_suggestions(
+    user_id: str = Depends(get_current_user_id),
+) -> Dict[str, Any]:
+    """Get the current user's suggestions and CP balance."""
+    try:
+        suggestions = await fetch(
+            """
+            SELECT id, content, category, status, vote_count, cp_earned, created_at
+            FROM user_suggestions
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            UUID(user_id),
+        )
+        cp_row = await fetchrow(
+            "SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1",
+            UUID(user_id),
+        )
+        return {
+            "suggestions": [dict(r) for r in suggestions],
+            "total_suggestions": len(suggestions),
+            "total_cp_earned": int(cp_row["total_cp_earned"] or 0) if cp_row else 0,
+            "total_dao_cp": int(cp_row["total_cp_earned"] or 0) if cp_row else 0,
+            "cp_balance": int(cp_row["cp_balance"] or 0) if cp_row else 0,
+            "tier": "contributor" if (cp_row and int(cp_row["total_cp_earned"] or 0) >= 100) else "observer",
+        }
+    except Exception as e:
+        logger.error(f"Get my suggestions failed: {e}")
+        return {"suggestions": [], "total_suggestions": 0, "total_cp_earned": 0, "total_dao_cp": 0, "cp_balance": 0, "tier": "observer"}

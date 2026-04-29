@@ -90,8 +90,10 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
     row = await fetchrow(
         """
         SELECT u.id, u.email, u.subscription_tier, u.fulfilment_score,
-               u.profile, u.created_at, u.last_active
+               u.profile, u.created_at, u.last_active,
+               cp.cp_balance, cp.total_cp_earned
         FROM users u
+        LEFT JOIN user_cp_balance cp ON cp.user_id = u.id
         WHERE u.id = $1
         """,
         UUID(user_id),
@@ -118,6 +120,10 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
         profile_data = {}
     profile_data["is_admin"] = _is_admin
     
+    _cp_balance = int(row["cp_balance"] or 0) if row.get("cp_balance") is not None else 0
+    _total_cp = int(row["total_cp_earned"] or 0) if row.get("total_cp_earned") is not None else 0
+    profile_data["cp_balance"] = _cp_balance
+    profile_data["total_dao_cp"] = _total_cp
     return UserProfile(
         id=row["id"],
         email=row["email"],

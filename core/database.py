@@ -936,6 +936,16 @@ async def run_migrations():
             ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS vote_count INTEGER DEFAULT 0
         """)
 
+        # User CP balance ledger
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS user_cp_balance (
+                user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                cp_balance INT NOT NULL DEFAULT 0,
+                total_cp_earned INT NOT NULL DEFAULT 0,
+                last_updated TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+
         # Subscriptions — Stripe-managed subscription tiers
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS subscriptions (
