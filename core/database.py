@@ -138,6 +138,40 @@ async def run_migrations():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         """)
+        await conn.execute("""
+            ALTER TABLE screen_specs ADD COLUMN IF NOT EXISTS embedding vector(1536)
+        """)
+        await conn.execute("""
+            ALTER TABLE screen_specs ADD COLUMN IF NOT EXISTS ioo_node_id UUID
+        """)
+        await conn.execute("""
+            ALTER TABLE screen_specs ADD COLUMN IF NOT EXISTS screen_role TEXT
+        """)
+
+        # Screen Graph — durable generated-screen pathway edges between user
+        # state, IOO nodes, clarifying screens, and execution screens.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS screen_graph_edges (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                from_screen_id UUID,
+                to_screen_id UUID,
+                relation_type TEXT NOT NULL,
+                ioo_node_id UUID,
+                user_id UUID REFERENCES users(id),
+                weight FLOAT DEFAULT 1.0,
+                evidence JSONB DEFAULT '{}',
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_screen_graph_edges_user
+            ON screen_graph_edges(user_id)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_screen_graph_edges_ioo
+            ON screen_graph_edges(ioo_node_id)
+        """)
 
         # Interactions table
         await conn.execute("""
