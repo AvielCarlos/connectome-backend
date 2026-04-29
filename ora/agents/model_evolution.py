@@ -71,11 +71,17 @@ EVAL_PROMPTS = [
     },
 ]
 
-# Known models to ignore in OpenAI's list (embeddings, vision-only, etc.)
+# Known models to ignore in OpenAI's list (embeddings, audio, vision-only, etc.)
+SKIP_MODELS = {"gpt-audio-mini", "gpt-audio-mini-2025-10-06", "gpt-5-search-api"}
 SKIP_MODEL_PREFIXES = [
     "whisper", "tts", "dall-e", "text-embedding", "babbage",
     "davinci", "curie", "ada", "ft:", "gpt-3.5-turbo-instruct",
 ]
+
+
+def _should_skip_model(model_id: str) -> bool:
+    mid = (model_id or "").lower()
+    return mid in SKIP_MODELS or "audio" in mid or any(mid.startswith(p) for p in SKIP_MODEL_PREFIXES)
 
 
 class ModelEvolutionAgent:
@@ -154,8 +160,8 @@ class ModelEvolutionAgent:
             result = []
             for model in models.data:
                 mid = model.id
-                # Skip non-chat models
-                if any(mid.startswith(p) for p in SKIP_MODEL_PREFIXES):
+                # Skip non-chat/audio/search-only models
+                if _should_skip_model(mid):
                     continue
                 if "gpt" in mid or "o1" in mid or "o3" in mid or "o4" in mid:
                     result.append(mid)
@@ -231,6 +237,14 @@ class ModelEvolutionAgent:
             model_id = candidate["model_id"]
             provider = candidate["provider"]
 
+            if provider == "openai" and _should_skip_model(model_id):
+                await execute(
+                    "UPDATE model_candidates SET status = 'rejected', notes = $1 WHERE id = $2",
+                    "Skipped non-chat/audio/search-only model",
+                    candidate["id"]
+                )
+                continue
+
             # Mark as evaluating
             await execute(
                 "UPDATE model_candidates SET status = 'evaluating' WHERE id = $1",
@@ -272,6 +286,9 @@ class ModelEvolutionAgent:
         """
         if not self.openai:
             logger.warning(f"ModelEvolutionAgent: no OpenAI client, cannot evaluate {model_id}")
+            return 0.0
+        if _should_skip_model(model_id):
+            logger.info(f"ModelEvolutionAgent: skipping non-chat/audio/search-only model {model_id}")
             return 0.0
 
         scores = []
