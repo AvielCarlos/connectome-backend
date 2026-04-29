@@ -44,6 +44,7 @@ from api.routes import events as events_routes
 from api.routes import ora_autonomy as ora_autonomy_routes
 from api.routes import onboarding as onboarding_routes
 from api.routes import surfaces as surfaces_routes
+from api.routes import gamification as gamification_routes
 try:
     from api.routes import ioo as ioo_routes
     _ioo_available = True
@@ -258,12 +259,18 @@ app.include_router(integrations_routes.router)
 app.include_router(ora_autonomy_routes.router)
 app.include_router(onboarding_routes.router)
 app.include_router(surfaces_routes.router)
+app.include_router(gamification_routes.router)
 if _services_available and services_routes:
     app.include_router(services_routes.router)
 if _executive_available and executive_routes:
     app.include_router(executive_routes.router)
 if _ioo_available and ioo_routes:
     app.include_router(ioo_routes.router)
+try:
+    from api.routes.github_webhook import router as github_webhook_router
+    app.include_router(github_webhook_router)
+except Exception:
+    pass
 
 
 @app.get("/api/schema")
