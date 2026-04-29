@@ -39,42 +39,63 @@ CSUITE_DOMAINS = {
     "ora": "strategic_vision",  # Ora as CEO
 }
 
-# Base CP rates by contribution type (inflation-controlled)
-CP_RATES = {
+# CP rate ranges — Ora picks within the range based on quality/impact
+# Format: (min, base, max) — Ora applies quality_score 0.5–2.0x on base
+CP_RATE_RANGES = {
     # Development
-    "bug_fix_minor": 25,
-    "bug_fix_major": 100,
-    "feature_small": 150,
-    "feature_medium": 500,
-    "feature_large": 1000,
-    "architecture": 750,
-    "code_review": 50,
-    "test_coverage": 75,
+    "bug_fix_minor":        (10,   25,   75),
+    "bug_fix_major":        (50,  100,  300),
+    "bug_fix_critical":     (200, 400, 1000),
+    "feature_small":        (75,  150,  400),
+    "feature_medium":       (250, 500, 1200),
+    "feature_large":        (500, 1000, 3000),
+    "architecture":         (300, 750, 2000),
+    "code_review":          (20,   50,  150),
+    "test_coverage":        (30,   75,  200),
+    "performance_opt":      (50,  150,  500),
+    "security_fix":         (100, 300, 1000),
+    "open_source_contrib":  (100, 250,  750),
     # Design
-    "ui_component": 100,
-    "ux_research": 200,
-    "design_system": 500,
-    "illustration": 75,
-    "brand_asset": 150,
+    "ui_component":         (50,  100,  300),
+    "ux_research":          (100, 200,  600),
+    "design_system":        (250, 500, 1500),
+    "illustration":         (30,   75,  200),
+    "brand_asset":          (75,  150,  400),
+    "prototype":            (100, 250,  700),
+    "user_testing":         (75,  175,  400),
     # Content
-    "blog_post": 50,
-    "documentation": 100,
-    "tutorial": 150,
-    "video_content": 200,
+    "blog_post":            (25,   50,  150),
+    "documentation":        (50,  100,  300),
+    "tutorial":             (75,  150,  400),
+    "video_content":        (100, 200,  600),
+    "podcast_appearance":   (50,  125,  350),
+    "social_content_pack":  (30,   75,  200),
     # Community
-    "community_moderation": 25,
-    "event_organisation": 200,
-    "referral": 100,
-    "ambassador": 500,
+    "community_moderation": (10,   25,   75),
+    "event_organisation":   (100, 200,  600),
+    "referral":             (50,  100,  300),
+    "ambassador":           (250, 500, 1500),
+    "community_manager":    (200, 400, 1000),
+    "onboarded_developer":  (100, 200,  500),
     # Research
-    "market_research": 150,
-    "user_interview": 100,
-    "competitive_analysis": 200,
+    "market_research":      (75,  150,  400),
+    "user_interview":       (50,  100,  250),
+    "competitive_analysis": (100, 200,  500),
+    "grant_application":    (200, 500, 2000),
+    "investor_intro":       (100, 300, 1000),
+    # Strategic
+    "partnership_closed":   (500, 1500, 5000),
+    "revenue_generated":    (0,     0,     0),  # custom: % of revenue
+    "viral_content":        (100, 300, 1000),
+    "press_coverage":       (150, 400, 1200),
     # General
-    "suggestion_accepted": 50,
-    "suggestion_implemented": 200,
-    "custom": 0,  # manually specified amount
+    "suggestion_accepted":  (25,   50,  150),
+    "suggestion_implemented":(100, 200,  600),
+    "custom":               (1,     0, 99999),  # fully custom
 }
+
+# Backwards compat — base values only
+CP_RATES = {k: v[1] for k, v in CP_RATE_RANGES.items()}
 
 
 class CPAwardRequest(BaseModel):
@@ -344,4 +365,93 @@ async def ltv_leaderboard(limit: int = 20):
             }
             for i, r in enumerate(rows)
         ]
+    }
+
+
+# ---------------------------------------------------------------------------
+# Contributor Outreach & Onboarding
+# ---------------------------------------------------------------------------
+
+class OutreachRequest(BaseModel):
+    candidate_name: str
+    candidate_role: str
+    candidate_background: str
+    platform: str = "twitter"  # twitter | telegram | email
+    contact: str  # Twitter handle, Telegram chat_id, or email
+
+
+class OnboardRequest(BaseModel):
+    user_email: str
+    name: str
+    role: str
+    initial_cp: int = 100
+    personal_reason: str = "your skills align with what we're building"
+
+
+@router.post("/outreach")
+async def send_contributor_outreach(
+    body: OutreachRequest,
+    awarding_user_id: str = Depends(get_current_user_id),
+):
+    """Ora sends personalised outreach to a potential contributor."""
+    caller = await fetchrow("SELECT email, profile FROM users WHERE id = $1", UUID(awarding_user_id))
+    is_admin = caller and ((caller.get("profile") or {}).get("is_admin") or
+                           (caller.get("email") or "").lower() == "carlosandromeda8@gmail.com")
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    try:
+        from ora.agents.contributor_recruitment import ContributorRecruitmentAgent
+        agent = ContributorRecruitmentAgent()
+        message = await agent.generate_outreach_message(
+            body.candidate_name, body.candidate_role, body.candidate_background, body.platform
+        )
+        sent = False
+        if body.platform == "telegram":
+            sent = await agent.send_telegram_message(int(body.contact), message)
+        # Twitter and email handled externally for now
+        return {"message": message, "platform": body.platform, "sent": sent}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/onboard")
+async def onboard_contributor(
+    body: OnboardRequest,
+    awarding_user_id: str = Depends(get_current_user_id),
+):
+    """Full contributor onboarding — award CP, send welcome, post to community."""
+    caller = await fetchrow("SELECT email, profile FROM users WHERE id = $1", UUID(awarding_user_id))
+    is_admin = caller and ((caller.get("profile") or {}).get("is_admin") or
+                           (caller.get("email") or "").lower() == "carlosandromeda8@gmail.com")
+    if not is_admin:
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    try:
+        from ora.agents.contributor_recruitment import ContributorRecruitmentAgent
+        agent = ContributorRecruitmentAgent()
+        result = await agent.onboard_contributor(
+            body.user_email, body.name, body.role, body.initial_cp, body.personal_reason
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/rates/full")
+async def get_full_cp_rates():
+    """Full rate ranges with min/base/max for each contribution type."""
+    return {
+        "rates": {
+            k: {"min": v[0], "base": v[1], "max": v[2]}
+            for k, v in CP_RATE_RANGES.items()
+        },
+        "ltv_multipliers": {
+            "1.0": "Standard — solid contribution",
+            "1.5": "High impact — meaningfully moved the needle",
+            "2.0": "Core contributor — sustained valuable work",
+            "2.5": "Key team member — significant ongoing impact",
+            "3.0": "Founding contributor — exceptional, irreplaceable",
+        },
+        "quality_guidance": "Ora picks within the range based on quality, depth, and business impact. The max is reserved for work that genuinely changes the trajectory.",
     }
