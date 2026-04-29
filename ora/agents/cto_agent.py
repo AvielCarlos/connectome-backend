@@ -195,6 +195,92 @@ class CTOAgent(BaseExecutiveAgent):
 
         return {"agent": self.name, "actions": actions_taken, "metrics": data}
 
+    # ─── Deep audit (every 3 days) ──────────────────────────────────────────
+
+    async def deep_audit(self) -> dict:
+        """Full end-to-end audit. Tests all endpoints, DB, CI. Alerts on criticals."""
+        import time as _time
+        now = datetime.now(timezone.utc)
+        findings = {"audited_at": now.isoformat(), "critical": [], "high": [], "medium": [], "passed": []}
+
+        token = await self._get_jwt()
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        admin_headers = {"X-Admin-Token": "connectome-admin-secret"}
+
+        endpoints = [
+            ("/health", {}, 200, "API health"),
+            ("/api/users/me", headers, 200, "Auth + profile"),
+            ("/api/payments/tiers", {}, 200, "Payment tiers"),
+            ("/api/screens/next", headers, 200, "Feed generation"),
+            ("/api/dao/leaderboard", {}, 200, "DAO leaderboard"),
+            ("/api/admin/insights", admin_headers, 200, "Admin insights"),
+            ("/api/ioo/nodes", headers, 200, "IOO graph nodes"),
+        ]
+
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            for path, hdrs, expected, name in endpoints:
+                url = f"{API_BASE_URL}{path}"
+                try:
+                    start = _time.monotonic()
+                    if path in ("/api/screens/next",):
+                        resp = await client.post(url, headers=hdrs, json={})
+                    else:
+                        resp = await client.get(url, headers=hdrs)
+                    elapsed = _time.monotonic() - start
+                    if resp.status_code != expected:
+                        findings["critical"].append(f"{name}: HTTP {resp.status_code}")
+                    elif elapsed > 3.0:
+                        findings["high"].append(f"{name}: slow ({elapsed:.1f}s)")
+                    elif elapsed > 1.5:
+                        findings["medium"].append(f"{name}: slightly slow ({elapsed:.1f}s)")
+                    else:
+                        findings["passed"].append(f"{name}: OK ({elapsed:.2f}s)")
+                    # CORS check
+                    if "users/me" in path and not resp.headers.get("access-control-allow-origin"):
+                        findings["critical"].append("CORS missing on /api/users/me")
+                except Exception as e:
+                    findings["critical"].append(f"{name}: failed ({str(e)[:50]})")
+
+        # DB checks
+        try:
+            from core.database import fetchrow as _fr
+            for table in ["users", "ora_knowledge", "goals", "ioo_nodes"]:
+                try:
+                    row = await _fr(f"SELECT COUNT(*) as n FROM {table}")
+                    n = int(row["n"] or 0)
+                    if n == 0 and table in ["ora_knowledge", "ioo_nodes"]:
+                        findings["high"].append(f"DB: {table} is empty")
+                    else:
+                        findings["passed"].append(f"DB: {table} = {n} rows")
+                except Exception as e:
+                    findings["medium"].append(f"DB: {table} error: {str(e)[:40]}")
+        except Exception:
+            pass
+
+        # CI
+        ci = await self._check_ci()
+        if ci.get("conclusion") == "failure":
+            findings["critical"].append(f"CI failing: {ci.get('workflow', '?')}")
+        else:
+            findings["passed"].append(f"CI: {ci.get('conclusion', 'unknown')}")
+
+        total_critical = len(findings["critical"])
+        summary = (f"CTO Deep Audit {now.strftime('%Y-%m-%d')}: "
+                   f"{len(findings['passed'])} passed, {total_critical} critical, "
+                   f"{len(findings['high'])} high. "
+                   + (("Issues: " + "; ".join(findings["critical"][:2])) if findings["critical"] else "All clear."))
+        await self.teach_ora(summary, confidence=0.95)
+        await self.save_report(findings, f"cto_audit_{now.strftime('%Y%m%d')}.json")
+
+        if total_critical > 0:
+            lines = [f"🚨 *CTO Audit — {now.strftime('%Y-%m-%d')}*"]
+            for f in findings["critical"]: lines.append(f"• 🔴 {f}")
+            for f in findings["high"][:3]: lines.append(f"• 🟡 {f}")
+            lines.append(f"\n{len(findings['passed'])} checks passed.")
+            await self.alert_avi("\n".join(lines))
+
+        return findings
+
     # ─── Internal helpers ────────────────────────────────────────────────────
 
     async def _check_endpoint(
