@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 GLOBAL_FEEDBACK_CP = 10
-GLOBAL_FEEDBACK_XP = 10
 GLOBAL_FEEDBACK_CATEGORIES = {"Bug", "Confusing", "Idea", "Design", "Praise", "Other"}
 
 
@@ -147,15 +146,7 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
 
     contribution_id = str(contribution["id"]) if contribution else (str(feedback_id) if feedback_id else None)
 
-    # Award XP + CP. These are non-critical after the feedback record itself exists.
-    try:
-        await execute(
-            "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, $3, $4)",
-            user_uuid, GLOBAL_FEEDBACK_XP, "global_feedback_submit", contribution["id"] if contribution else None,
-        )
-    except Exception as err:
-        logger.warning(f"Feedback XP award failed (non-fatal): {err}")
-
+    # Award CP. This is non-critical after the feedback record itself exists.
     try:
         await execute(
             """
@@ -188,8 +179,7 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
     return FeedbackResponse(
         ok=True,
         fulfilment_delta=0.0,
-        message="+10 XP / feedback received",
-        xp_earned=GLOBAL_FEEDBACK_XP,
+        message="Feedback submitted +10 CP",
         cp_earned=GLOBAL_FEEDBACK_CP,
         cp_balance=int(cp_row["cp_balance"] or 0) if cp_row else None,
         total_dao_cp=int(cp_row["total_cp_earned"] or 0) if cp_row else None,
@@ -238,15 +228,15 @@ async def _record_ioo_outcome_if_applicable(
         logger.warning(f"IOO outcome recording skipped: {_err}")
 
 
-@router.post("", response_model=FeedbackResponse)
-@router.post("/", response_model=FeedbackResponse)
+@router.post("", response_model=FeedbackResponse, response_model_exclude={"xp_earned"})
+@router.post("/", response_model=FeedbackResponse, response_model_exclude={"xp_earned"})
 async def submit_feedback(
     body: FeedbackSubmit,
     user_id: str = Depends(get_current_user_id),
 ):
     """
     Submit feedback.
-    - Global app feedback (message/category/route) stores screenshot context and awards CP/XP.
+    - Global app feedback (message/category/route) stores screenshot context and awards CP.
     - Legacy card feedback (screen_spec_id/rating) triggers the learning loop.
     """
     if body.message is not None:
@@ -272,16 +262,6 @@ async def submit_feedback(
 
     # Update IOO graph weights if this was a graph-sourced card
     await _record_ioo_outcome_if_applicable(user_id, body.screen_spec_id, body.rating)
-
-    # Award XP for giving feedback — feedback fuels the learning loop
-    try:
-        await execute(
-            "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES ($1, $2, $3, $4)",
-            UUID(user_id), 10, "feedback_submit",
-            UUID(body.screen_spec_id) if body.screen_spec_id and len(body.screen_spec_id) == 36 else None,
-        )
-    except Exception:
-        pass  # Non-critical — don't block feedback response
 
     # Build a human-readable message based on the insight
     signal = insight.get("signal_type", "neutral")
