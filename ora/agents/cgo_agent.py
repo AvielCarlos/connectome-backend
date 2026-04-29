@@ -1,5 +1,5 @@
 """
-CGO Agent — Chief Growth Officer for Connectome/Ora.
+CGO Agent — Chief Growth Officer for Ascension Technologies / Ora.
 
 Mandate: aggressively and creatively grow revenue while protecting the
 non-profit mission. The CGO never assumes a surface is impossible to monetize;
@@ -9,7 +9,7 @@ it finds ethical, legally sound revenue architecture around genuine value.
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 
@@ -27,13 +27,96 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", os.getenv("ADMIN_SECRET", "connectome-adm
 
 class CGOAgent(BaseExecutiveAgent):
     """
-    Ora's Chief Growth Officer.
+    Ora's Chief Growth Officer for the entire Ascension Technologies ecosystem.
 
     Thinks like a startup growth hacker plus a mission-driven social enterprise:
     data-driven, commercial, fast-moving, and allergic to fake scarcity or
     deceptive billing. Revenue exists to make the human-flourishing mission
     durable.
     """
+
+    ecosystem_thesis = (
+        "We are Ascension Technologies. Connectome/iDo is ONE product. We also "
+        "have The Scilence, AI music, community, consulting, grants, corporate "
+        "clients, developer API access, Ora Sessions, DAO Founding Stewards, "
+        "events/retreats, and white-label Ora licensing. Revenue serves human "
+        "flourishing, not the reverse."
+    )
+
+    revenue_streams = [
+        {
+            "stream": "App subscriptions",
+            "target": "iDo / Connectome users",
+            "vehicle": "Stripe recurring subscriptions",
+            "near_term_offer": "Explorer/Premium personal fulfilment plan",
+        },
+        {
+            "stream": "Community membership",
+            "target": "Ascension community",
+            "vehicle": "Stripe recurring membership",
+            "near_term_offer": "Founding Steward membership and reflection circles",
+        },
+        {
+            "stream": "Corporate wellness",
+            "target": "HR/wellness teams",
+            "vehicle": "Stripe B2B checkout",
+            "near_term_offer": "Ora for Teams pilot at $8/seat/month",
+        },
+        {
+            "stream": "Developer API",
+            "target": "AI/wellness builders",
+            "vehicle": "Stripe API subscription",
+            "near_term_offer": "$29/month developer tier",
+        },
+        {
+            "stream": "Ora Sessions",
+            "target": "Individuals",
+            "vehicle": "Stripe one-off checkout",
+            "near_term_offer": "$49 clarity session / $99 deep work session",
+        },
+        {
+            "stream": "The Scilence",
+            "target": "Readers, sci-fi fans, publishers, agents",
+            "vehicle": "Pre-order page, publisher/agent outreach, self-publishing path",
+            "near_term_offer": "Pitch deck + sample pages + preorder waitlist",
+        },
+        {
+            "stream": "AI music",
+            "target": "Streaming audiences, sync libraries, wellness creators",
+            "vehicle": "DistroKid, sync licensing, creator collaborations",
+            "near_term_offer": "Release cadence + playlist/sync outreach",
+        },
+        {
+            "stream": "Grants",
+            "target": "Non-profit funders",
+            "vehicle": "Wellcome Trust, Google.org, Open Philanthropy, responsible AI grants",
+            "near_term_offer": "2-page concept note with safeguards and outcomes",
+        },
+        {
+            "stream": "Consulting/speaking",
+            "target": "Organisations and conferences",
+            "vehicle": "Direct outreach and paid engagements",
+            "near_term_offer": "AI + consciousness keynote/workshop menu",
+        },
+        {
+            "stream": "DAO Founding Stewards",
+            "target": "Early believers",
+            "vehicle": "Fiat-to-CP fast-track with transparent guardrails",
+            "near_term_offer": "Founding Steward pledge/membership",
+        },
+        {
+            "stream": "White-label Ora",
+            "target": "Wellness/health/coaching companies",
+            "vehicle": "B2B licensing",
+            "near_term_offer": "$500-$2,000/month pilot license",
+        },
+        {
+            "stream": "Events/retreats",
+            "target": "Community members",
+            "vehicle": "Eventbrite / Stripe tickets",
+            "near_term_offer": "Small virtual salon before physical retreats",
+        },
+    ]
 
     name = "cgo"
     display_name = "CGO Agent"
@@ -54,17 +137,25 @@ class CGOAgent(BaseExecutiveAgent):
             "api_access_monetization": await self._research_api_access(metrics),
             "community_membership": await self._research_community_membership(metrics),
             "ip_licensing_white_label": await self._research_ip_licensing(metrics),
+            "the_scilence": await self._research_the_scilence(metrics),
+            "ai_music": await self._research_ai_music(metrics),
+            "consulting_speaking": await self._research_consulting_speaking(metrics),
+            "dao_founding_stewards": await self._research_dao_founding_stewards(metrics),
+            "events_retreats": await self._research_events_retreats(metrics),
         }
         streams = self._prioritize_revenue_streams(metrics, research)
         activation = await self._activate_top_streams(streams)
+        growth_plan = self.multi_stream_growth_plan(metrics, research)
 
         report = {
             "agent": self.name,
             "analyzed_at": now.isoformat(),
-            "mandate": "Revenue serves the mission: fund Ora's non-profit AI OS for human flourishing.",
+            "mandate": self.ecosystem_thesis,
+            "ecosystem": self.revenue_streams,
             "metrics": metrics,
             "research": research,
             "prioritized_action_plan": self._build_action_plan(streams, metrics),
+            "multi_stream_30_day_growth_plan": growth_plan,
             "activated_revenue_streams": activation,
             "structured_growth_report": {
                 "stage": self._stage(metrics),
@@ -104,6 +195,7 @@ class CGOAgent(BaseExecutiveAgent):
         await self.set_redis_report(summary)
         await self.teach_ora(
             "CGO growth state: "
+            "Ascension Technologies ecosystem mandate active; "
             f"{data['metrics'].get('total_users', 0)} users, "
             f"${data['metrics'].get('total_revenue_cents', 0) / 100:.2f} lifetime revenue, "
             f"top streams={', '.join(data['structured_growth_report']['top_3_revenue_streams'])}.",
@@ -118,6 +210,53 @@ class CGOAgent(BaseExecutiveAgent):
                 "Prepared Stripe Checkout activation links for top revenue streams",
             ],
             "report": data,
+        }
+
+    def multi_stream_growth_plan(
+        self,
+        metrics: Optional[Dict[str, Any]] = None,
+        research: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Return a concrete 30-day plan across all Ascension revenue streams."""
+        metrics = metrics or {}
+        research = research or {}
+        return {
+            "principle": "Revenue serves human flourishing, not the reverse.",
+            "context": self.ecosystem_thesis,
+            "success_metrics_by_day_30": [
+                "1 corporate wellness pilot in active conversation or checkout-ready",
+                "10 qualified community membership leads and a Founding Steward offer drafted",
+                "3 grant opportunities qualified with one concept note ready",
+                "5 publishers/agents/media targets for The Scilence with personalised pitches",
+                "1 consulting/speaking topic menu and 10 targeted outreach drafts",
+                "Developer API and Ora Sessions checkout links verified",
+            ],
+            "week_1_foundation": [
+                "Audit all existing Stripe checkout paths: app, sessions, API, corporate.",
+                "Create/update target_streams.json for community, corporate, grants, media, consulting, and developer API.",
+                "Draft The Scilence one-page pitch and sample-pages request flow.",
+                "Draft Aviel's speaking/consulting topic menu: AI, consciousness, human flourishing, practical transformation.",
+            ],
+            "week_2_outreach": [
+                "Send researched community invitations to 5-10 aligned organisers or creators.",
+                "Pitch 5 corporate wellness pilot targets with a clear low-friction pilot offer.",
+                "Qualify Wellcome Trust, Google.org, Open Philanthropy, and one responsible-AI grant for fit/deadlines.",
+                "Contact 3 publishers/agents/journalists for The Scilence only after tailoring each pitch.",
+            ],
+            "week_3_conversion_assets": [
+                "Add a lightweight Ascension membership/preorder waitlist page if not already live.",
+                "Prepare corporate pilot FAQ: privacy, data boundaries, outcomes, pricing, cancellation.",
+                "Package Ora API docs/examples for wellness/coaching builders.",
+                "Define AI music release/sync workflow: DistroKid metadata, playlist targets, sync library list.",
+            ],
+            "week_4_close_and_learn": [
+                "Follow up with every warm lead using one useful new artifact, not pressure.",
+                "Convert one channel into money: corporate pilot, paid session, Founding Steward, or consulting discovery call.",
+                "Review response rates by stream; cut weak channels and double down on the top two.",
+                "Teach Ora the validated growth thesis and update the next 30-day plan.",
+            ],
+            "active_research_refs": sorted(research.keys()),
+            "current_metrics_source": metrics.get("source", "unknown"),
         }
 
     async def _get_revenue_metrics(self) -> Dict[str, Any]:
@@ -243,6 +382,69 @@ class CGOAgent(BaseExecutiveAgent):
             "expected_impact": "High-ticket but requires stronger onboarding, compliance, and support capacity.",
         }
 
+    async def _research_the_scilence(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "asset": "The Scilence — sci-fi novel set in 2047 around BCI, human-AI merger, consciousness, and power.",
+            "buyers": ["sci-fi readers", "literary agents", "speculative fiction publishers", "tech/culture media"],
+            "next_steps": [
+                "Create a one-page pitch with comparable titles, core hook, audience, and author platform.",
+                "Prepare sample pages and a preorder/waitlist page before broad pitching.",
+                "Research 20 agents/publishers that accept speculative fiction touching AI and consciousness.",
+            ],
+            "expected_impact": "Longer-cycle IP upside; can grow audience and credibility even before a deal.",
+        }
+
+    async def _research_ai_music(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "asset": "Avi's AI-generated music catalogue distributed via DistroKid.",
+            "buyers": ["streaming listeners", "wellness creators", "sync libraries", "meditation communities"],
+            "next_steps": [
+                "Establish a consistent release cadence and metadata strategy.",
+                "Build a playlist and sync-licensing target list for cinematic, wellness, and consciousness-adjacent use cases.",
+                "Bundle selected tracks into Ascension community moments, meditations, and launch content.",
+            ],
+            "expected_impact": "Small near-term streaming revenue; larger brand/audience and sync optionality.",
+        }
+
+    async def _research_consulting_speaking(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "offer": "Aviel as AI + consciousness + human flourishing speaker/consultant.",
+            "buyers": ["AI conferences", "future-of-work events", "corporate L&D", "conscious business communities"],
+            "next_steps": [
+                "Create a short topic menu and bio in Aviel's voice.",
+                "Research 25 programme leads with explicit fit before outreach.",
+                "Offer one paid workshop format and one keynote format with clear outcomes.",
+            ],
+            "expected_impact": "High-margin revenue and authority building if positioned selectively.",
+        }
+
+    async def _research_dao_founding_stewards(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "offer": "DAO Founding Steward fast-track for early believers who want to fund the mission.",
+            "guardrails": [
+                "Fiat-to-CP mechanics must be transparent and capped.",
+                "No pay-to-win governance or misleading investment framing.",
+                "Use plain-language terms before accepting payments.",
+            ],
+            "next_steps": [
+                "Draft Founding Steward tiers around contribution, recognition, and participation.",
+                "Invite only aligned early believers first; avoid public hype until governance language is reviewed.",
+            ],
+            "expected_impact": "Mission-aligned early cash if trust and legal clarity are protected.",
+        }
+
+    async def _research_events_retreats(self, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "offer": "Ascension salons, workshops, and eventually retreats for community members.",
+            "sequence": ["free/low-cost virtual salon", "paid workshop", "small in-person retreat only after demand is proven"],
+            "next_steps": [
+                "Run one virtual salon around AI, consciousness, and designing a flourishing life.",
+                "Use Stripe/Eventbrite for paid workshops once attendance is validated.",
+                "Collect testimonials and learning signals, not just ticket revenue.",
+            ],
+            "expected_impact": "Community activation and modest revenue; high mission fit if intimate and sincere.",
+        }
+
     def _prioritize_revenue_streams(self, metrics: Dict[str, Any], research: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [
             {
@@ -272,6 +474,34 @@ class CGOAgent(BaseExecutiveAgent):
                 "why_now": "High mission fit, but slow sales cycle.",
                 "price": "Non-dilutive grants",
                 "research": research["grants"],
+            },
+            {
+                "name": "Community membership / Founding Stewards",
+                "rank": 5,
+                "why_now": "The mission needs believers as well as users; membership can fund early work without pretending the app is finished.",
+                "price": "$11-$49/month membership or transparent steward pledge",
+                "research": research["community_membership"],
+            },
+            {
+                "name": "Consulting and speaking",
+                "rank": 6,
+                "why_now": "Aviel's thought leadership can create high-margin revenue and attract aligned partners.",
+                "price": "Paid workshops/keynotes/consulting",
+                "research": research["consulting_speaking"],
+            },
+            {
+                "name": "The Scilence publishing/media pipeline",
+                "rank": 7,
+                "why_now": "Narrative IP can build audience, cultural gravity, and future publishing revenue.",
+                "price": "Preorders, publishing deal, or self-publish revenue",
+                "research": research["the_scilence"],
+            },
+            {
+                "name": "AI music catalogue",
+                "rank": 8,
+                "why_now": "Music can compound brand atmosphere and small passive revenue while supporting the movement.",
+                "price": "Streaming and sync licensing",
+                "research": research["ai_music"],
             },
         ]
 
@@ -326,6 +556,27 @@ class CGOAgent(BaseExecutiveAgent):
                 "owner": "CGO + CMO",
                 "next_step": "Segment free users by engagement and add mission-framed upgrade prompts.",
                 "success_metric": "Free-to-paid conversion above 5% among active users.",
+            },
+            {
+                "priority": 5,
+                "action": "Open the Ascension community membership / Founding Steward path carefully.",
+                "owner": "CGO + Community",
+                "next_step": "Draft membership tiers and invite 10 aligned early believers personally.",
+                "success_metric": "3 members or stewards expressing paid intent in 30 days.",
+            },
+            {
+                "priority": 6,
+                "action": "Package Aviel's AI + consciousness consulting/speaking offer.",
+                "owner": "CGO + Avi",
+                "next_step": "Create topic menu, bio, and 20 targeted conference/L&D contacts.",
+                "success_metric": "2 discovery calls booked.",
+            },
+            {
+                "priority": 7,
+                "action": "Create The Scilence pitch pipeline for publishers, agents, and tech-culture media.",
+                "owner": "CGO + Editorial",
+                "next_step": "Prepare one-page pitch, sample-pages packet, and 20 researched targets.",
+                "success_metric": "5 personalised pitches sent and tracked.",
             },
         ]
 
