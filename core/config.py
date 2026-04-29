@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
     GOOGLE_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/google/callback"
+    FACEBOOK_APP_ID: str = ""
+    APPLE_CLIENT_ID: str = ""
+    IOS_BUNDLE_ID: str = ""
 
 
     # Monetization — Legacy

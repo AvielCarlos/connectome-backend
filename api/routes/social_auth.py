@@ -108,7 +108,9 @@ async def google_social_login(body: GoogleSocialLogin):
     data = resp.json()
 
     configured_aud = getattr(settings, "GOOGLE_CLIENT_ID", "")
-    if configured_aud and data.get("aud") != configured_aud:
+    if not configured_aud:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Google social login not configured")
+    if data.get("aud") != configured_aud:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Google token audience mismatch")
 
     provider_id = data.get("sub")
@@ -143,6 +145,16 @@ async def facebook_social_login(body: FacebookSocialLogin):
     if not provider_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Facebook token missing id")
 
+    configured_app_id = getattr(settings, "FACEBOOK_APP_ID", "")
+    if configured_app_id:
+        async with httpx.AsyncClient(timeout=10) as client:
+            app_resp = await client.get(
+                "https://graph.facebook.com/app",
+                params={"access_token": body.access_token},
+            )
+        if app_resp.status_code != 200 or str(app_resp.json().get("id")) != str(configured_app_id):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Facebook token app mismatch")
+
     picture = data.get("picture") or {}
     avatar_url = None
     if isinstance(picture, dict):
@@ -175,13 +187,13 @@ async def apple_social_login(body: AppleSocialLogin):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Apple signing key not found")
 
     apple_client_id = getattr(settings, "APPLE_CLIENT_ID", "") or getattr(settings, "IOS_BUNDLE_ID", "")
+    if not apple_client_id:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Apple social login not configured")
     decode_kwargs = {
         "algorithms": ["RS256"],
         "issuer": "https://appleid.apple.com",
-        "options": {"verify_aud": bool(apple_client_id)},
+        "audience": apple_client_id,
     }
-    if apple_client_id:
-        decode_kwargs["audience"] = apple_client_id
 
     try:
         claims = jwt.decode(body.identity_token, key, **decode_kwargs)
