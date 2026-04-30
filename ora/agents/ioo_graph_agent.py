@@ -54,6 +54,16 @@ def _normalize_vector(values: List[float]) -> List[float]:
     return [v / norm for v in values]
 
 
+def macro_micro_grade(score: float | int | None) -> str:
+    """Map 0.0 micro → 1.0 macro onto A → Z for compact internal shorthand."""
+    try:
+        value = float(score if score is not None else 0.5)
+    except Exception:
+        value = 0.5
+    value = max(0.0, min(value, 1.0))
+    return chr(ord("A") + round(value * 25))
+
+
 def _node_embedding_text(node: dict) -> str:
     tags = node.get("tags") or []
     if isinstance(tags, str):
@@ -309,6 +319,7 @@ class IOOGraphAgent:
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS difficulty_level INTEGER DEFAULT 5")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS node_scale TEXT DEFAULT 'meso'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_score NUMERIC(6,4) DEFAULT 0.5")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_grade TEXT")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_depth INTEGER DEFAULT 50")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS primary_macro_domain TEXT")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS contributes_to_domains TEXT[] DEFAULT '{}'")
@@ -1509,9 +1520,11 @@ class IOOGraphAgent:
         unlocks_domains = list(dict.fromkeys([str(d) for d in unlocks_domains if d] + inferred_unlocks))
         macro_micro_score = float(signal.get("macro_micro_score") or signal.get("scale_score") or 0.2)
         macro_micro_score = max(0.0, min(macro_micro_score, 1.0))
+        macro_grade = str(signal.get("macro_micro_grade") or macro_micro_grade(macro_micro_score)).upper()[:1]
         dimensional_axes = {
             "scale": signal.get("node_scale") or "micro",
             "macro_micro_score": macro_micro_score,
+            "macro_micro_grade": macro_grade,
             "macro_depth": int(signal.get("macro_depth") or round(macro_micro_score * 100)),
             "primary_domain": signal.get("primary_macro_domain") or domain,
             "contributes_to_domains": contribution_domains,
@@ -1563,11 +1576,12 @@ class IOOGraphAgent:
                     requirements = COALESCE(requirements, '{}'::jsonb) || $4::jsonb,
                     node_scale = COALESCE(NULLIF($7, ''), node_scale),
                     macro_micro_score = COALESCE($8, macro_micro_score),
-                    macro_depth = COALESCE($9, macro_depth),
-                    primary_macro_domain = COALESCE(NULLIF($10, ''), primary_macro_domain, domain),
-                    contributes_to_domains = CASE WHEN array_length($11::text[], 1) IS NULL THEN contributes_to_domains ELSE $11::text[] END,
-                    unlocks_domains = CASE WHEN array_length($12::text[], 1) IS NULL THEN unlocks_domains ELSE $12::text[] END,
-                    dimensional_axes = COALESCE(dimensional_axes, '{}'::jsonb) || $13::jsonb,
+                    macro_micro_grade = COALESCE(NULLIF($9, ''), macro_micro_grade),
+                    macro_depth = COALESCE($10, macro_depth),
+                    primary_macro_domain = COALESCE(NULLIF($11, ''), primary_macro_domain, domain),
+                    contributes_to_domains = CASE WHEN array_length($12::text[], 1) IS NULL THEN contributes_to_domains ELSE $12::text[] END,
+                    unlocks_domains = CASE WHEN array_length($13::text[], 1) IS NULL THEN unlocks_domains ELSE $13::text[] END,
+                    dimensional_axes = COALESCE(dimensional_axes, '{}'::jsonb) || $14::jsonb,
                     engagement_score = LEAST(1.0, COALESCE(engagement_score, 0.5) + 0.01),
                     neural_state = 'active',
                     is_active = TRUE,
@@ -1583,6 +1597,7 @@ class IOOGraphAgent:
                 embedding_vec,
                 str(dimensional_axes["scale"]),
                 float(dimensional_axes["macro_micro_score"]),
+                str(dimensional_axes["macro_micro_grade"]),
                 int(dimensional_axes["macro_depth"]),
                 str(dimensional_axes["primary_domain"]),
                 [str(d) for d in contribution_domains if d],
@@ -1598,9 +1613,9 @@ class IOOGraphAgent:
                 (type, title, description, tags, domain, step_type, goal_category,
                  requires_location, requirements, difficulty_level, generation_source,
                  growth_angle, neural_state, engagement_score, fulfilment_score, embedding,
-                 node_scale, macro_micro_score, macro_depth, primary_macro_domain, contributes_to_domains, unlocks_domains, dimensional_axes)
+                 node_scale, macro_micro_score, macro_micro_grade, macro_depth, primary_macro_domain, contributes_to_domains, unlocks_domains, dimensional_axes)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,'world_signal',$11,'active',$12,$13,$14::vector,
-                    $15,$16,$17,$18,$19,$20,$21::jsonb)
+                    $15,$16,$17,$18,$19,$20,$21,$22::jsonb)
             RETURNING id, title, generation_source, growth_angle
             """,
             node_type,
@@ -1619,6 +1634,7 @@ class IOOGraphAgent:
             embedding_vec,
             str(dimensional_axes["scale"]),
             float(dimensional_axes["macro_micro_score"]),
+            str(dimensional_axes["macro_micro_grade"]),
             int(dimensional_axes["macro_depth"]),
             str(dimensional_axes["primary_domain"]),
             [str(d) for d in contribution_domains if d],

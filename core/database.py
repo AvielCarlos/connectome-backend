@@ -1765,6 +1765,7 @@ async def run_migrations():
         for ddl in [
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS node_scale TEXT DEFAULT 'meso'",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_score NUMERIC(6,4) DEFAULT 0.5",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_grade TEXT",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_depth INTEGER DEFAULT 50",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS primary_macro_domain TEXT",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS contributes_to_domains TEXT[] DEFAULT '{}'",
@@ -1802,6 +1803,10 @@ async def run_migrations():
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ioo_nodes_macro_micro_score
             ON ioo_nodes(macro_micro_score)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_macro_micro_grade
+            ON ioo_nodes(macro_micro_grade)
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ioo_nodes_primary_macro_domain

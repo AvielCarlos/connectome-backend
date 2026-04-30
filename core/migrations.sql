@@ -753,6 +753,7 @@ CREATE INDEX IF NOT EXISTS idx_app_feedback_user_created ON app_feedback(user_id
 -- IOO 3D neural graph scale/domain/unlock axes (2026-04-30)
 ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS node_scale TEXT DEFAULT 'meso';
 ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_score NUMERIC(6,4) DEFAULT 0.5;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_grade TEXT;
 ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_depth INTEGER DEFAULT 50;
 ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS primary_macro_domain TEXT;
 ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS contributes_to_domains TEXT[] DEFAULT '{}';
@@ -760,4 +761,5 @@ ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS unlocks_domains TEXT[] DEFAULT '{
 ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS dimensional_axes JSONB DEFAULT '{}';
 CREATE INDEX IF NOT EXISTS idx_ioo_nodes_scale_depth ON ioo_nodes(node_scale, macro_depth);
 CREATE INDEX IF NOT EXISTS idx_ioo_nodes_macro_micro_score ON ioo_nodes(macro_micro_score);
+CREATE INDEX IF NOT EXISTS idx_ioo_nodes_macro_micro_grade ON ioo_nodes(macro_micro_grade);
 CREATE INDEX IF NOT EXISTS idx_ioo_nodes_primary_macro_domain ON ioo_nodes(primary_macro_domain);
