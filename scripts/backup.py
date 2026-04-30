@@ -367,28 +367,10 @@ async def export_ora_identity(
 # GitHub commit
 # ---------------------------------------------------------------------------
 
-async def commit_identity_to_github(identity_pack_path: str) -> bool:
-    """
-    Commit the Ora Identity Pack to the connectome-backend GitHub repo.
-    This makes Ora's knowledge version-controlled and survives any server loss.
-    """
-    import base64
-
-    github_token = os.environ.get("GITHUB_TOKEN", "")
-    if not github_token:
-        logger.warning("commit_identity_to_github: GITHUB_TOKEN not set, skipping")
-        return False
-
+async def _put_github_file(repo: str, path: str, branch: str, content: str, message: str, github_token: str) -> bool:
+    """Create/update a single GitHub file via Contents API."""
     import httpx
 
-    repo = "AvielCarlos/connectome-backend"
-    path = "backups/ora_identity_pack.json"
-    branch = "main"
-
-    with open(identity_pack_path, "rb") as f:
-        content = base64.b64encode(f.read()).decode()
-
-    # Get existing file SHA (needed for update)
     sha = None
     try:
         async with httpx.AsyncClient(timeout=15) as client:
@@ -402,14 +384,9 @@ async def commit_identity_to_github(identity_pack_path: str) -> bool:
             if r.status_code == 200:
                 sha = r.json().get("sha")
     except Exception as e:
-        logger.debug(f"commit_identity_to_github: get SHA failed: {e}")
+        logger.debug(f"commit_identity_to_github: get SHA failed for {path}: {e}")
 
-    # Commit
-    payload = {
-        "message": f"[Ora] Identity pack backup — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-        "content": content,
-        "branch": branch,
-    }
+    payload = {"message": message, "content": content, "branch": branch}
     if sha:
         payload["sha"] = sha
 
@@ -427,12 +404,39 @@ async def commit_identity_to_github(identity_pack_path: str) -> bool:
             if r.status_code in (200, 201):
                 logger.info(f"commit_identity_to_github: committed to {repo}/{path}")
                 return True
-            else:
-                logger.warning(f"commit_identity_to_github: GitHub returned {r.status_code}: {r.text[:200]}")
-                return False
+            logger.warning(f"commit_identity_to_github: GitHub returned {r.status_code} for {path}: {r.text[:200]}")
+            return False
     except Exception as e:
-        logger.error(f"commit_identity_to_github: commit failed: {e}")
+        logger.error(f"commit_identity_to_github: commit failed for {path}: {e}")
         return False
+
+
+async def commit_identity_to_github(identity_pack_path: str) -> bool:
+    """
+    Commit the Ora Identity Pack to the connectome-backend GitHub repo.
+    This makes Ora's knowledge version-controlled and survives any server loss.
+    """
+    import base64
+
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+    if not github_token:
+        logger.warning("commit_identity_to_github: GITHUB_TOKEN not set, skipping")
+        return False
+
+    repo = "AvielCarlos/connectome-backend"
+    branch = "main"
+
+    with open(identity_pack_path, "rb") as f:
+        content = base64.b64encode(f.read()).decode()
+
+    stamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    message = f"[Ora] Identity pack backup — {stamp}"
+    # Keep both names fresh:
+    # - ora_identity_pack.json is the durable human-readable backup file.
+    # - ora_identity_latest.json is what SurvivalAgent freshness checks read.
+    pack_ok = await _put_github_file(repo, "backups/ora_identity_pack.json", branch, content, message, github_token)
+    latest_ok = await _put_github_file(repo, "backups/ora_identity_latest.json", branch, content, message, github_token)
+    return pack_ok and latest_ok
 
 
 # ---------------------------------------------------------------------------

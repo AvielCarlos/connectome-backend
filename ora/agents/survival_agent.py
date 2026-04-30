@@ -134,6 +134,13 @@ async def check_github_backup_age(max_hours: int = 26) -> dict:
                 url,
                 headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
             )
+            if resp.status_code == 404:
+                # Backward compatibility with older backup jobs that only wrote
+                # ora_identity_pack.json. New jobs write both files.
+                resp = await client.get(
+                    "https://api.github.com/repos/AvielCarlos/connectome-backend/contents/backups/ora_identity_pack.json",
+                    headers={"Authorization": f"token {token}", "Accept": "application/vnd.github+json"},
+                )
             if resp.status_code != 200:
                 return {"ok": False, "error": f"GitHub API {resp.status_code}"}
 
