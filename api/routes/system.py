@@ -20,6 +20,19 @@ def _jsonish(value: Any, fallback: Any) -> Any:
     return value
 
 
+def _graph_first_featured_apps(value: Any) -> list[str]:
+    apps = _jsonish(value, DEFAULT_AI_OS_STATE["featured_apps"])
+    if not isinstance(apps, list):
+        return DEFAULT_AI_OS_STATE["featured_apps"]
+    hidden_domain_apps = {"aventi", "ivive", "eviva"}
+    kept = [str(app) for app in apps if str(app).strip().lower() not in hidden_domain_apps]
+    ordered = ["iDo", "IOO Graph", "Goals", "Contribute"]
+    for app in kept:
+        if app not in ordered:
+            ordered.append(app)
+    return ordered
+
+
 DEFAULT_AI_OS_STATE = {
     "id": None,
     "ruling_goals": [],
@@ -48,7 +61,7 @@ async def get_aios_state():
 
     data = dict(row)
     data["ruling_goals"] = _jsonish(data.get("ruling_goals"), [])
-    data["featured_apps"] = _jsonish(data.get("featured_apps"), DEFAULT_AI_OS_STATE["featured_apps"])
+    data["featured_apps"] = _graph_first_featured_apps(data.get("featured_apps"))
     computed_at = data.get("computed_at")
     if computed_at is not None:
         data["computed_at"] = computed_at.isoformat()
