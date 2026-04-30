@@ -9,6 +9,8 @@ Endpoints:
   GET  /api/ioo/progress                      — get my progress
   GET  /api/ioo/nodes                         — browse nodes (filters: type, domain, tag)
   GET  /api/ioo/nodes/{id}                    — node detail
+  POST /api/ioo/neural/lifecycle/sweep        — grow/prune/merge living graph
+  POST /api/ioo/nodes/{id}/grow               — spawn multi-angle node branches
   POST /api/ioo/surfaces/{node_id}            — spawn a surface for a node
   GET  /api/ioo/surfaces/{node_id}            — get active surfaces for a node
   POST /api/ioo/surfaces/{surface_id}/interact — record interaction/completion
@@ -155,6 +157,11 @@ class ProgressUpdate(BaseModel):
 class SurfaceSpawnRequest(BaseModel):
     surface_type: str = "info_card"               # booking_flow/habit_tracker/challenge/checklist/info_card
     title: Optional[str] = None
+
+
+class NeuralGrowRequest(BaseModel):
+    angles: Optional[List[str]] = None
+    max_new: int = 4
 
 
 class SurfaceInteractRequest(BaseModel):
@@ -691,6 +698,44 @@ async def get_node(
 
 
 # ---------------------------------------------------------------------------
+# Neural graph lifecycle
+# ---------------------------------------------------------------------------
+
+@router.post("/neural/lifecycle/sweep")
+async def neural_lifecycle_sweep(
+    user_id: str = Depends(get_current_user_id),
+):
+    """Run one living-graph pass: reinforce weights, prune weak paths, merge duplicates, grow strong branches."""
+    try:
+        return await get_graph_agent().run_neural_lifecycle_sweep()
+    except Exception as e:
+        logger.error(f"IOO neural lifecycle sweep failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="IOO neural lifecycle sweep failed")
+
+
+@router.post("/nodes/{node_id}/grow")
+async def grow_node_branches(
+    node_id: str,
+    body: NeuralGrowRequest | None = None,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Spawn multi-angle branches around a node so Ora can test several routes to fulfilment."""
+    try:
+        UUID(node_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid node ID")
+
+    node = await fetchrow("SELECT id FROM ioo_nodes WHERE id = $1::uuid AND is_active = TRUE", node_id)
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+
+    payload = body or NeuralGrowRequest()
+    max_new = max(1, min(int(payload.max_new or 4), 8))
+    branches = await get_graph_agent().grow_node_from_angles(node_id, payload.angles, max_new=max_new)
+    return {"node_id": node_id, "branches_spawned": len(branches), "branches": branches}
+
+
+# ---------------------------------------------------------------------------
 # Surfaces
 # ---------------------------------------------------------------------------
 
@@ -781,7 +826,7 @@ async def record_interaction(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid surface ID")
 
-    surface = await fetchrow("SELECT id FROM ioo_surfaces WHERE id = $1", sid)
+    surface = await fetchrow("SELECT id, node_id FROM ioo_surfaces WHERE id = $1", sid)
     if not surface:
         raise HTTPException(status_code=404, detail="Surface not found")
 
@@ -815,6 +860,18 @@ async def record_interaction(
             "UPDATE ioo_surfaces SET goal_success_count = goal_success_count + 1, updated_at = NOW() WHERE id = $1",
             sid,
         )
+
+    signal = {
+        "view": "view",
+        "interact": "start",
+        "complete": "complete",
+        "goal_success": "fulfilment_high",
+    }.get(body.action)
+    if signal and surface["node_id"]:
+        try:
+            await get_graph_agent().reinforce_node_signal(str(surface["node_id"]), signal, user_id=str(user_id))
+        except Exception as e:
+            logger.debug(f"Surface neural feedback skipped for {surface_id}: {e}")
 
     return {"ok": True}
 

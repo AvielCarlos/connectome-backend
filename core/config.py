@@ -68,6 +68,17 @@ class Settings(BaseSettings):
     SERPAPI_KEY: str = ""            # Google Events via SerpAPI (set in Railway env vars)
     EVENTBRITE_TOKEN: str = ""       # Eventbrite public API token (set in Railway env vars)
 
+    # Feedback screenshots — local dev fallback or S3/R2-compatible object storage
+    FEEDBACK_SCREENSHOT_STORAGE_BACKEND: str = "local"  # local | s3
+    FEEDBACK_SCREENSHOT_LOCAL_DIR: str = "storage"
+    FEEDBACK_SCREENSHOT_PUBLIC_BASE_URL: str = ""
+    FEEDBACK_SCREENSHOT_MAX_BYTES: int = 5_000_000
+    FEEDBACK_SCREENSHOT_S3_BUCKET: str = ""
+    FEEDBACK_SCREENSHOT_S3_REGION: str = "auto"
+    FEEDBACK_SCREENSHOT_S3_ENDPOINT_URL: str = ""
+    FEEDBACK_SCREENSHOT_S3_ACCESS_KEY_ID: str = ""
+    FEEDBACK_SCREENSHOT_S3_SECRET_ACCESS_KEY: str = ""
+
     # Google OAuth (for Sign In with Google + Drive integration)
     # Setup: console.cloud.google.com → APIs & Services → Credentials → OAuth 2.0 Client ID
     # Authorized redirect URI: https://connectome-api-production.up.railway.app/api/auth/google/callback

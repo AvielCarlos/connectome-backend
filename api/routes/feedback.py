@@ -15,6 +15,7 @@ from core.models import FeedbackSubmit, FeedbackResponse
 from api.middleware import get_current_user_id
 from ora.brain import get_brain
 from core.database import execute, fetchrow
+from core.feedback_storage import ScreenshotStorageError, store_feedback_screenshot
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,8 @@ async def _ensure_global_feedback_schema() -> None:
             message TEXT NOT NULL,
             route TEXT,
             screenshot_data_url TEXT,
+            screenshot_url TEXT,
+            screenshot_key TEXT,
             metadata JSONB DEFAULT '{}'::jsonb,
             created_at TIMESTAMPTZ DEFAULT NOW()
         )
@@ -42,6 +45,8 @@ async def _ensure_global_feedback_schema() -> None:
     )
     await execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS route TEXT")
     await execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS screenshot_data_url TEXT")
+    await execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS screenshot_url TEXT")
+    await execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS screenshot_key TEXT")
     await execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}'::jsonb")
     await execute("CREATE INDEX IF NOT EXISTS idx_app_feedback_user_created ON app_feedback(user_id, created_at DESC)")
 
@@ -104,18 +109,45 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
     user_uuid = UUID(user_id)
     await _ensure_global_feedback_schema()
 
-    metadata = body.metadata if isinstance(body.metadata, dict) else {}
+    metadata = dict(body.metadata) if isinstance(body.metadata, dict) else {}
+    screenshot_url = None
+    screenshot_key = None
+    # Keep the legacy column for backwards compatibility, but do not write new
+    # base64 screenshots into Postgres. Durable object/file refs live below.
+    screenshot_data_url = None
+
+    if body.screenshot_data_url:
+        try:
+            stored_screenshot = await store_feedback_screenshot(body.screenshot_data_url, str(user_uuid))
+            screenshot_url = stored_screenshot.url
+            screenshot_key = stored_screenshot.key
+            screenshot_data_url = None
+            metadata["screenshot"] = {
+                "storage": stored_screenshot.backend,
+                "content_type": stored_screenshot.content_type,
+                "size_bytes": stored_screenshot.size_bytes,
+            }
+        except ScreenshotStorageError as err:
+            logger.warning(f"Feedback screenshot storage failed (non-fatal): {err}")
+            metadata["screenshot_storage_error"] = str(err)
+            # Screenshot failure must not block the text feedback insert.
+        except Exception as err:
+            logger.warning(f"Feedback screenshot storage failed unexpectedly (non-fatal): {err}", exc_info=True)
+            metadata["screenshot_storage_error"] = "unexpected storage failure"
+
     feedback = await fetchrow(
         """
-        INSERT INTO app_feedback (user_id, category, message, route, screenshot_data_url, metadata)
-        VALUES ($1, $2, $3, $4, $5, $6::jsonb)
+        INSERT INTO app_feedback (user_id, category, message, route, screenshot_data_url, screenshot_url, screenshot_key, metadata)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
         RETURNING id
         """,
         user_uuid,
         category,
         message,
         body.route,
-        body.screenshot_data_url,
+        screenshot_data_url,
+        screenshot_url,
+        screenshot_key,
         json.dumps(metadata),
     )
     feedback_id = feedback["id"] if feedback else None
@@ -127,9 +159,9 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
             """
             INSERT INTO contributions (
                 contributor_id, user_id, contribution_type, title, description,
-                status, base_cp, multiplier, final_cp, evidence_text, source, source_id, impact_data
+                status, base_cp, multiplier, final_cp, evidence_text, source, source_id, attachment_urls, impact_data
             )
-            VALUES ($1, $2, 'feedback', $3, $4, 'accepted', $5, 1.0, $5, $6, 'feedback', $7, $8::jsonb)
+            VALUES ($1, $2, 'feedback', $3, $4, 'accepted', $5, 1.0, $5, $6, 'feedback', $7, $8::jsonb, $9::jsonb)
             RETURNING id
             """,
             contributor["id"] if contributor else None,
@@ -139,7 +171,14 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
             GLOBAL_FEEDBACK_CP,
             message,
             str(feedback_id) if feedback_id else None,
-            json.dumps({"route": body.route, "category": category, "feedback_id": str(feedback_id) if feedback_id else None}),
+            json.dumps([screenshot_url] if screenshot_url else []),
+            json.dumps({
+                "route": body.route,
+                "category": category,
+                "feedback_id": str(feedback_id) if feedback_id else None,
+                "screenshot_url": screenshot_url,
+                "screenshot_key": screenshot_key,
+            }),
         )
     except Exception as err:
         logger.warning(f"Feedback contribution write failed (non-fatal): {err}")

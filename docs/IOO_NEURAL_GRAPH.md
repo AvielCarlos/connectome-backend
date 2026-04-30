@@ -97,3 +97,88 @@ user state/vector
 ```
 
 This is the foundation for Ora as an adaptive AI operating system for human flourishing.
+
+## Living graph lifecycle
+
+The production model now treats IOO as a living neural graph rather than a static library of cards.
+
+Each node carries lifecycle metadata:
+
+- `neural_state` — `active`, `pruned`, `merged`, etc.
+- `generation_source` — seed, neural growth, neural split, imported source, agent proposal.
+- `growth_angle` — fastest, easiest, most fulfilling, social, low-cost, growth edge, novelty, vitality, contribution.
+- `parent_node_ids`, `split_from_node_id`, `merged_into_node_id`, `merged_from_node_ids` — lineage.
+- `engagement_score` and `fulfilment_score` — behavioural reinforcement targets.
+- `spawned_count`, `last_reinforced_at`, `pruned_at`, `prune_reason` — lifecycle control.
+
+Edges also carry richer neural meaning:
+
+- `relation_type` — `leads_to`, `requires`, `branches_to`, `splits_to`, `merged_path`, etc.
+- `confidence`, `rationale`, `last_reinforced_at`, `pruned_at`.
+
+Every graph mutation can be written to `ioo_graph_events`, giving Ora a memory of how the graph evolved.
+
+## Growth from multiple angles
+
+When a user intention or IOO node is promising, Ora should not generate one path. It should grow a small family of branches from different angles:
+
+- fastest route;
+- easiest route;
+- most fulfilling route;
+- most social route;
+- lowest-cost route;
+- growth-edge route;
+- vitality-first route;
+- contribution/service route;
+- novelty/adventure route.
+
+Endpoint:
+
+```http
+POST /api/ioo/nodes/{node_id}/grow
+```
+
+Example body:
+
+```json
+{
+  "angles": ["fastest", "most_fulfilling", "most_social", "lowest_cost"],
+  "max_new": 4
+}
+```
+
+This creates child/sibling nodes connected by `branches_to` edges. The graph can then learn which angle actually creates engagement, activity, completed experiences, and fulfilment.
+
+## Reinforce, prune, split, merge
+
+User behaviour updates the graph:
+
+- surface `view` lightly reinforces engagement;
+- surface `interact` and execution `start` reinforce stronger intent;
+- execution/surface `complete` reinforces engagement and fulfilment;
+- `goal_success` strongly reinforces fulfilment;
+- abandoned/low-signal paths decay over time.
+
+Lifecycle sweeps can then:
+
+1. recalculate edge weights from traversal/success data;
+2. prune weak branches conservatively while preserving history;
+3. merge exact duplicate nodes into the strongest survivor;
+4. grow promising high-engagement nodes into new angled branches;
+5. split overloaded broad nodes into sharper focus nodes when needed.
+
+Endpoint:
+
+```http
+POST /api/ioo/neural/lifecycle/sweep
+```
+
+The sweep follows the principle:
+
+```text
+grow from multiple angles → reinforce winners → prune weak branches → split broad successes → merge duplicates → repeat
+```
+
+## Engagement is not the final objective
+
+The graph optimises for engagement only as a nervous-system signal. The higher objective remains more lived experiences, meaningful activity, vitality, contribution, and fulfilment. A route that gets clicks but does not produce execution or fulfilment should eventually lose weight to routes that move someone into real life.

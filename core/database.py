@@ -1123,10 +1123,14 @@ async def run_migrations():
                 message TEXT NOT NULL,
                 route TEXT,
                 screenshot_data_url TEXT,
+                screenshot_url TEXT,
+                screenshot_key TEXT,
                 metadata JSONB DEFAULT '{}'::jsonb,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
         """)
+        await conn.execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS screenshot_url TEXT")
+        await conn.execute("ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS screenshot_key TEXT")
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_app_feedback_user_created
             ON app_feedback(user_id, created_at DESC)
@@ -1713,6 +1717,34 @@ async def run_migrations():
         await conn.execute("""
             ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS difficulty_level INTEGER DEFAULT 5
         """)
+        # Neural-graph lifecycle metadata. IOO nodes are not static cards: Ora
+        # grows variants from multiple angles, reinforces what creates real
+        # engagement/fulfilment, prunes weak paths, and can split/merge nodes as
+        # the possibility map learns.
+        for ddl in [
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS neural_state TEXT DEFAULT 'active'",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS generation_source TEXT DEFAULT 'seed'",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS growth_angle TEXT",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS parent_node_ids UUID[] DEFAULT '{}'",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS split_from_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS merged_into_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS merged_from_node_ids UUID[] DEFAULT '{}'",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS spawned_count INT DEFAULT 0",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS engagement_score NUMERIC(8,4) DEFAULT 0.5",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS fulfilment_score NUMERIC(8,4) DEFAULT 0.5",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS last_reinforced_at TIMESTAMPTZ",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS pruned_at TIMESTAMPTZ",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prune_reason TEXT",
+        ]:
+            await conn.execute(ddl)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_neural_state
+            ON ioo_nodes(neural_state, is_active)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_growth_angle
+            ON ioo_nodes(growth_angle)
+        """)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ioo_node_proposals (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1761,6 +1793,35 @@ async def run_migrations():
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ioo_edges_to ON ioo_edges(to_node_id)
+        """)
+        for ddl in [
+            "ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS relation_type TEXT DEFAULT 'leads_to'",
+            "ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS confidence NUMERIC(6,4) DEFAULT 0.5",
+            "ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS rationale TEXT",
+            "ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS last_reinforced_at TIMESTAMPTZ",
+            "ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS pruned_at TIMESTAMPTZ",
+        ]:
+            await conn.execute(ddl)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_edges_relation_type
+            ON ioo_edges(relation_type)
+        """)
+
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_graph_events (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                event_type TEXT NOT NULL,
+                user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL,
+                related_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL,
+                edge_id UUID REFERENCES ioo_edges(id) ON DELETE SET NULL,
+                payload JSONB DEFAULT '{}',
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_graph_events_type_created
+            ON ioo_graph_events(event_type, created_at DESC)
         """)
 
         # Per-user capability profile (passively/actively learned)

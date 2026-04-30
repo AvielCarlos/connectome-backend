@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from api.middleware import get_current_user_id
 from core.database import execute, fetchrow
 from ora.agents.ioo_execution_agent import build_execution_protocol
+from ora.agents.ioo_graph_agent import get_graph_agent
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ioo", tags=["ioo-execution"])
@@ -138,9 +139,9 @@ async def execute_ioo_node(
     user_context = await _load_execution_context(user_id)
     protocol = build_execution_protocol(_record_to_dict(node), user_context, body.intent)
 
-    # SearchAgent TODO: future versions should enrich this protocol with live web
-    # search / Places / Aventi / Eviva results, but still stop before external
-    # booking, purchase, or message actions until the user confirms.
+    # SearchAgent enrichment is included in the protocol as side-effect-free
+    # candidates/query surfaces. Live providers can replace the graceful fallback
+    # without changing the persisted execution-run shape.
     run = await fetchrow(
         """
         INSERT INTO ioo_execution_runs (user_id, node_id, intent, status, protocol, updated_at)
@@ -249,6 +250,14 @@ async def complete_execution_run(
         str(user_id),
         str(run["node_id"]),
     )
+
+    # Feed completion back into the living IOO neural graph so successful
+    # experiences reinforce their node/edges and weak paths can later be pruned.
+    try:
+        await get_graph_agent().record_node_outcome(str(user_id), str(run["node_id"]), success=True)
+        await get_graph_agent().build_user_ioo_vector(str(user_id))
+    except Exception as e:
+        logger.warning(f"IOO neural feedback update failed for run {run_id}: {e}")
 
     xp_reward = _xp_reward_from_protocol(protocol)
     return {

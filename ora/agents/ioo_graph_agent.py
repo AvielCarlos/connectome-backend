@@ -991,6 +991,7 @@ class IOOGraphAgent:
 
         # Also update edges that lead to this node
         await self._update_edges_for_node(node_id, success)
+        await self.reinforce_node_signal(node_id, "complete" if success else "abandon", user_id=user_id)
 
     async def _update_edges_for_node(self, node_id: str, success: bool) -> None:
         """Increment success_count on edges pointing to this node if successful."""
@@ -1033,6 +1034,300 @@ class IOOGraphAgent:
         except Exception:
             count = 0
         return count
+
+    # ------------------------------------------------------------------
+    # Neural graph lifecycle: grow, reinforce, prune, split, merge
+    # ------------------------------------------------------------------
+
+    async def _log_graph_event(
+        self,
+        event_type: str,
+        node_id: str | None = None,
+        related_node_id: str | None = None,
+        user_id: str | None = None,
+        payload: dict | None = None,
+    ) -> None:
+        """Persist a lightweight memory of how the graph changed."""
+        try:
+            await execute(
+                """
+                INSERT INTO ioo_graph_events (event_type, user_id, node_id, related_node_id, payload)
+                VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::jsonb)
+                """,
+                event_type,
+                str(user_id) if user_id else None,
+                str(node_id) if node_id else None,
+                str(related_node_id) if related_node_id else None,
+                json.dumps(payload or {}),
+            )
+        except Exception as e:
+            logger.debug(f"IOO graph event log skipped ({event_type}): {e}")
+
+    async def reinforce_node_signal(
+        self,
+        node_id: str,
+        signal: str,
+        user_id: str | None = None,
+        strength: float = 1.0,
+    ) -> dict:
+        """
+        Update neural scores from explicit/implicit behaviour.
+
+        Signals are deliberately broad so frontend surfaces, execution runs, and
+        future agents can all feed the same graph: view, save, skip, start,
+        complete, abandon, fulfilment_high, fulfilment_low.
+        """
+        engagement_delta = {
+            "view": 0.01,
+            "save": 0.04,
+            "start": 0.08,
+            "complete": 0.12,
+            "skip": -0.03,
+            "abandon": -0.06,
+        }.get(signal, 0.0) * float(strength)
+        fulfilment_delta = {
+            "complete": 0.08,
+            "fulfilment_high": 0.14,
+            "fulfilment_low": -0.10,
+            "abandon": -0.04,
+        }.get(signal, 0.0) * float(strength)
+
+        row = await fetchrow(
+            """
+            UPDATE ioo_nodes
+            SET engagement_score = LEAST(1.0, GREATEST(0.0, COALESCE(engagement_score, 0.5) + $2)),
+                fulfilment_score = LEAST(1.0, GREATEST(0.0, COALESCE(fulfilment_score, 0.5) + $3)),
+                last_reinforced_at = CASE WHEN $2 > 0 OR $3 > 0 THEN NOW() ELSE last_reinforced_at END,
+                updated_at = NOW()
+            WHERE id = $1::uuid
+            RETURNING id, engagement_score, fulfilment_score, neural_state
+            """,
+            str(node_id),
+            engagement_delta,
+            fulfilment_delta,
+        )
+        await self._log_graph_event(
+            "reinforce" if engagement_delta >= 0 and fulfilment_delta >= 0 else "decay",
+            node_id=node_id,
+            user_id=user_id,
+            payload={"signal": signal, "strength": strength, "engagement_delta": engagement_delta, "fulfilment_delta": fulfilment_delta},
+        )
+        return dict(row) if row else {}
+
+    async def grow_node_from_angles(
+        self,
+        node_id: str,
+        angles: list[str] | None = None,
+        max_new: int = 4,
+    ) -> list[dict]:
+        """
+        Spawn sibling/child possibilities around a node from multiple angles.
+
+        This is the core anti-flat-card behaviour: one intention can branch into
+        fastest, easiest, social, growth, low-cost, vitality, contribution, and
+        novelty routes, then later be pruned/merged by outcomes.
+        """
+        base = await fetchrow("SELECT * FROM ioo_nodes WHERE id = $1::uuid AND is_active = TRUE", str(node_id))
+        if not base:
+            return []
+        angles = angles or ["fastest", "easiest", "most_fulfilling", "most_social", "lowest_cost", "growth_edge"]
+        created: list[dict] = []
+        tags = list(base["tags"] or [])
+        for angle in angles[:max_new]:
+            title = f"{base['title']} — {angle.replace('_', ' ')} path"
+            existing = await fetchrow(
+                "SELECT id, title, growth_angle FROM ioo_nodes WHERE lower(title) = lower($1) LIMIT 1",
+                title,
+            )
+            if existing:
+                created.append(dict(existing))
+                continue
+            description = (
+                f"A {angle.replace('_', ' ')} route for: {base['title']}. "
+                f"Generated as an IOO neural-graph branch so Ora can test which pathway creates more engagement, experiences, activity, and fulfilment."
+            )
+            row = await fetchrow(
+                """
+                INSERT INTO ioo_nodes
+                    (type, title, description, tags, domain, step_type, goal_category,
+                     requirements, difficulty_level, generation_source, growth_angle,
+                     parent_node_ids, neural_state)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,'neural_growth',$10,ARRAY[$11::uuid],'active')
+                RETURNING id, title, growth_angle
+                """,
+                base["type"],
+                title,
+                description,
+                list(dict.fromkeys(tags + [angle])),
+                base["domain"],
+                base["step_type"],
+                base["goal_category"],
+                json.dumps({"generated_from_node_id": str(node_id), "growth_angle": angle}),
+                base["difficulty_level"],
+                angle,
+                str(node_id),
+            )
+            await execute(
+                """
+                INSERT INTO ioo_edges (from_node_id, to_node_id, relation_type, confidence, rationale)
+                VALUES ($1::uuid, $2::uuid, 'branches_to', 0.72, $3)
+                ON CONFLICT (from_node_id, to_node_id) DO UPDATE
+                SET relation_type = 'branches_to', confidence = GREATEST(ioo_edges.confidence, 0.72), updated_at = NOW()
+                """,
+                str(node_id),
+                str(row["id"]),
+                f"Spawned as the {angle} branch of this IOO possibility.",
+            )
+            await execute("UPDATE ioo_nodes SET spawned_count = spawned_count + 1 WHERE id = $1::uuid", str(node_id))
+            await self._log_graph_event("grow", node_id=node_id, related_node_id=str(row["id"]), payload={"angle": angle})
+            created.append(dict(row))
+        return created
+
+    async def prune_underperforming_nodes(
+        self,
+        min_attempts: int = 8,
+        max_nodes: int = 25,
+    ) -> dict:
+        """Conservatively deactivate weak branches while preserving history."""
+        rows = await fetch(
+            """
+            UPDATE ioo_nodes
+            SET is_active = FALSE,
+                neural_state = 'pruned',
+                pruned_at = NOW(),
+                prune_reason = 'Low engagement/fulfilment after enough attempts',
+                updated_at = NOW()
+            WHERE id IN (
+                SELECT id FROM ioo_nodes
+                WHERE is_active = TRUE
+                  AND neural_state <> 'pruned'
+                  AND attempt_count >= $1
+                  AND (COALESCE(success_count,0)::float / GREATEST(attempt_count,1)) < 0.18
+                  AND COALESCE(engagement_score,0.5) < 0.35
+                ORDER BY updated_at ASC
+                LIMIT $2
+            )
+            RETURNING id, title
+            """,
+            int(min_attempts),
+            int(max_nodes),
+        )
+        for row in rows:
+            await self._log_graph_event("prune", node_id=str(row["id"]), payload={"reason": "underperforming"})
+        return {"pruned": len(rows), "nodes": [dict(r) for r in rows]}
+
+    async def split_node_by_tags(self, node_id: str, max_children: int = 3) -> list[dict]:
+        """Split a broad/high-traffic node into sharper child nodes."""
+        node = await fetchrow("SELECT * FROM ioo_nodes WHERE id = $1::uuid AND is_active = TRUE", str(node_id))
+        if not node:
+            return []
+        tags = [t for t in list(node["tags"] or []) if t]
+        if len(tags) < 2:
+            return []
+        children: list[dict] = []
+        for tag in tags[:max_children]:
+            title = f"{node['title']} — {tag} focus"
+            existing = await fetchrow("SELECT id, title FROM ioo_nodes WHERE lower(title) = lower($1) LIMIT 1", title)
+            if existing:
+                children.append(dict(existing))
+                continue
+            row = await fetchrow(
+                """
+                INSERT INTO ioo_nodes
+                    (type, title, description, tags, domain, step_type, goal_category,
+                     requirements, difficulty_level, generation_source, growth_angle,
+                     parent_node_ids, split_from_node_id, neural_state)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,'neural_split',$10,ARRAY[$11::uuid],$11::uuid,'active')
+                RETURNING id, title
+                """,
+                node["type"], title, f"A sharper {tag} branch split from {node['title']}.", [tag],
+                node["domain"], node["step_type"], node["goal_category"],
+                json.dumps({"split_from_node_id": str(node_id), "focus_tag": tag}),
+                node["difficulty_level"], tag, str(node_id),
+            )
+            await execute(
+                "INSERT INTO ioo_edges (from_node_id, to_node_id, relation_type, confidence, rationale) VALUES ($1::uuid,$2::uuid,'splits_to',0.8,$3) ON CONFLICT DO NOTHING",
+                str(node_id), str(row["id"]), f"Split broad node into focused {tag} child.",
+            )
+            await self._log_graph_event("split", node_id=node_id, related_node_id=str(row["id"]), payload={"tag": tag})
+            children.append(dict(row))
+        return children
+
+    async def merge_duplicate_title_nodes(self, max_groups: int = 10) -> dict:
+        """Merge exact duplicate titles into the strongest surviving node."""
+        groups = await fetch(
+            """
+            SELECT lower(title) AS key, array_agg(id ORDER BY success_count DESC, attempt_count DESC, created_at ASC) AS ids
+            FROM ioo_nodes
+            WHERE is_active = TRUE
+            GROUP BY lower(title)
+            HAVING COUNT(*) > 1
+            LIMIT $1
+            """,
+            int(max_groups),
+        )
+        merged = 0
+        for group in groups:
+            ids = [str(x) for x in group["ids"]]
+            keep, duplicates = ids[0], ids[1:]
+            for duplicate in duplicates:
+                await execute(
+                    """
+                    UPDATE ioo_nodes
+                    SET is_active = FALSE,
+                        neural_state = 'merged',
+                        merged_into_node_id = $2::uuid,
+                        updated_at = NOW()
+                    WHERE id = $1::uuid
+                    """,
+                    duplicate, keep,
+                )
+                await execute(
+                    """
+                    UPDATE ioo_edges
+                    SET from_node_id = CASE WHEN from_node_id = $1::uuid THEN $2::uuid ELSE from_node_id END,
+                        to_node_id = CASE WHEN to_node_id = $1::uuid THEN $2::uuid ELSE to_node_id END,
+                        relation_type = COALESCE(relation_type, 'merged_path'),
+                        updated_at = NOW()
+                    WHERE from_node_id = $1::uuid OR to_node_id = $1::uuid
+                    """,
+                    duplicate, keep,
+                )
+                await execute(
+                    "UPDATE ioo_nodes SET merged_from_node_ids = array_append(merged_from_node_ids, $2::uuid), updated_at = NOW() WHERE id = $1::uuid",
+                    keep, duplicate,
+                )
+                await self._log_graph_event("merge", node_id=duplicate, related_node_id=keep)
+                merged += 1
+        return {"merged": merged, "groups": len(groups)}
+
+    async def run_neural_lifecycle_sweep(self) -> dict:
+        """One maintenance pass over the living IOO graph."""
+        edge_weights_updated = await self.update_edge_weights()
+        pruned = await self.prune_underperforming_nodes()
+        merged = await self.merge_duplicate_title_nodes()
+        candidates = await fetch(
+            """
+            SELECT id FROM ioo_nodes
+            WHERE is_active = TRUE
+              AND neural_state = 'active'
+              AND attempt_count >= 10
+              AND spawned_count < 3
+              AND COALESCE(engagement_score,0.5) >= 0.62
+            ORDER BY engagement_score DESC, success_count DESC
+            LIMIT 5
+            """
+        )
+        grown = []
+        for row in candidates:
+            grown.extend(await self.grow_node_from_angles(str(row["id"]), max_new=2))
+        return {
+            "edge_weights_updated": edge_weights_updated,
+            "pruned": pruned,
+            "merged": merged,
+            "grown": len(grown),
+            "principle": "grow from multiple angles, reinforce winners, prune weak branches, split/merge overloaded structure",
+        }
 
     # ------------------------------------------------------------------
     # Seed initial nodes

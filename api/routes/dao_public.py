@@ -169,8 +169,8 @@ async def _generate_ora_message(stats: Dict[str, Any]) -> str:
 
 async def _generate_ora_thought(build_momentum: str, recent_commits: List[str]) -> Dict[str, str]:
     """Generate a fresh philosophical Ora thought for atdao.org."""
+    global _fallback_index
     if not settings.has_openai:
-        global _fallback_index
         thought = ORA_FALLBACK_THOUGHTS[_fallback_index % len(ORA_FALLBACK_THOUGHTS)]
         _fallback_index += 1
         return {**thought, "generated_at": datetime.now(timezone.utc).isoformat()}
@@ -218,7 +218,6 @@ async def _generate_ora_thought(build_momentum: str, recent_commits: List[str]) 
         }
     except Exception as e:
         logger.warning(f"Ora thought generation failed: {e}")
-        global _fallback_index
         thought = ORA_FALLBACK_THOUGHTS[_fallback_index % len(ORA_FALLBACK_THOUGHTS)]
         _fallback_index += 1
         return {**thought, "generated_at": datetime.now(timezone.utc).isoformat()}

@@ -17,6 +17,8 @@ from decimal import Decimal
 from typing import Any, Iterable
 from uuid import UUID
 
+from ora.agents.ioo_search_agent import build_search_agent_payload
+
 
 class ExecutionAgentRole:
     """Specialist roles that can participate in an IOO execution protocol."""
@@ -308,12 +310,22 @@ def build_execution_protocol(node: Any, user_context: Any, intent: str = "do_now
     context = _normalise_context(user_context)
     questions = clarify_execution_requirements(n.__dict__, context)
 
+    search_agent = build_search_agent_payload(n.__dict__, context, intent)
+    execution_agents = _agent_directives(n, context, intent)
+    for agent in execution_agents:
+        if agent.get("role") == ExecutionAgentRole.SEARCH:
+            agent["status"] = search_agent["status"]
+            agent["candidate_count"] = len(search_agent.get("candidates", []))
+            agent["fallback_used"] = bool(search_agent.get("fallback", {}).get("used"))
+            break
+
     return {
         "node_id": n.id,
         "intent": intent,
         "status": "needs_clarification" if questions else "plan_ready",
         "clarifying_questions": questions,
-        "execution_agents": _agent_directives(n, context, intent),
+        "execution_agents": execution_agents,
+        "search_agent": search_agent,
         "execution_plan": spawn_execution_plan(n.__dict__, context, intent),
         "safety": {
             "external_actions_require_confirmation": True,

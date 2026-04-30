@@ -686,6 +686,42 @@ CREATE TABLE IF NOT EXISTS ioo_node_proposals (
 CREATE INDEX IF NOT EXISTS idx_ioo_node_proposals_status
     ON ioo_node_proposals(status, created_at DESC);
 ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}';
+-- IOO neural graph lifecycle: nodes are living possibilities, not static cards.
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS neural_state TEXT DEFAULT 'active';
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS generation_source TEXT DEFAULT 'seed';
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS growth_angle TEXT;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS parent_node_ids UUID[] DEFAULT '{}';
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS split_from_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS merged_into_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS merged_from_node_ids UUID[] DEFAULT '{}';
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS spawned_count INT DEFAULT 0;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS engagement_score NUMERIC(8,4) DEFAULT 0.5;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS fulfilment_score NUMERIC(8,4) DEFAULT 0.5;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS last_reinforced_at TIMESTAMPTZ;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS pruned_at TIMESTAMPTZ;
+ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prune_reason TEXT;
+CREATE INDEX IF NOT EXISTS idx_ioo_nodes_neural_state ON ioo_nodes(neural_state, is_active);
+CREATE INDEX IF NOT EXISTS idx_ioo_nodes_growth_angle ON ioo_nodes(growth_angle);
+
+ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS relation_type TEXT DEFAULT 'leads_to';
+ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS confidence NUMERIC(6,4) DEFAULT 0.5;
+ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS rationale TEXT;
+ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS last_reinforced_at TIMESTAMPTZ;
+ALTER TABLE ioo_edges ADD COLUMN IF NOT EXISTS pruned_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_ioo_edges_relation_type ON ioo_edges(relation_type);
+
+CREATE TABLE IF NOT EXISTS ioo_graph_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type TEXT NOT NULL,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL,
+    related_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL,
+    edge_id UUID REFERENCES ioo_edges(id) ON DELETE SET NULL,
+    payload JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ioo_graph_events_type_created
+    ON ioo_graph_events(event_type, created_at DESC);
 
 -- Contribution system v2 (GitHub OAuth + attachments)
 ALTER TABLE users ADD COLUMN IF NOT EXISTS github_username TEXT;
@@ -705,7 +741,11 @@ CREATE TABLE IF NOT EXISTS app_feedback (
     message TEXT NOT NULL,
     route TEXT,
     screenshot_data_url TEXT,
+    screenshot_url TEXT,
+    screenshot_key TEXT,
     metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS screenshot_url TEXT;
+ALTER TABLE app_feedback ADD COLUMN IF NOT EXISTS screenshot_key TEXT;
 CREATE INDEX IF NOT EXISTS idx_app_feedback_user_created ON app_feedback(user_id, created_at DESC);

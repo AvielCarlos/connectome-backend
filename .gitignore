@@ -17,6 +17,9 @@ env/
 # Docker
 *.log
 
+# Local feedback screenshot fallback
+storage/
+
 # IDE
 .vscode/
 .idea/
