@@ -45,6 +45,9 @@ SERVICE_CATALOG = [
             "model/search/tool costs plus a small growth margin."
         ),
         "price_usd": 19,
+        "min_price_usd": 9,
+        "max_price_usd": 79,
+        "pricing_model": "dynamic_goal_quote",
         "delivery_hours": 24,
         "agent": "ora_goal_path_agent",
         "icon": "🧭",
@@ -58,6 +61,9 @@ SERVICE_CATALOG = [
             "Price covers research/tool/model costs plus growth margin."
         ),
         "price_usd": 49,
+        "min_price_usd": 19,
+        "max_price_usd": 149,
+        "pricing_model": "dynamic_goal_quote",
         "delivery_hours": 48,
         "agent": "ora_opportunity_scout_agent",
         "icon": "🔎",
@@ -71,6 +77,9 @@ SERVICE_CATALOG = [
             "Price covers agent/tool costs plus growth margin."
         ),
         "price_usd": 99,
+        "min_price_usd": 39,
+        "max_price_usd": 399,
+        "pricing_model": "dynamic_goal_quote",
         "delivery_hours": 72,
         "agent": "ora_delegated_action_agent",
         "icon": "⚡",
@@ -182,6 +191,18 @@ class ServiceOrderRequest(BaseModel):
     content: Optional[str] = None
     term: Optional[str] = None
     referrer: Optional[str] = None
+    quoted_price_usd: Optional[int] = None
+    quote_reason: Optional[str] = None
+
+
+def _effective_service_price(service: dict, body: ServiceOrderRequest) -> int:
+    """Use dynamic quotes for Ora goal services, clamped server-side to safe catalog bands."""
+    default = int(service["price_usd"])
+    if service.get("pricing_model") != "dynamic_goal_quote" or body.quoted_price_usd is None:
+        return default
+    min_price = int(service.get("min_price_usd") or default)
+    max_price = int(service.get("max_price_usd") or default)
+    return max(min_price, min(max_price, int(body.quoted_price_usd)))
 
 
 # ---------------------------------------------------------------------------
@@ -228,7 +249,8 @@ async def create_service_order(
         )
 
     order_id = str(uuid.uuid4())
-    price_cents = service["price_usd"] * 100
+    effective_price_usd = _effective_service_price(service, body)
+    price_cents = effective_price_usd * 100
 
     # Redirect customers back to the web app, not the API origin.
     # FRONTEND_BASE_URL should be set in Railway if the production frontend moves.
@@ -258,6 +280,8 @@ async def create_service_order(
             "metadata[order_id]": order_id,
             "metadata[service_id]": body.service_id,
             "metadata[user_id]": user_id or "",
+            "metadata[quoted_price_usd]": str(effective_price_usd),
+            "metadata[quote_reason]": (body.quote_reason or "")[:450],
         }
         for key, value in attribution.items():
             if value:
@@ -307,6 +331,8 @@ async def create_service_order(
         "checkout_url": checkout_url,
         "order_id": order_id,
         "estimated_delivery": estimated,
+        "price_usd": effective_price_usd,
+        "quote_reason": body.quote_reason,
     }
 
 

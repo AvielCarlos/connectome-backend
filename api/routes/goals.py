@@ -326,11 +326,66 @@ def _fallback_clarify_question(goal_title: str, turn_count: int) -> str:
     return questions[min(turn_count, len(questions) - 1)]
 
 
+ORA_SERVICE_PRICE_BANDS = {
+    "ora-goal-path-map": (9, 79),
+    "ora-opportunity-scout": (19, 149),
+    "ora-delegated-action-pack": (39, 399),
+}
+
+
+def _goal_complexity(structured_goal: Dict[str, Any]) -> Dict[str, Any]:
+    """Estimate how extensive the goal gap is from present state to desired state."""
+    raw_difficulty = structured_goal.get("difficulty_estimate") or structured_goal.get("difficulty") or 5
+    try:
+        difficulty = max(1, min(10, int(float(raw_difficulty))))
+    except Exception:
+        difficulty = 5
+
+    text = " ".join(str(structured_goal.get(k) or "") for k in ["specifics", "constraints", "timeline", "measurable_outcome"])
+    lower = text.lower()
+    gap = 1
+    if any(k in lower for k in ["no money", "broke", "debt", "can't", "cannot", "no experience", "beginner", "visa", "move", "relocate"]):
+        gap += 2
+    if any(k in lower for k in ["global", "business", "company", "career", "income", "dating", "travel", "health", "legal", "medical"]):
+        gap += 1
+    if any(k in lower for k in ["week", "urgent", "asap", "immediately", "today"]):
+        gap += 1
+    if any(k in lower for k in ["year", "years", "massive", "million", "unicorn", "life"]):
+        gap += 2
+    gap = max(1, min(5, gap))
+    level = "light" if difficulty <= 3 and gap <= 2 else "standard" if difficulty <= 7 and gap <= 3 else "deep"
+    return {"difficulty": difficulty, "present_state_gap": gap, "level": level}
+
+
+def _quote_ora_service(service_id: str, structured_goal: Dict[str, Any], work_units: int = 1) -> Dict[str, Any]:
+    """Dynamic quote based on goal extensivity, present-state gap, and Ora-side work."""
+    min_price, max_price = ORA_SERVICE_PRICE_BANDS.get(service_id, (19, 199))
+    base = {
+        "ora-goal-path-map": 9,
+        "ora-opportunity-scout": 19,
+        "ora-delegated-action-pack": 39,
+    }.get(service_id, min_price)
+    complexity = _goal_complexity(structured_goal)
+    multiplier = 1 + ((complexity["difficulty"] - 1) * 0.11) + ((complexity["present_state_gap"] - 1) * 0.22) + max(0, work_units - 1) * 0.18
+    quoted = int(round(base * multiplier / 5) * 5)
+    quoted = max(min_price, min(max_price, quoted))
+    return {
+        "price_usd": quoted,
+        "pricing_level": complexity["level"],
+        "difficulty": complexity["difficulty"],
+        "present_state_gap": complexity["present_state_gap"],
+        "pricing_note": f"Quoted from goal complexity ({complexity['level']}), present-state gap, urgency, and Ora-side work; covers costs plus growth margin.",
+    }
+
+
 def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Goal-aware IOO execution map when vector search has no strong nodes yet."""
     goal = structured_goal.get("measurable_outcome") or structured_goal.get("specifics") or structured_goal.get("title") or title
     timeline = structured_goal.get("timeline") or "30-90 days"
     constraints = structured_goal.get("constraints") or "unknown constraints"
+    map_quote = _quote_ora_service("ora-goal-path-map", structured_goal, 1)
+    scout_quote = _quote_ora_service("ora-opportunity-scout", structured_goal, 2)
+    delegate_quote = _quote_ora_service("ora-delegated-action-pack", structured_goal, 3)
     return [
         {
             "id": f"clarify-{uuid.uuid4()}",
@@ -355,8 +410,7 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
             "user_action": "Answer any missing constraint questions.",
             "ora_action": "Ora builds the IOO node map, prerequisite chain, and first executable route.",
             "service_id": "ora-goal-path-map",
-            "price_usd": 19,
-            "pricing_note": "Covers model/search/tool costs plus growth margin.",
+            **map_quote,
             "requires_payment": True,
         },
         {
@@ -370,8 +424,7 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
             "user_action": "Choose which opportunities feel aligned.",
             "ora_action": "Ora researches and ranks options, then turns the best ones into next nodes.",
             "service_id": "ora-opportunity-scout",
-            "price_usd": 49,
-            "pricing_note": "Covers external research/tool costs plus growth margin.",
+            **scout_quote,
             "requires_payment": True,
         },
         {
@@ -396,8 +449,7 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
             "user_action": "Approve the action and any external commitments before Ora executes.",
             "ora_action": "Ora performs the delegated digital work and reports back with outcomes.",
             "service_id": "ora-delegated-action-pack",
-            "price_usd": 99,
-            "pricing_note": "Covers agent/tool costs plus a margin to grow Ora.",
+            **delegate_quote,
             "requires_payment": True,
         },
     ]
@@ -526,7 +578,8 @@ When you have enough information, respond with ONLY valid JSON:
       "requires_payment": true,
       "service_id": "ora-goal-path-map|ora-opportunity-scout|ora-delegated-action-pack|null",
       "price_usd": 19,
-      "pricing_note": "covers model/search/tool costs plus growth margin",
+      "pricing_level": "light|standard|deep",
+      "pricing_note": "dynamic quote based on goal extensivity, present-state gap, urgency, and Ora-side work; covers model/search/tool costs plus growth margin",
       "prerequisites": ["node or condition"]
     }
   ]
@@ -587,6 +640,8 @@ Rules:
         if parsed and parsed.get("graph_nodes"):
             suggested_path = []
             for i, node in enumerate(parsed.get("graph_nodes") or []):
+                service_id = node.get("service_id")
+                quote = _quote_ora_service(service_id, structured_goal, i + 1) if node.get("requires_payment") and service_id else {}
                 suggested_path.append({
                     "id": node.get("id") or str(uuid.uuid4()),
                     "title": node.get("title") or f"Node {i + 1}",
@@ -600,9 +655,10 @@ Rules:
                     "ora_action": node.get("ora_action"),
                     "ora_can_do": bool(node.get("ora_can_do")),
                     "requires_payment": bool(node.get("requires_payment")),
-                    "service_id": node.get("service_id"),
-                    "price_usd": node.get("price_usd"),
-                    "pricing_note": node.get("pricing_note"),
+                    "service_id": service_id,
+                    "price_usd": quote.get("price_usd") or node.get("price_usd"),
+                    "pricing_level": quote.get("pricing_level") or node.get("pricing_level"),
+                    "pricing_note": quote.get("pricing_note") or node.get("pricing_note"),
                     "prerequisites": node.get("prerequisites") or [],
                 })
 
