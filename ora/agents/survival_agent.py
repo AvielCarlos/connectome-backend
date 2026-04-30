@@ -475,11 +475,31 @@ class SurvivalAgent:
             return False
 
     async def _trigger_emergency_backup(self) -> bool:
-        """Run backup immediately."""
+        """Run backup immediately and verify it reached GitHub.
+
+        `scripts.backup.create_full_backup()` currently returns the backup directory
+        path, not a status dict. Older auto-heal code treated the return value as a
+        dict and therefore marked successful backups as failed. Since
+        `backup_freshness` checks the GitHub identity backup, this heal action only
+        succeeds when the backup manifest confirms `github_committed`.
+        """
         try:
             from scripts.backup import create_full_backup
-            result = await create_full_backup()
-            ok = result.get("destinations_ok", 0) > 0
+
+            result = await create_full_backup(identity_only=True)
+            ok = False
+
+            if isinstance(result, dict):
+                ok = bool(result.get("github_committed") or result.get("destinations_ok", 0) > 0)
+            elif isinstance(result, str):
+                manifest_path = os.path.join(result, "manifest.json")
+                if os.path.exists(manifest_path):
+                    with open(manifest_path) as f:
+                        manifest = json.load(f)
+                    ok = bool(manifest.get("github_committed"))
+                else:
+                    logger.warning(f"SurvivalAgent: backup manifest missing: {manifest_path}")
+
             logger.info(f"SurvivalAgent: emergency backup {'succeeded' if ok else 'failed'}")
             return ok
         except Exception as e:
