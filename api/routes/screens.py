@@ -152,31 +152,63 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
 _STATIC_FALLBACK_CARDS = [
     {
         "title": "Take a 10-minute Aventi walk",
-        "body": "Step outside, pick one direction, and let curiosity choose the next turn. Notice one place you could return to with a friend.",
+        "body": "A tiny real-world exploration: step outside, choose one direction, and let curiosity pick the next turn. Notice one place, person, event poster, cafe, path, or view you could return to later.",
         "domain": "Aventi",
         "tag": "exploration",
         "button": "Start the walk →",
+        "why": "Aventi grows aliveness through lived experience. This is deliberately small so it works even when motivation is low.",
+        "steps": [
+            "Check your energy and weather; keep it easy.",
+            "Walk for 10 minutes with no productivity goal.",
+            "Save one thing you noticed as a possible future experience.",
+        ],
+        "needs": ["10 minutes", "safe place to walk", "curiosity"],
+        "result": "Ora learns what kinds of places and experiences make you feel more alive.",
     },
     {
         "title": "Reset your system with iVive",
-        "body": "Drink water, loosen your jaw, drop your shoulders, and take five slow breaths. Tiny regulation counts.",
+        "body": "A nervous-system reset for when your body is carrying friction. Drink water, loosen your jaw, drop your shoulders, and take five slow breaths before choosing the next task.",
         "domain": "iVive",
         "tag": "vitality",
         "button": "Do the reset →",
+        "why": "iVive is about maintaining and growing the self. A regulated body makes better decisions and lowers the cost of starting.",
+        "steps": [
+            "Drink water or take one sip if that is all you can do.",
+            "Relax jaw, shoulders, hands, and belly.",
+            "Take five slow breaths, then ask: what is the smallest next step?",
+        ],
+        "needs": ["1–3 minutes", "water if available", "somewhere to pause"],
+        "result": "Ora learns whether you need restoration before action.",
     },
     {
         "title": "Send one Eviva spark",
-        "body": "Message someone a real appreciation in one sentence. No performance — just warmth, delivered.",
+        "body": "A contribution-through-connection action: send one person a real appreciation, useful intro, helpful link, or warm check-in. Keep it one sentence and make it genuine.",
         "domain": "Eviva",
         "tag": "connection",
         "button": "Send appreciation →",
+        "why": "Eviva grows contribution, relationships, and service. Small signals of care can reopen human pathways without needing a big project.",
+        "steps": [
+            "Choose one person who would genuinely benefit from warmth or recognition.",
+            "Write one specific sentence — no performance, no ask.",
+            "Send it, or save it if now is not socially appropriate.",
+        ],
+        "needs": ["one person", "one sentence", "phone or messaging app"],
+        "result": "Ora learns which relationships and contribution channels are alive for you.",
     },
     {
         "title": "Choose Rest on purpose",
-        "body": "Put your phone down for three minutes. Let your nervous system learn that nothing needs to be chased right now.",
+        "body": "A deliberate recovery micro-step: put your phone down for three minutes and let your nervous system learn that nothing needs to be chased right now.",
         "domain": "Rest",
         "tag": "recovery",
         "button": "Begin rest →",
+        "why": "Rest is the substrate under iVive, Eviva, and Aventi. Sometimes the best next action is reducing load before adding direction.",
+        "steps": [
+            "Put the phone face down or away from your hand.",
+            "Let your eyes rest on one still object.",
+            "After three minutes, choose whether to continue resting or return to action.",
+        ],
+        "needs": ["3 minutes", "quiet enough space", "permission to pause"],
+        "result": "Ora learns when your next best step is recovery, not more input.",
     },
 ]
 
@@ -203,9 +235,13 @@ async def _static_fallback_card(
             {"type": "category_badge", "text": item["domain"].upper(), "color": "#00d4aa"},
             {"type": "headline", "text": item["title"]},
             {"type": "body", "text": item["body"]},
+            {"type": "section_header", "text": "What this is"},
+            {"type": "body_text", "text": item["why"]},
+            {"type": "section_header", "text": "Needs"},
+            {"type": "body_text", "text": ", ".join(item["needs"])},
             {
                 "type": "action_button",
-                "text": item["button"],
+                "label": item["button"],
                 "action": {
                     "type": "open_url",
                     "url": f"ido://fallback/{item['tag']}",
@@ -214,7 +250,7 @@ async def _static_fallback_card(
             },
         ],
         "feedback_overlay": {"type": "star_rating", "position": "bottom_right", "always_visible": True},
-        "metadata": {
+            "metadata": {
             "agent": "StaticFallbackAgent",
             "source": "static_fallback",
             "domain": item["domain"],
@@ -223,6 +259,26 @@ async def _static_fallback_card(
             "ioo_execution_status": "pending_user_response",
             "ioo_learning_event": "fallback_card_shown",
             "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "card_data": {
+            "title": item["title"],
+            "body": item["body"],
+            "deep_dive": {
+                "time_to_start": item["needs"][0],
+                "difficulty": "easy",
+                "why_it_matters": item["why"],
+                "steps": item["steps"],
+                "resources": [],
+                "stat": item["result"],
+            },
+        },
+        "deep_dive": {
+            "time_to_start": item["needs"][0],
+            "difficulty": "easy",
+            "why_it_matters": item["why"],
+            "steps": item["steps"],
+            "resources": [],
+            "stat": item["result"],
         },
     }
 
