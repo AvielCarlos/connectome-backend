@@ -1,9 +1,16 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-30T13:30:42.436856+00:00",
+  "timestamp": "2026-04-30T13:33:40.780882+00:00",
   "identity": {
-    "total_lessons": 881,
+    "total_lessons": 882,
     "lessons": [
+      {
+        "id": "136181ff-5c8d-4edf-8899-3bb4c0d0dd44",
+        "lesson": "{\"proposal_id\": \"136181ff-5c8d-4edf-8899-3bb4c0d0dd44\", \"card_type\": \"personalized_goal_tracker\", \"hypothesis\": \"Introducing a personalized goal tracker card will improve user engagement by 20%.\", \"description\": \"This card type allows users to set and track personal goals related to their usage of the app, such as completing tasks or learning new skills. Users will receive regular updates on their progress and motivational insights based on their interactions, fostering a sense of achievement and continuous engagement.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-04-30T13:31:44.037150+00:00\", \"expires_at\": \"2026-05-02T13:31:44.037150+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-04-30 13:31:44.03715"
+      },
       {
         "id": "998859c8-182b-4204-a6ec-8a601b554a13",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -6272,7 +6279,7 @@
       "rollback": {}
     },
     "consciousness_version": "03eb391c7e6148ae",
-    "lessons_hash": "537f17690b9d8160"
+    "lessons_hash": "239fe5a4629ad1ac"
   },
   "platform_stats": {
     "total_users": 19,
