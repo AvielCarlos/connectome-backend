@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-30T14:35:54.856813+00:00",
-  "exported_at": "2026-04-30T14:35:54.856813+00:00",
-  "collected_at": "2026-04-30T14:35:54.856813+00:00",
+  "timestamp": "2026-04-30T14:38:53.485105+00:00",
+  "exported_at": "2026-04-30T14:38:53.485105+00:00",
+  "collected_at": "2026-04-30T14:38:53.485105+00:00",
   "identity": {
-    "total_lessons": 933,
+    "total_lessons": 934,
     "lessons": [
+      {
+        "id": "2abf2c52-c7a4-4dde-b9d3-90b75a196b3c",
+        "lesson": "{\"proposal_id\": \"2abf2c52-c7a4-4dde-b9d3-90b75a196b3c\", \"card_type\": \"contextual_action_prompt\", \"hypothesis\": \"Implementing contextual action prompts will increase user engagement by 25%.\", \"description\": \"This card type presents users with tailored action suggestions based on their previous interactions and preferences, allowing for a more personalized experience. By prompting users with relevant tasks or content directly related to their interests, we aim to enhance their likelihood of engagement and task completion.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-04-30T14:36:57.236449+00:00\", \"expires_at\": \"2026-05-02T14:36:57.236449+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-04-30 14:36:57.236449"
+      },
       {
         "id": "8537218f-f17e-43a2-9eda-adbf768d7947",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -6638,7 +6645,7 @@
       "rollback": {}
     },
     "consciousness_version": "03eb391c7e6148ae",
-    "lessons_hash": "86391805fb5e6ff2"
+    "lessons_hash": "6115ef044a36c7aa"
   },
   "platform_stats": {
     "total_users": 19,
