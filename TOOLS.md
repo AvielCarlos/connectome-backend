@@ -51,4 +51,4 @@ Add whatever helps you do your job. This is your cheat sheet.
 ---
 
 ### Stripe
-- Secret key (live): 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
+- Old exposed live secret key removed. Stripe deactivated the key ending `b7OPly`; generate/rotate a new live key in Stripe Dashboard before production payment work.
