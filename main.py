@@ -139,6 +139,13 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_daily_self_check_loop())
     logger.info("✅ Ora daily self-check loop started")
 
+    # Start Ora brain backup freshness loops (hourly identity backup + monitor)
+    try:
+        from ora.agents.backup_freshness import start_backup_freshness_loops
+        start_backup_freshness_loops(app)
+    except Exception as _backup_e:
+        logger.warning(f"Ora backup freshness loops failed to start: {_backup_e}")
+
     # Start ModelEvolutionAgent weekly loop
     from ora.brain import get_brain as _get_brain
     _ora_brain = _get_brain()

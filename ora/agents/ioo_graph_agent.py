@@ -1321,13 +1321,20 @@ class IOOGraphAgent:
         grown = []
         for row in candidates:
             grown.extend(await self.grow_node_from_angles(str(row["id"]), max_new=2))
-        return {
+        summary = {
             "edge_weights_updated": edge_weights_updated,
             "pruned": pruned,
             "merged": merged,
             "grown": len(grown),
             "principle": "grow from multiple angles, reinforce winners, prune weak branches, split/merge overloaded structure",
         }
+        if len(grown) or pruned.get("pruned") or merged.get("merged"):
+            try:
+                from ora.agents.backup_freshness import trigger_identity_backup
+                await trigger_identity_backup("ioo_neural_lifecycle")
+            except Exception as e:
+                logger.debug(f"IOO lifecycle backup trigger skipped: {e}")
+        return summary
 
     async def upsert_world_signal_node(self, signal: dict) -> dict:
         """
@@ -1449,6 +1456,12 @@ class IOOGraphAgent:
                     spawned_or_refreshed.append(node)
             except Exception as e:
                 logger.warning(f"IOO world-signal ingest failed for {signal.get('title', '?')}: {e}")
+        if spawned_or_refreshed:
+            try:
+                from ora.agents.backup_freshness import trigger_identity_backup
+                await trigger_identity_backup("world_signal_ioo_ingest")
+            except Exception as e:
+                logger.debug(f"World-signal ingest backup trigger skipped: {e}")
         return {"ingested": len(spawned_or_refreshed), "nodes": spawned_or_refreshed}
 
     # ------------------------------------------------------------------

@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_SECRET: str = ""
     GITHUB_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/github/callback"
 
+    # Ora brain backup freshness
+    ORA_BACKUP_SCHEDULER_ENABLED: bool = True
+    ORA_IDENTITY_BACKUP_INTERVAL_SECONDS: int = 3600       # hourly identity pack
+    ORA_BACKUP_FRESHNESS_CHECK_SECONDS: int = 1800         # 30-minute monitor
+    ORA_EVENT_BACKUP_DEBOUNCE_SECONDS: int = 900           # coalesce bursty brain changes
+
     # Railway — for Railway API access (redeploy, env var updates)
     RAILWAY_API_TOKEN: str = ""
     RAILWAY_SERVICE_ID: str = "088d77ed-a707-4dc4-af68-866bf99a1d63"
@@ -150,5 +156,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
 

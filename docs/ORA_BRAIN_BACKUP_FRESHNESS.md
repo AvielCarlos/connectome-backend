@@ -44,6 +44,28 @@ The backup job now writes both:
 
 ## Suggested Railway cron commands
 
+The backend now also starts an in-process freshness scheduler on FastAPI startup when:
+
+```bash
+ORA_BACKUP_SCHEDULER_ENABLED=true
+```
+
+Defaults:
+
+```bash
+ORA_IDENTITY_BACKUP_INTERVAL_SECONDS=3600
+ORA_BACKUP_FRESHNESS_CHECK_SECONDS=1800
+ORA_EVENT_BACKUP_DEBOUNCE_SECONDS=900
+```
+
+This means production gets:
+
+- an hourly identity-only backup loop;
+- a 30-minute SurvivalAgent freshness monitor;
+- debounced event-triggered identity backups after IOO neural lifecycle/world-signal graph mutations.
+
+External Railway cron is still useful as a second safety net:
+
 Daily full backup:
 
 ```bash
