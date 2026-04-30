@@ -53,37 +53,143 @@ async def _get_user_has_goals(user_id: str) -> bool:
     return row is not None
 
 
+def _node_text(node: dict) -> str:
+    return " ".join(str(node.get(k) or "") for k in ["title", "description", "type", "domain", "goal_category", "step_type"]).lower()
+
+
+def _screen_pattern_for_ioo_node(node: dict) -> str:
+    """Choose a UI pattern based on node semantics, not a single generic card."""
+    text = _node_text(node)
+    node_type = str(node.get("type") or node.get("step_type") or "").lower()
+    domain = str(node.get("domain") or "").lower()
+    if any(k in text for k in ["travel", "event", "restaurant", "date", "walk", "adventure", "place", "city", "trip"]):
+        return "experience_plan"
+    if any(k in text for k in ["money", "income", "job", "client", "business", "revenue", "work", "contribution", "volunteer"]):
+        return "opportunity_pipeline"
+    if any(k in text for k in ["health", "fitness", "energy", "sleep", "diet", "body", "breath", "workout", "nervous"]):
+        return "capacity_protocol"
+    if any(k in text for k in ["learn", "skill", "course", "practice", "study", "write", "create", "music", "code"]):
+        return "skill_sprint"
+    if any(k in text for k in ["clarify", "choose", "decide", "reflect", "intention", "goal"]):
+        return "decision_canvas"
+    if any(k in node_type for k in ["subroutine", "prerequisite", "bridge"]):
+        return "bridge_node"
+    if domain == "aventi":
+        return "experience_plan"
+    if domain == "eviva":
+        return "opportunity_pipeline"
+    if domain == "ivive":
+        return "capacity_protocol"
+    return "adaptive_canvas"
+
+
+def _ioo_pattern_components(node: dict, pattern: str) -> list[dict]:
+    title = node.get("title", "")
+    desc = node.get("description") or ""
+    time = node.get("requires_time_hours")
+    money = node.get("requires_finances")
+    prereqs = node.get("prerequisites") or node.get("requirements") or []
+    if isinstance(prereqs, str):
+        prereqs = [prereqs]
+
+    base = [
+        {"type": "pattern_badge", "text": pattern.replace("_", " ").upper(), "color": "#00d4aa"},
+        {"type": "headline", "text": title},
+        {"type": "body", "text": desc},
+    ]
+
+    context = []
+    if time:
+        context.append({"label": "Time", "value": f"~{time}h"})
+    if money:
+        context.append({"label": "Money", "value": f"~${float(money):.0f}"})
+    if node.get("difficulty_level"):
+        context.append({"label": "Difficulty", "value": f"{node.get('difficulty_level')}/10"})
+    if context:
+        base.append({"type": "context_strip", "items": context})
+
+    if pattern == "experience_plan":
+        base += [
+            {"type": "section_header", "text": "Experience variables"},
+            {"type": "choice_grid", "items": [
+                {"label": "Solo", "value": "solo"}, {"label": "With someone", "value": "social"},
+                {"label": "Low cost", "value": "budget"}, {"label": "Peak aliveness", "value": "stretch"},
+            ]},
+            {"type": "timeline_steps", "items": [
+                {"title": "Check fit", "body": "Time, budget, location, energy."},
+                {"title": "Find option", "body": "Ora can scout real places/events."},
+                {"title": "Commit", "body": "Book, invite, or schedule."},
+            ]},
+        ]
+    elif pattern == "opportunity_pipeline":
+        base += [
+            {"type": "section_header", "text": "Opportunity pipeline"},
+            {"type": "kanban_lite", "columns": [
+                {"label": "Find", "items": ["Options", "People", "Signals"]},
+                {"label": "Qualify", "items": ["Fit", "Reward", "Next ask"]},
+                {"label": "Act", "items": ["Message", "Apply", "Deliver"]},
+            ]},
+        ]
+    elif pattern == "capacity_protocol":
+        base += [
+            {"type": "section_header", "text": "Capacity protocol"},
+            {"type": "readiness_meter", "items": ["Energy", "Time", "Body", "Focus"]},
+            {"type": "timeline_steps", "items": [
+                {"title": "Regulate", "body": "Lower friction first."},
+                {"title": "Tiny action", "body": "Do the minimum viable version."},
+                {"title": "Record signal", "body": "Ora updates your current state."},
+            ]},
+        ]
+    elif pattern == "skill_sprint":
+        base += [
+            {"type": "section_header", "text": "Skill sprint"},
+            {"type": "timeline_steps", "items": [
+                {"title": "Target", "body": "Define the proof of skill."},
+                {"title": "Practice loop", "body": "One focused repetition."},
+                {"title": "Feedback", "body": "Ora or a human critiques output."},
+                {"title": "Ship", "body": "Make one result real."},
+            ]},
+        ]
+    elif pattern == "decision_canvas":
+        base += [
+            {"type": "section_header", "text": "Clarify before action"},
+            {"type": "question_stack", "items": [
+                "What would prove this worked?",
+                "What constraint matters most?",
+                "What can Ora do vs what must you do?",
+            ]},
+        ]
+    else:
+        base += [
+            {"type": "section_header", "text": "Bridge node" if pattern == "bridge_node" else "Adaptive path"},
+            {"type": "split_actions", "items": [
+                {"owner": "You", "text": "Confirm reality: time, energy, money, access."},
+                {"owner": "Ora", "text": "Map prerequisites, options, and next interface."},
+            ]},
+        ]
+
+    if prereqs:
+        base.append({"type": "constraint_panel", "items": [{"label": str(p), "status": "needed"} for p in prereqs[:5]]})
+
+    base.append({
+        "type": "action_button",
+        "text": "Start this path →",
+        "action": {"type": "open_url", "url": f"ioo://node/{node['id']}", "payload": {"node_id": str(node["id"]), "pattern": pattern}},
+    })
+    return base
+
+
 def _ioo_node_to_screen_dict(node: dict) -> dict:
     """
     Convert an IOO graph node into a screen spec dict.
     The dict is JSON-serialisable and compatible with the ScreenSpec Pydantic model.
     """
-    components = [
-        {
-            "type": "category_badge",
-            "text": str(node.get("type", "")).upper().replace("_", " "),
-            "color": "#8b5cf6",
-        },
-        {"type": "headline", "text": node.get("title", "")},
-        {"type": "body", "text": node.get("description") or ""},
-    ]
-    if node.get("requires_time_hours"):
-        components.append({"type": "meta", "text": f"\u23f1 ~{node['requires_time_hours']}h"})
-    if node.get("requires_finances"):
-        components.append({"type": "meta", "text": f"\U0001f4b0 ~${node['requires_finances']:.0f}"})
-    components.append({
-        "type": "action_button",
-        "text": "Start this \u2192",
-        "action": {
-            "type": "open_url",
-            "url": f"ioo://node/{node['id']}",
-            "payload": {"node_id": str(node["id"])},
-        },
-    })
+    pattern = _screen_pattern_for_ioo_node(node)
+    components = _ioo_pattern_components(node, pattern)
     return {
         "screen_id": str(_uuid_mod.uuid4()),
         "type": "opportunity",
-        "layout": "card_stack",
+        "layout": pattern,
         "components": components,
         "feedback_overlay": {
             "type": "star_rating",
@@ -95,6 +201,8 @@ def _ioo_node_to_screen_dict(node: dict) -> dict:
             "source": "ioo_graph",
             "node_id": str(node["id"]),
             "node_type": node.get("type"),
+            "screen_pattern": pattern,
+            "pattern_version": "adaptive_v1",
             "domain": node.get("domain"),
             "tags": node.get("tags") or [],
         },
