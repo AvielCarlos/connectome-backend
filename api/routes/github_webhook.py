@@ -17,14 +17,14 @@ import hmac
 import logging
 import os
 
-import httpx
 from fastapi import APIRouter, HTTPException, Request
+
+from core.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/github", tags=["github"])
 
 WEBHOOK_SECRET = os.getenv("GITHUB_WEBHOOK_SECRET", "")
-BOT_TOKEN_PATH = "/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt"
 TELEGRAM_CHAT_ID = "5716959016"
 
 
@@ -38,16 +38,9 @@ def _verify_signature(payload: bytes, signature: str) -> bool:
 
 
 async def _send_telegram(msg: str) -> None:
-    try:
-        with open(BOT_TOKEN_PATH) as f:
-            token = f.read().strip()
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "Markdown"},
-            )
-    except Exception as e:
-        logger.error(f"GitHub webhook: Telegram alert failed: {e}")
+    ok = await send_telegram_message(msg, chat_id=TELEGRAM_CHAT_ID, parse_mode="Markdown")
+    if not ok:
+        logger.error("GitHub webhook: Telegram alert skipped/failed")
 
 
 @router.post("/webhook")

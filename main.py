@@ -210,32 +210,17 @@ async def _aura_error_recovery_middleware(request, call_next):
             if count == 1:
                 await r.expire(error_key, 60)  # reset window every 60s
             if count >= 3:
-                import httpx as _httpx, os as _os
-                token = _os.environ.get("ORA_TELEGRAM_TOKEN", "")
-                if not token:
-                    try:
-                        with open("/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt") as f:
-                            token = f.read().strip()
-                    except Exception:
-                        pass
-                if token:
-                    from datetime import datetime as _dt, timezone as _tz
-                    msg = (
-                        f"⚠️ Ora Error Alert\n\n"
-                        f"Endpoint {path} has failed {count}x in the last 60s.\n"
-                        f"Status: {response.status_code}\n"
-                        f"Time: {_dt.now(_tz.utc).isoformat()}"
-                    )
-                    try:
-                        async with _httpx.AsyncClient(timeout=10) as client:
-                            await client.post(
-                                f"https://api.telegram.org/bot{token}/sendMessage",
-                                json={"chat_id": 5716959016, "text": msg},
-                            )
-                        logger.warning(f"Ora error alert sent for {path} (count={count})")
-                        await r.delete(error_key)
-                    except Exception as _te:
-                        logger.debug(f"Error alert send failed: {_te}")
+                from datetime import datetime as _dt, timezone as _tz
+                from core.telegram import send_telegram_message
+                msg = (
+                    f"⚠️ Ora Error Alert\n\n"
+                    f"Endpoint {path} has failed {count}x in the last 60s.\n"
+                    f"Status: {response.status_code}\n"
+                    f"Time: {_dt.now(_tz.utc).isoformat()}"
+                )
+                if await send_telegram_message(msg):
+                    logger.warning(f"Ora error alert sent for {path} (count={count})")
+                    await r.delete(error_key)
         except Exception as _e:
             logger.debug(f"Error recovery middleware failed: {_e}")
 

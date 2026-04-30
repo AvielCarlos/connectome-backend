@@ -23,17 +23,9 @@ logger = logging.getLogger(__name__)
 # Avi's Telegram chat_id
 AVI_CHAT_ID = 5716959016
 
-# Bot token: env var first, then file fallback
+# Bot token: cloud runtime uses env vars, not Avi's laptop filesystem.
 def _get_bot_token() -> str:
-    token = os.environ.get("ORA_TELEGRAM_TOKEN", "")
-    if not token:
-        try:
-            token_path = "/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt"
-            with open(token_path) as f:
-                token = f.read().strip()
-        except Exception:
-            pass
-    return token
+    return os.environ.get("ORA_TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN") or ""
 
 
 class ReporterAgent:

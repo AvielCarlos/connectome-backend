@@ -67,20 +67,13 @@ LTV_VALUE_THRESHOLD = 0.5
 # Number of founding stewards
 FOUNDING_STEWARD_LIMIT = 10
 
-# Telegram config
-TELEGRAM_BOT_TOKEN_PATH = "/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt"
-TELEGRAM_CHANNEL_ID = "-1003968154861"
-TELEGRAM_GROUP_ID = "-1003758049811"
+# Telegram config — cloud runtime must use env vars, not Avi's laptop filesystem.
+TELEGRAM_CHANNEL_ID = os.getenv("DAO_TELEGRAM_CHANNEL_ID", "-1003968154861")
+TELEGRAM_GROUP_ID = os.getenv("DAO_TELEGRAM_GROUP_ID", "-1003758049811")
 
 
 def _load_telegram_token() -> Optional[str]:
-    try:
-        if os.path.exists(TELEGRAM_BOT_TOKEN_PATH):
-            with open(TELEGRAM_BOT_TOKEN_PATH) as f:
-                return f.read().strip()
-    except Exception as e:
-        logger.warning(f"DaoAgent: could not load telegram token: {e}")
-    return None
+    return os.getenv("ORA_TELEGRAM_TOKEN") or os.getenv("TELEGRAM_BOT_TOKEN")
 
 
 def _tier_for_cp(total_cp: int) -> str:

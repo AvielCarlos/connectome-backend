@@ -863,13 +863,6 @@ class SurvivalAgent:
             or os.getenv("TELEGRAM_BOT_TOKEN")
         )
         if not token:
-            try:
-                p = pathlib.Path("/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt")
-                if p.exists():
-                    token = p.read_text().strip()
-            except Exception:
-                pass
-        if not token:
             return
         try:
             async with httpx.AsyncClient(timeout=10) as client:

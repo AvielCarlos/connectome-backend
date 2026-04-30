@@ -20,11 +20,9 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-API_BASE = "https://connectome-api-production.up.railway.app"
-AVI_TELEGRAM_CHAT_ID = 5716959016
-WORKER_CHANNEL_ID = -1003968154861
-JWT_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/connectome_jwt.txt"
-TELEGRAM_TOKEN_FILE = "/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt"
+API_BASE = os.getenv("CONNECTOME_API_BASE", "https://connectome-api-production.up.railway.app")
+AVI_TELEGRAM_CHAT_ID = int(os.getenv("ORA_TELEGRAM_CHAT_ID", "5716959016"))
+WORKER_CHANNEL_ID = int(os.getenv("WORKER_TELEGRAM_CHANNEL_ID", "-1003968154861"))
 
 
 class BaseWorkerAgent(ABC):
@@ -129,17 +127,11 @@ class BaseWorkerAgent(ABC):
     async def _get_jwt(self) -> Optional[str]:
         if self._jwt:
             return self._jwt
-        # Try file first (kept fresh by JWT auto-renew cron)
-        if os.path.exists(JWT_FILE):
-            try:
-                with open(JWT_FILE) as f:
-                    token = f.read().strip()
-                if token:
-                    self._jwt = token
-                    return token
-            except Exception:
-                pass
-        # Fall back to fresh login
+        token = os.environ.get("ORA_JWT_TOKEN") or os.environ.get("CONNECTOME_WORKER_JWT")
+        if token:
+            self._jwt = token
+            return token
+        # Fall back to fresh login in dev/test only.
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.post(
@@ -157,13 +149,7 @@ class BaseWorkerAgent(ABC):
     async def _get_tg_token(self) -> Optional[str]:
         if self._tg_token:
             return self._tg_token
-        token = os.environ.get("TELEGRAM_BOT_TOKEN")
-        if not token and os.path.exists(TELEGRAM_TOKEN_FILE):
-            try:
-                with open(TELEGRAM_TOKEN_FILE) as f:
-                    token = f.read().strip()
-            except Exception:
-                pass
+        token = os.environ.get("ORA_TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
         self._tg_token = token
         return token
 

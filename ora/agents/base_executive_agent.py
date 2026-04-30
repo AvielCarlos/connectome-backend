@@ -340,12 +340,6 @@ class BaseExecutiveAgent(ABC):
         if self._telegram_token:
             return self._telegram_token
         token = os.environ.get("ORA_TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
-        if not token:
-            try:
-                with open("/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt") as f:
-                    token = f.read().strip()
-            except Exception:
-                pass
         if token:
             self._telegram_token = token
         return token
