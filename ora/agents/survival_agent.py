@@ -199,12 +199,15 @@ class SurvivalAgent:
     }
 
     SELF_HEAL_ACTIONS = {
-        "api": ["trigger_railway_redeploy", "activate_standby_if_available", "alert_avi"],
-        "database": ["reconnect_pool", "alert_avi"],
+        # Routine recoveries stay quiet. Avi is alerted only by the escalation
+        # path after repeated failed heal attempts, or for explicit data-risk
+        # cases below that need human intervention.
+        "api": ["trigger_railway_redeploy", "activate_standby_if_available"],
+        "database": ["reconnect_pool"],
         "redis": ["reconnect_redis", "rebuild_cache_from_db"],
         "backup_freshness": ["trigger_emergency_backup", "alert_avi_if_very_stale"],
         "lesson_count": ["restore_lessons_from_backup", "alert_avi_immediately"],
-        "ora_brain": ["trigger_railway_redeploy", "alert_avi"],
+        "ora_brain": ["trigger_railway_redeploy"],
     }
 
     # -----------------------------------------------------------------------
