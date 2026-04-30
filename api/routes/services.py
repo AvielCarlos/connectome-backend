@@ -137,6 +137,12 @@ class ServiceOrderRequest(BaseModel):
     description: str
     context: Optional[str] = None
     email: Optional[str] = None  # for non-logged-in orders
+    source: Optional[str] = None
+    campaign: Optional[str] = None
+    medium: Optional[str] = None
+    content: Optional[str] = None
+    term: Optional[str] = None
+    referrer: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +198,15 @@ async def create_service_order(
     try:
         import httpx
 
+        attribution = {
+            "source": body.source,
+            "campaign": body.campaign,
+            "medium": body.medium,
+            "content": body.content,
+            "term": body.term,
+            "referrer": body.referrer,
+        }
+
         payload = {
             "mode": "payment",
             "payment_method_types[]": "card",
@@ -205,6 +220,10 @@ async def create_service_order(
             "metadata[service_id]": body.service_id,
             "metadata[user_id]": user_id or "",
         }
+        for key, value in attribution.items():
+            if value:
+                payload[f"metadata[{key}]"] = value[:500]
+                payload[f"metadata[utm_{key}]"] = value[:500]
         if body.email:
             payload["customer_email"] = body.email
 
