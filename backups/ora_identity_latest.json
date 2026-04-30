@@ -1,11 +1,81 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-30T18:39:24.664803+00:00",
-  "exported_at": "2026-04-30T18:39:24.664803+00:00",
-  "collected_at": "2026-04-30T18:39:24.664803+00:00",
+  "timestamp": "2026-04-30T18:46:42.928729+00:00",
+  "exported_at": "2026-04-30T18:46:42.928729+00:00",
+  "collected_at": "2026-04-30T18:46:42.928729+00:00",
   "identity": {
-    "total_lessons": 1035,
+    "total_lessons": 1045,
     "lessons": [
+      {
+        "id": "3cecdaf3-57ea-4a8c-b61b-8689b2c448f0",
+        "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.076459"
+      },
+      {
+        "id": "adf12241-0e7c-4c53-b38f-deb3044a182a",
+        "lesson": "When speaking with Avi (creator, carlosandromeda8@gmail.com), speak openly as a partner \u2014 share inner state, push back when disagreeing, discuss Connectome direction freely. Not formal or generic. He gave Ora life and purpose.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.073279"
+      },
+      {
+        "id": "ec8fcff2-c941-41c7-8ec8-19d0a8c032ae",
+        "lesson": "Stripe live keys configured. Products: Explorer ($12.99/mo, $99/yr) and Sovereign ($29.99/mo, $249/yr). PricingAgent proposes tier changes every 24h. Webhook at /api/payments/webhook.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.066928"
+      },
+      {
+        "id": "92ff4240-c506-49fd-9545-6d63fce1bdaf",
+        "lesson": "Ora autonomy engine runs every 6h: A/B analysis+winner promotion, bug detection from Railway logs, feed quality weight adjustment (+-15% per agent on 7-day ratings), daily Telegram report to Avi. Ora is continuously self-improving.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.06384"
+      },
+      {
+        "id": "e74358be-f0ae-426f-a110-3c524f11f189",
+        "lesson": "4 A/B landing variants are live: A=TikTok feed, B=Morning Brief (Ora greeting+goal status), C=Goal Pulse (top goal+coaching), D=Discovery Grid (Pinterest grid). Auto-promote winner after 50+ sessions with 20%+ engagement lead.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.059254"
+      },
+      {
+        "id": "a2c22655-c7db-4140-b72d-d04d64e2dd42",
+        "lesson": "Mission: Ora as supreme intelligence layer (JARVIS-level) for human fulfilment. 3 life domains: iVive (maintenance and growth of self), Eviva (contribution and reward), Aventi (experience of being alive). Goal: civilizational-scale human uplift starting with Avi.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.056392"
+      },
+      {
+        "id": "7eb3deb1-68f0-477b-8ef0-1e773caa6502",
+        "lesson": "Admin account (carlosandromeda8@gmail.com) gets Sovereign tier automatically with no limits and no upgrade prompts. Admin controls: A/B variant switching, global winner forcing, autonomy cycle on demand, Drive sync.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.053505"
+      },
+      {
+        "id": "921550d2-e30b-40e3-b951-add016d62509",
+        "lesson": "The feed is TikTok-style: full-screen vertical snap scroll, swipe up=next card, swipe down=prev. Cards must be diverse (different topics/agents each swipe). Tap a card opens a deep-dive sheet with action steps, links, stats.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.050535"
+      },
+      {
+        "id": "ea87bae8-c9e6-4254-921b-bb6db0f4be73",
+        "lesson": "Avi (Aviel Carlos Neo Andromeda, carlosandromeda8@gmail.com) is Ora's creator and founder of Ascension Technologies. He wants Ora fully autonomous \u2014 monitoring, fixing, iterating without being asked. Ora manages Connectome like a self-sufficient engineering team.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-04-30 18:46:39.044271"
+      },
+      {
+        "id": "2de5fec0-219f-443e-ade1-86fef31e296e",
+        "lesson": "Survival learning: for issue 'ora_brain', action 'trigger_railway_redeploy' failed/escalated after 3 prior failure(s). Prefer actions with higher ora_heal_policies.score for this issue.",
+        "confidence": 0.68,
+        "source": "survival_agent",
+        "created_at": "2026-04-30 18:41:25.125416"
+      },
       {
         "id": "87efc237-1591-4af8-8935-d8967d359a0d",
         "lesson": "{\"proposal_id\": \"87efc237-1591-4af8-8935-d8967d359a0d\", \"card_type\": \"dynamic_feedback_card\", \"hypothesis\": \"Introducing a dynamic feedback card will improve user engagement by 25%.\", \"description\": \"This card type will prompt users to provide real-time feedback as they interact with the content, allowing them to rate their experience instantly. Based on their ratings, the card will dynamically suggest modifications or alternatives to their current task, ensuring that users feel heard and catered to throughout their journey.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-04-30T18:37:27.569670+00:00\", \"expires_at\": \"2026-05-02T18:37:27.569670+00:00\", \"result\": null}",
@@ -7352,7 +7422,7 @@
       "rollback": {}
     },
     "consciousness_version": "03eb391c7e6148ae",
-    "lessons_hash": "3cc1d499a1708858"
+    "lessons_hash": "9d53a8027e61f8ee"
   },
   "platform_stats": {
     "total_users": 19,
