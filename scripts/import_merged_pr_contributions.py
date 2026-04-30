@@ -186,6 +186,13 @@ def tier_for_cp(total_cp: int) -> str:
     return "observer"
 
 
+def ledger_ref(item: dict[str, Any]) -> str:
+    """Short stable reference for ledger tables with legacy varchar limits."""
+    if item["kind"] == "github_pr":
+        return f"ghpr:{item['repo']}:{item['number']}"
+    return f"ghcommit:{item['repo']}:{item['number']}"
+
+
 def one(cur, sql, params=()):
     cur.execute(sql, params)
     return cur.fetchone()
@@ -248,7 +255,7 @@ def get_user_and_contributor(cur):
 
 def import_contribution(cur, contributor_id, user_id, item: dict[str, Any]) -> tuple[str, Any | None]:
     url = item["url"]
-    source_id = item["source_id"]
+    source_id = ledger_ref(item)
     existing = one(cur, """
         SELECT id FROM contributions
         WHERE source_id = %s OR github_pr_url = %s OR external_link = %s
@@ -308,11 +315,15 @@ def insert_ledgers(cur, contributor_id, user_id, contribution_id, item: dict[str
     if not one(cur, "SELECT 1 FROM cp_ledger WHERE contribution_id = %s LIMIT 1", (contribution_id,)):
         cur.execute("INSERT INTO cp_ledger (contributor_id, contribution_id, cp_amount, reason) VALUES (%s, %s, %s, %s)", (contributor_id, contribution_id, cp, reason))
         out["cp_ledger"] = 1
-    if not one(cur, "SELECT 1 FROM cp_transactions WHERE reference_id = %s LIMIT 1", (item["source_id"],)):
-        cur.execute("INSERT INTO cp_transactions (user_id, amount, reason, reference_id) VALUES (%s, %s, %s, %s)", (user_id, cp, reason, item["source_id"]))
+    if not one(cur, "SELECT 1 FROM cp_transactions WHERE reference_id = %s LIMIT 1", (ledger_ref(item),)):
+        cur.execute("INSERT INTO cp_transactions (user_id, amount, reason, reference_id) VALUES (%s, %s, %s, %s)", (user_id, cp, reason, ledger_ref(item)))
         out["cp_transactions"] = 1
-    if not one(cur, "SELECT 1 FROM xp_log WHERE ref_id = %s LIMIT 1", (item["source_id"],)):
-        cur.execute("INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES (%s, %s, %s, %s)", (user_id, cp, reason, item["source_id"]))
+    short_ref = ledger_ref(item)
+    if not one(cur, "SELECT 1 FROM xp_log WHERE ref_id = %s LIMIT 1", (short_ref,)):
+        cur.execute(
+            "INSERT INTO xp_log (user_id, amount, reason, ref_id) VALUES (%s, %s, %s, %s)",
+            (user_id, cp, reason[:80], short_ref),
+        )
         out["xp_log"] = 1
     return out
 
