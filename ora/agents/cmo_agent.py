@@ -181,7 +181,7 @@ class CMOAgent(BaseExecutiveAgent):
             f"best channel={data['best_channel']}, "
             f"viral K={data['viral_coefficient_est']:.3f}."
         )
-        await self.teach_ora(insight, confidence=0.8)
+        await self.teach_aura(insight, confidence=0.8)
         actions_taken.append("Taught Ora growth state")
 
         # Escalate if declining
@@ -196,7 +196,7 @@ class CMOAgent(BaseExecutiveAgent):
 
         # Generate campaign idea and teach Ora
         campaign = await self.generate_campaign(data["best_channel"])
-        await self.teach_ora(
+        await self.teach_aura(
             f"New growth experiment: {campaign}",
             confidence=0.6
         )

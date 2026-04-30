@@ -859,13 +859,13 @@ Return ONLY the evaluation text, nothing else."""
             overall_section = "\n".join(overall_lines) if overall_lines else "—"
 
             # Ora's pick
-            ora_pick = ""
+            aura_pick = ""
             if week_rows:
                 best = week_rows[0]
                 pick_title = best["title"]
                 pick_eval = best["ora_evaluation"] or ""
                 pick_eval_short = pick_eval.split(".")[0] + "." if pick_eval else "Exceptional contribution."
-                ora_pick = f'\nOra\'s pick:\n"{pick_title}" — {pick_eval_short}'
+                aura_pick = f'\nOra\'s pick:\n"{pick_title}" — {pick_eval_short}'
 
             founding_note = ""
             if founding_stewards_count and int(founding_stewards_count) > 0:

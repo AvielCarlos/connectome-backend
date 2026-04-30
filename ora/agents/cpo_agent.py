@@ -225,7 +225,7 @@ class CPOAgent(BaseExecutiveAgent):
             f"avg card rating={data['avg_card_rating']}, "
             f"onboarding completion={data['onboarding_completion_rate_pct']}%."
         )
-        await self.teach_ora(insight, confidence=0.85)
+        await self.teach_aura(insight, confidence=0.85)
         actions_taken.append("Taught Ora product state")
 
         # Create GitHub issues for pain points

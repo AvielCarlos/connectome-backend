@@ -234,7 +234,7 @@ class CoachingAgent:
         display_name = user_context.get("display_name", "")
         domain = user_context.get("domain", "iVive")
         user_id = user_context.get("user_id", "")
-        ora_lessons = user_context.get("ora_lessons", [])
+        aura_lessons = user_context.get("ora_lessons", [])
 
         # Load / update streak
         streak_data = {"current_streak": 0, "longest_streak": 0, "total_sessions": 0}
@@ -302,8 +302,8 @@ class CoachingAgent:
 
         # Ora lessons relevant to coaching
         lessons_hint = ""
-        if ora_lessons:
-            lessons_hint = f"\n\nOra has learned these lessons from past sessions:\n" + "\n".join(f"  - {l}" for l in ora_lessons[:3])
+        if aura_lessons:
+            lessons_hint = f"\n\nOra has learned these lessons from past sessions:\n" + "\n".join(f"  - {l}" for l in aura_lessons[:3])
 
         # Integration C: CBT/ACT mode detection
         cbt_mode = self._detect_cbt_act_mode(emotional_state, user_context)

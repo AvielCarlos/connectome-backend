@@ -59,7 +59,7 @@ class LearningAgent(BaseWorkerAgent):
             summary = self._synthesize(query, raw, tweet_raw)
 
             lesson = topic["lesson_template"].format(summary=summary)
-            success = await self.teach_ora(lesson, confidence=0.8)
+            success = await self.teach_aura(lesson, confidence=0.8)
             if success:
                 taught += 1
                 logger.info(f"LearningAgent: taught Ora about '{topic['category']}'")

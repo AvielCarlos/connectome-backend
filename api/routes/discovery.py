@@ -165,7 +165,7 @@ def _user_turns(conversation: list[dict]) -> list[str]:
     ]
 
 
-async def _ora_onboarding_message(
+async def _aura_onboarding_message(
     conversation: list[dict],
     next_question: Optional[str],
     is_complete: bool,
@@ -569,7 +569,7 @@ async def onboarding_intake(
 
     next_question_obj = questions[answered_count]
     next_question = _render_question(next_question_obj, user_turns)
-    message = await _ora_onboarding_message(
+    message = await _aura_onboarding_message(
         body.conversation,
         next_question=next_question,
         is_complete=False,

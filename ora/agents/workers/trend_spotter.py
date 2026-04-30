@@ -60,7 +60,7 @@ class TrendSpotter(BaseWorkerAgent):
 
             relevance = self._compute_relevance(topic)
 
-            await self.teach_ora(
+            await self.teach_aura(
                 f"Trending today ({today}): '{topic}' is active in {category}. "
                 f"People are saying: \"{snippet}\". "
                 f"Relevant to iDo because: {relevance}. "

@@ -192,7 +192,7 @@ async def get_evolution_population(
     """
     try:
         from ora.agent_registry import AgentRegistry
-        from ora.agents.evolution_agent import OraEvolutionAgent
+        from ora.agents.evolution_agent import AuraEvolutionAgent
         from ora.brain import get_brain
 
         registry = AgentRegistry()
@@ -200,7 +200,7 @@ async def get_evolution_population(
 
         # Try to get fitness data
         brain = get_brain()
-        evolution_agent = OraEvolutionAgent(getattr(brain, "_openai", None))
+        evolution_agent = AuraEvolutionAgent(getattr(brain, "_openai", None))
         try:
             fitness = await evolution_agent.analyze_population_fitness()
         except Exception:
@@ -278,11 +278,11 @@ async def trigger_evolution_run(
     """
     logger.info(f"OraEvolution: manual trigger by {user_id}")
     try:
-        from ora.agents.evolution_agent import OraEvolutionAgent
+        from ora.agents.evolution_agent import AuraEvolutionAgent
         from ora.brain import get_brain
 
         brain = get_brain()
-        evolution_agent = OraEvolutionAgent(getattr(brain, "_openai", None))
+        evolution_agent = AuraEvolutionAgent(getattr(brain, "_openai", None))
         result = await evolution_agent.run()
         return {"ok": True, "result": result}
     except Exception as e:
@@ -351,11 +351,11 @@ async def approve_evolution_proposal(
         if not target:
             raise HTTPException(status_code=404, detail="Proposal not found")
 
-        from ora.agents.evolution_agent import OraEvolutionAgent
+        from ora.agents.evolution_agent import AuraEvolutionAgent
         from ora.brain import get_brain
 
         brain = get_brain()
-        evolution_agent = OraEvolutionAgent(getattr(brain, "_openai", None))
+        evolution_agent = AuraEvolutionAgent(getattr(brain, "_openai", None))
 
         proposal_type = target.get("type")
         executed = False
@@ -430,11 +430,11 @@ async def spawn_new_agent(
         raise HTTPException(status_code=400, detail="gap_description is required")
 
     try:
-        from ora.agents.evolution_agent import OraEvolutionAgent
+        from ora.agents.evolution_agent import AuraEvolutionAgent
         from ora.brain import get_brain
 
         brain = get_brain()
-        evolution_agent = OraEvolutionAgent(getattr(brain, "_openai", None))
+        evolution_agent = AuraEvolutionAgent(getattr(brain, "_openai", None))
         agent_record = await evolution_agent.spawn_new_agent(gap_description)
         return {"ok": True, "agent": agent_record}
     except Exception as e:

@@ -73,7 +73,7 @@ class InfluencerAgent(BaseWorkerAgent):
         # 3. Teach Ora
         total = len(prospects["prospects"])
         contacted = sum(1 for p in prospects["prospects"] if p.get("contacted"))
-        await self.teach_ora(
+        await self.teach_aura(
             f"Influencer pipeline ({week}): {total} prospects tracked, {contacted} contacted. "
             f"Top topic niches: {', '.join(TOPICS[:3])}. "
             f"Outreach is building brand awareness in self-improvement communities.",

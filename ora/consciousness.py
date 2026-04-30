@@ -153,7 +153,7 @@ ORA_IDENTITY = {
 # ---------------------------------------------------------------------------
 
 @dataclass
-class OraReflection:
+class AuraReflection:
     period_start: datetime
     period_end: datetime
     decisions_made: int
@@ -176,7 +176,7 @@ class OraReflection:
 # OraConsciousness
 # ---------------------------------------------------------------------------
 
-class OraConsciousness:
+class AuraConsciousness:
     """
     Ora's persistent self-model. Instantiated once alongside OraBrain.
     """
@@ -191,7 +191,7 @@ class OraConsciousness:
     # 1. Reflect
     # -----------------------------------------------------------------------
 
-    async def reflect(self, user_id: Optional[str] = None) -> OraReflection:
+    async def reflect(self, user_id: Optional[str] = None) -> AuraReflection:
         """
         Produce a structured reflection covering the last N decisions.
         Stored in ora_reflections. The self_note is Ora writing to herself.
@@ -300,7 +300,7 @@ class OraConsciousness:
             uncertainty_areas=uncertainty_areas,
         )
 
-        reflection = OraReflection(
+        reflection = AuraReflection(
             period_start=period_start,
             period_end=now,
             decisions_made=int(decisions_made),
@@ -835,7 +835,7 @@ Ascension Technologies is at an early stage where every API call has a real cost
         profile = json.loads(_raw_p) if isinstance(_raw_p, str) else (_raw_p or {})
         interests = profile.get("interests", [])
         domain_weights = profile.get("domain_weights", {})
-        ora_memory = profile.get("ora_memory", "")
+        aura_memory = profile.get("ora_memory", "")
 
         # Interaction stats
         stats_row = await fetchrow(
@@ -873,7 +873,7 @@ Ascension Technologies is at an early stage where every API call has a real cost
             known.append(f"Engages most with {top_domain}")
         if total >= 20:
             known.append(f"Rated {total} screens")
-        if ora_memory:
+        if aura_memory:
             known.append("Narrative memory established")
 
         # Build uncertain list
@@ -1163,21 +1163,21 @@ Ascension Technologies is at an early stage where every API call has a real cost
         Personalized if Ora knows the user; generic if brand new.
         """
         user_context = await self._build_user_context(user_id)
-        ora_memory = user_context.get("ora_memory", "")
+        aura_memory = user_context.get("ora_memory", "")
         goals = user_context.get("goals", [])
         known = user_context.get("known", [])
 
         # Brand new user
-        if not ora_memory and not goals and len(known) == 0:
+        if not aura_memory and not goals and len(known) == 0:
             return (
                 "Hi. I'm Ora. I don't know you yet — "
                 "but I'm watching and learning. What are you looking for right now?"
             )
 
-        if self._openai and (ora_memory or goals):
+        if self._openai and (aura_memory or goals):
             try:
                 context_str = ""
-                if ora_memory:
+                if aura_memory:
                     context_str = f"What you know: {ora_memory}"
                 elif goals:
                     context_str = f"Their goals: {[g['title'] for g in goals[:2]]}"

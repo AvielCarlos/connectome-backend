@@ -57,7 +57,7 @@ class SupportAgent(BaseWorkerAgent):
             await self._handle_issue(issue)
 
         if flagged:
-            await self.teach_ora(
+            await self.teach_aura(
                 f"Support scan ({now.strftime('%Y-%m-%d %H:%M')}): Found {len(flagged)} user issue(s). "
                 f"Common themes: errors, crashes, login problems. "
                 f"Responding empathetically with guidance improves retention.",

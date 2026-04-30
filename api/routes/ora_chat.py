@@ -151,7 +151,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    ora_state: Dict[str, Any]
+    aura_state: Dict[str, Any]
 
 
 # ---------------------------------------------------------------------------
@@ -186,12 +186,12 @@ async def chat(
 
     # Build a lightweight ora_state for the mobile UI
     uncertainty = await consciousness.articulate_uncertainty(user_id)
-    ora_state = {
+    aura_state = {
         "mood_hint": "curious",
         "confidence": uncertainty.get("confidence_overall", 0.5),
     }
 
-    return ChatResponse(reply=reply, ora_state=ora_state)
+    return ChatResponse(reply=reply, aura_state=aura_state)
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +275,7 @@ async def explain_screen(
 # ---------------------------------------------------------------------------
 
 @router.get("/self")
-async def get_ora_self(
+async def get_aura_self(
     user_id: str = Depends(get_current_user_id),
 ):
     """Return Ora's full self-description — identity, stats, latest reflection."""
@@ -497,7 +497,7 @@ async def roleplay_end(
 
 
 @router.post("/learn")
-async def teach_ora(
+async def teach_aura(
     payload: LearnPayload,
     user_id: str = Depends(get_current_user_id),
 ):
@@ -545,7 +545,7 @@ async def teach_ora(
 
 
 @router.get("/lessons")
-async def get_ora_lessons(
+async def get_aura_lessons(
     limit: int = 20,
     user_id: str = Depends(get_current_user_id),
 ):

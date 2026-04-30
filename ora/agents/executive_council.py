@@ -494,7 +494,7 @@ class ExecutiveCouncil(BaseExecutiveAgent):
         except Exception as e:
             logger.debug("ExecutiveCouncil: master insight publish failed: %s", e)
 
-        await self.teach_ora(
+        await self.teach_aura(
             f"Executive council brief {date_str}: {brief.get('strategic_synthesis', '')[:500]}",
             confidence=0.9
         )
@@ -645,7 +645,7 @@ class ExecutiveCouncil(BaseExecutiveAgent):
             f"Top opportunity: {opportunities[0] if opportunities else 'deepen AI quality'}."
         )
 
-        ora_briefing = (
+        aura_briefing = (
             f"Ora Briefing: {synthesis} Compound signals: "
             f"{'; '.join(compound_opportunities[:3]) if compound_opportunities else 'no strong cross-agent convergence yet'}. "
             f"Fast-track queue: {len(trigger_queue)} pending agent follow-ups."
@@ -662,7 +662,7 @@ class ExecutiveCouncil(BaseExecutiveAgent):
             "compound_opportunities": compound_opportunities[:5],
             "compound_recommendations": compound_recommendations[:5],
             "fast_track_agents": sorted({t.get("target_agent") for t in trigger_queue if t.get("target_agent")}),
-            "ora_briefing": ora_briefing,
+            "ora_briefing": aura_briefing,
             "strategic_synthesis": synthesis,
             "weekly_agent_insights_snapshot": weekly_insights[:20],
             "agent_reports_snapshot": {
@@ -740,7 +740,7 @@ class ExecutiveCouncil(BaseExecutiveAgent):
             f"_Escalated via Executive Council_"
         )
         await self._send_telegram(message, chat_id=TELEGRAM_CHAT_ID)
-        await self.teach_ora(
+        await self.teach_aura(
             f"Executive escalation from {agent}: {issue[:200]}",
             confidence=0.9
         )

@@ -29,7 +29,7 @@ class NPSAgent(BaseWorkerAgent):
 
         if not ratings:
             logger.info("NPSAgent: no ratings data found")
-            await self.teach_ora(
+            await self.teach_aura(
                 f"NPS check ({week}): No card rating data available this week. "
                 "Consider prompting users to rate more screens to improve feedback loop.",
                 confidence=0.5,
@@ -79,7 +79,7 @@ class NPSAgent(BaseWorkerAgent):
         logger.info(f"NPSAgent: {len(at_risk)} at-risk users, {len(promoters)} promoters")
 
         # 6. Teach Ora
-        await self.teach_ora(
+        await self.teach_aura(
             f"User satisfaction ({week}): {overall_avg}/5 average card rating across {len(user_ratings)} users. "
             f"At-risk users (< 2.5 avg): {len(at_risk)} — predominantly in '{top_detractor_domain}' domain. "
             f"Promoters (> 4.0 avg): {len(promoters)} — strongest in '{top_promoter_domain}'. "

@@ -89,7 +89,7 @@ class PartnershipAgent(BaseWorkerAgent):
 
         # 5. Teach Ora
         categories = ", ".join(o["category"] for o in shortlist)
-        await self.teach_ora(
+        await self.teach_aura(
             f"Partnership opportunities ({date_str}): Top 3 — {categories}. "
             f"Integration partnerships with complementary apps can drive 3x organic growth. "
             f"Community partnerships (Reddit, Discord) are low-cost, high-trust acquisition channels. "

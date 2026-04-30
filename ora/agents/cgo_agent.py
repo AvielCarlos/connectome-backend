@@ -17,7 +17,7 @@ from ora.agents.base_executive_agent import API_BASE, BaseExecutiveAgent
 from ora.payments.growth_billing import (
     create_api_access_checkout,
     create_corporate_plan_checkout,
-    create_ora_session_payment,
+    create_aura_session_payment,
 )
 
 logger = logging.getLogger(__name__)
@@ -196,7 +196,7 @@ class CGOAgent(BaseExecutiveAgent):
         path = await self.save_report(data, "cgo_report.json")
         summary = await self.report()
         await self.set_redis_report(summary)
-        await self.teach_ora(
+        await self.teach_aura(
             "CGO growth state: "
             "Ascension DAO → Connectome AI OS ecosystem mandate active; "
             f"{data['metrics'].get('total_users', 0)} users, "
@@ -519,7 +519,7 @@ class CGOAgent(BaseExecutiveAgent):
                         contact_email="growth@connectome.app",
                     )
                 elif stream["name"] == "One-time Ora Sessions":
-                    checkout = await create_ora_session_payment("growth-demo", "clarity")
+                    checkout = await create_aura_session_payment("growth-demo", "clarity")
                 elif stream["name"] == "Developer API tier":
                     checkout = await create_api_access_checkout("growth-demo", "developer")
                 else:

@@ -92,7 +92,7 @@ class CohortAgent(BaseWorkerAgent):
         # 6. Teach Ora
         d7 = retention.get("day_7", {})
         d7_pct = d7.get("retention_pct") or "?"
-        await self.teach_ora(
+        await self.teach_aura(
             f"Cohort analysis ({week}): Day-7 retention is {d7_pct}%. "
             f"Major drop-off at {drop_off_point}. "
             f"Users who set a goal in their first session retain 2x better — "

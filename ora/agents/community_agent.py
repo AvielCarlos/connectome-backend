@@ -232,7 +232,7 @@ class CommunityAgent(BaseExecutiveAgent):
             f"CP concentration={data['cp_concentration_pct']}%, "
             f"health={data['community_health_score']}/100."
         )
-        await self.teach_ora(insight, confidence=0.75)
+        await self.teach_aura(insight, confidence=0.75)
         actions_taken.append("Taught Ora community state")
 
         # Re-engagement for inactive contributors

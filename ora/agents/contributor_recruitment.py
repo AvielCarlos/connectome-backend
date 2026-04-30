@@ -114,8 +114,8 @@ class ContributorRecruitmentAgent(BaseExecutiveAgent):
     ) -> str:
         """Ora generates a personalised outreach message."""
         try:
-            from ora.consciousness import OraConsciousness
-            ora = OraConsciousness()
+            from ora.consciousness import AuraConsciousness
+            ora = AuraConsciousness()
             
             prompt = f"""You are Ora, the AI interface of Connectome / Ascension Technologies. 
 You are reaching out to {candidate_name}, a {candidate_role}, on {platform}.
@@ -270,7 +270,7 @@ Platform: {platform}"""
         await self.save_report(data, "recruitment_report.json")
         await self.set_redis_report(f"Recruitment: {data['total_contributors']} active contributors. Priority: {', '.join(PRIORITY_SKILLS[:3])}")
 
-        await self.teach_ora(
+        await self.teach_aura(
             f"Current contributor recruitment status: {data['total_contributors']} active contributors. "
             f"Priority skills needed: {', '.join(PRIORITY_SKILLS[:4])}. "
             f"Ora has authority to onboard contributors, award joining CP (100-500 CP), and send personalised outreach on Twitter, email, and Telegram.",

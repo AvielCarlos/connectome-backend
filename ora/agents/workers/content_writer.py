@@ -55,7 +55,7 @@ class ContentWriterAgent(BaseWorkerAgent):
 
         # 6. Teach Ora
         top_topic = topics[0] if topics else "productivity"
-        await self.teach_ora(
+        await self.teach_aura(
             f"Content performance: '{top_topic}' is trending in self-improvement. "
             f"Daily content generated for {today}. Tweet thread posted to channel.",
             confidence=0.7,

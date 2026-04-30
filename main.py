@@ -31,7 +31,7 @@ except Exception as _payments_err:
     payments_routes = None
     _payments_available = False
     logging.warning(f"Payments module unavailable: {_payments_err}")
-from api.routes import ora_chat
+from api.routes import ora_chat as aura_chat
 from api.routes import discovery as discovery_routes
 from api.routes import ab_testing as ab_testing_routes
 from api.routes import explore as explore_routes
@@ -47,12 +47,12 @@ from api.routes import world as world_routes
 from api.routes import suggestions as suggestions_routes
 from api.routes import drive as drive_routes
 from api.routes import system as system_routes
-from api.routes import ora_health as ora_health_routes
+from api.routes import ora_health as aura_health_routes
 from api.routes import google_auth as google_auth_routes
 from api.routes import github_oauth as github_oauth_routes
 from api.routes import integrations as integrations_routes
 from api.routes import events as events_routes
-from api.routes import ora_autonomy as ora_autonomy_routes
+from api.routes import ora_autonomy as aura_autonomy_routes
 from api.routes import council as council_routes
 from api.routes import onboarding as onboarding_routes
 from api.routes import surfaces as surfaces_routes
@@ -148,15 +148,15 @@ async def lifespan(app: FastAPI):
 
     # Start ModelEvolutionAgent weekly loop
     from ora.brain import get_brain as _get_brain
-    _ora_brain = _get_brain()
-    model_evolution_agent = ModelEvolutionAgent(_ora_brain._openai)
+    _aura_brain = _get_brain()
+    model_evolution_agent = ModelEvolutionAgent(_aura_brain._openai)
     app.state.model_evolution = model_evolution_agent
     asyncio.create_task(model_evolution_agent.start_weekly_check_loop())
     logger.info("✅ ModelEvolutionAgent weekly loop started")
 
     # Start DaoAgent background loops
     from ora.agents.dao_agent import DaoAgent
-    dao_agent = DaoAgent(_ora_brain._openai)
+    dao_agent = DaoAgent(_aura_brain._openai)
     app.state.dao_agent = dao_agent
     asyncio.create_task(dao_agent.run_daily_evaluation_loop())
     asyncio.create_task(dao_agent.run_weekly_leaderboard_loop())
@@ -167,7 +167,7 @@ async def lifespan(app: FastAPI):
 
     # Start MetaAgent periodic self-improvement loop (every 6 hours)
     from ora.agents.meta_agent import MetaAgent
-    meta_agent = MetaAgent(_ora_brain._openai)
+    meta_agent = MetaAgent(_aura_brain._openai)
     app.state.meta_agent = meta_agent
     asyncio.create_task(_meta_agent_loop(meta_agent))
     logger.info("✅ MetaAgent self-improvement loop started")
@@ -175,7 +175,7 @@ async def lifespan(app: FastAPI):
     # Initialize PricingAgent — Ora manages her own pricing
     try:
         from ora.agents.pricing_agent import get_pricing_agent
-        pricing_agent = get_pricing_agent(getattr(_ora_brain, '_openai', None))
+        pricing_agent = get_pricing_agent(getattr(_aura_brain, '_openai', None))
         app.state.pricing_agent = pricing_agent
         asyncio.create_task(_pricing_agent_loop(pricing_agent))
     except Exception as _pe:
@@ -193,7 +193,7 @@ async def lifespan(app: FastAPI):
     logger.info("👋 Shutdown complete")
 
 
-async def _ora_error_recovery_middleware(request, call_next):
+async def _aura_error_recovery_middleware(request, call_next):
     """
     Track errors on /api/ora/* endpoints.
     If an endpoint fails 3+ times in 60s, send a Telegram alert to Avi.
@@ -273,7 +273,7 @@ app.add_middleware(
 app.add_middleware(BaseHTTPMiddleware, dispatch=timing_middleware)
 
 # Ora error recovery middleware — tracks /api/ora/* failures in Redis
-app.add_middleware(BaseHTTPMiddleware, dispatch=_ora_error_recovery_middleware)
+app.add_middleware(BaseHTTPMiddleware, dispatch=_aura_error_recovery_middleware)
 
 # Mount routes
 app.include_router(users.router)
@@ -287,7 +287,7 @@ app.include_router(sessions.router)
 app.include_router(notifications.router)
 app.include_router(ground_truth.router)
 app.include_router(admin.router)
-app.include_router(ora_chat.router)
+app.include_router(aura_chat.router)
 app.include_router(discovery_routes.router)
 app.include_router(ab_testing_routes.router)
 app.include_router(explore_routes.router)
@@ -302,11 +302,11 @@ app.include_router(suggestions_routes.router)
 app.include_router(events_routes.router)
 app.include_router(drive_routes.router)
 app.include_router(system_routes.router)
-app.include_router(ora_health_routes.router)
+app.include_router(aura_health_routes.router)
 app.include_router(google_auth_routes.router)
 app.include_router(github_oauth_routes.router)
 app.include_router(integrations_routes.router)
-app.include_router(ora_autonomy_routes.router)
+app.include_router(aura_autonomy_routes.router)
 app.include_router(council_routes.router)
 app.include_router(onboarding_routes.router)
 app.include_router(surfaces_routes.router)

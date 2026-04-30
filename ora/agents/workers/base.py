@@ -49,7 +49,7 @@ class BaseWorkerAgent(ABC):
 
     # ─── Core helpers ────────────────────────────────────────────────────────
 
-    async def teach_ora(self, insight: str, confidence: float = 0.8) -> bool:
+    async def teach_aura(self, insight: str, confidence: float = 0.8) -> bool:
         """POST an insight to /api/ora/learn."""
         try:
             token = await self._get_jwt()

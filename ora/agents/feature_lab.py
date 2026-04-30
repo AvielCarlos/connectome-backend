@@ -59,7 +59,7 @@ FALLBACK_PROPOSALS = [
 ]
 
 
-class OraFeatureLabAgent:
+class AuraFeatureLabAgent:
     """
     Ora's internal feature lab. Runs autonomously in the background,
     generating and evaluating hypotheses for new card types.

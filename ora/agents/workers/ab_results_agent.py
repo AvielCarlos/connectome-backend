@@ -77,13 +77,13 @@ class ABResultsAgent(BaseWorkerAgent):
         no_data = [r for r in results if r.get("status") == "insufficient data"]
         if winners:
             summary = "; ".join(f"{r['experiment']}→{r['winner']}" for r in winners)
-            await self.teach_ora(
+            await self.teach_aura(
                 f"A/B results ({today}): {len(winners)} winner(s) found and applied — {summary}. "
                 f"{len(no_data)} experiments still gathering data.",
                 confidence=0.9,
             )
         else:
-            await self.teach_ora(
+            await self.teach_aura(
                 f"A/B results ({today}): No clear winners yet. {len(results)} experiments running. "
                 f"Need more traffic to reach statistical significance.",
                 confidence=0.75,

@@ -128,7 +128,7 @@ async def _get_recent_commit_frequency() -> str:
     return "low"
 
 
-async def _generate_ora_message(stats: Dict[str, Any]) -> str:
+async def _generate_aura_message(stats: Dict[str, Any]) -> str:
     """Generate a fresh 1-sentence Ora insight about the DAO state."""
     if not settings.has_openai:
         return (
@@ -167,7 +167,7 @@ async def _generate_ora_message(stats: Dict[str, Any]) -> str:
         )
 
 
-async def _generate_ora_thought(build_momentum: str, recent_commits: List[str]) -> Dict[str, str]:
+async def _generate_aura_thought(build_momentum: str, recent_commits: List[str]) -> Dict[str, str]:
     """Generate a fresh philosophical Ora thought for atdao.org."""
     global _fallback_index
     if not settings.has_openai:
@@ -314,7 +314,7 @@ async def get_dao_pulse():
         "cp_awarded_total": cp_awarded_total,
         "build_momentum": build_momentum,
     }
-    ora_message = await _generate_ora_message(stats_for_message)
+    aura_message = await _generate_aura_message(stats_for_message)
 
     payload = {
         "contributors_total": int(contributors_total),
@@ -324,7 +324,7 @@ async def get_dao_pulse():
         "founding_stewards_remaining": founding_stewards_remaining,
         "top_contributors": top_contributors,
         "latest_contribution": latest_contribution,
-        "ora_message": ora_message,
+        "ora_message": aura_message,
         "active_proposals": int(active_proposals),
         "github_issues_open": 0,  # TODO: fetch from GitHub API
         "build_momentum": build_momentum,
@@ -338,7 +338,7 @@ async def get_dao_pulse():
 # ── Endpoint: /api/public/dao/ora-thought ───────────────────────────────────
 
 @router.get("/ora-thought")
-async def get_ora_thought():
+async def get_aura_thought():
     """
     Ora generates a fresh philosophical insight every hour.
     Pulls from recent git log, DAO contribution data, and build momentum.
@@ -367,7 +367,7 @@ async def get_ora_thought():
     except Exception:
         pass
 
-    thought = await _generate_ora_thought(build_momentum, recent_commits)
+    thought = await _generate_aura_thought(build_momentum, recent_commits)
 
     await redis_set(cache_key, thought, ttl_seconds=TTL_ORA_THOUGHT)
     return JSONResponse(content=thought, headers=CORS_HEADERS)

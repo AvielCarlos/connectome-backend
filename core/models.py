@@ -171,7 +171,7 @@ class GoalStep(BaseModel):
     resources: Optional[List[dict]] = []   # [{"label": str, "url": str}]
     completed: bool = False
     order: int = 0
-    ora_note: Optional[str] = None         # Ora's note after user completes it
+    aura_note: Optional[str] = None         # Ora's note after user completes it
 
 
 class GoalCreate(BaseModel):

@@ -258,7 +258,7 @@ class CUXDAgent(BaseExecutiveAgent):
                 f"Applicable to: {lesson['applicable_to']}."
             )
             try:
-                await self.teach_ora(content, confidence=0.9)
+                await self.teach_aura(content, confidence=0.9)
                 taught += 1
             except Exception as e:
                 logger.debug(f"CUXD: teach_ora failed: {e}")
@@ -270,7 +270,7 @@ class CUXDAgent(BaseExecutiveAgent):
             "iDo design principles: " + 
             " | ".join(DESIGN_SYSTEM["principles"])
         )
-        await self.teach_ora(principles_text, confidence=0.95)
+        await self.teach_aura(principles_text, confidence=0.95)
         actions_taken.append("Taught Ora design system principles")
 
         # Save report

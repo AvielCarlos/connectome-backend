@@ -320,7 +320,7 @@ class CFOAgent(BaseExecutiveAgent):
             f"30d revenue=${data['revenue_last_30d_usd']:.2f}, "
             f"LTV est=${data['ltv_estimate_usd']:.2f}."
         )
-        await self.teach_ora(insight, confidence=0.9)
+        await self.teach_aura(insight, confidence=0.9)
         actions_taken.append("Taught Ora financial state")
 
         # Alert if MRR > $1000
@@ -370,5 +370,5 @@ class CFOAgent(BaseExecutiveAgent):
             )
 
         insight = f"Pricing analysis: {recommendation}"
-        await self.teach_ora(insight, confidence=0.75)
+        await self.teach_aura(insight, confidence=0.75)
         return recommendation

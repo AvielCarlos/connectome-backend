@@ -84,7 +84,7 @@ class ReflectionAgent(BaseWorkerAgent):
             logger.warning(f"ReflectionAgent: Drive upload skipped: {_e}")
 
         # 4b. Teach Ora the synthesis as a meta-lesson
-        await self.teach_ora(
+        await self.teach_aura(
             f"Weekly self-reflection ({week}): I processed {len(lesson_texts)} lessons this week. "
             f"{synthesis} "
             f"Key priorities going forward: {priorities}",

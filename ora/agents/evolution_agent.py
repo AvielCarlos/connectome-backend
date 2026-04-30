@@ -60,7 +60,7 @@ CANNIBALIZE_MIN_INTERACTIONS = 50
 SPAWN_TRIAL_WEIGHT = 0.05
 
 
-class OraEvolutionAgent:
+class AuraEvolutionAgent:
     """
     Ora's evolutionary engine.
     """

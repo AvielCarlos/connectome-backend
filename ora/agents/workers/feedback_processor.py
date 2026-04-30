@@ -65,7 +65,7 @@ class FeedbackProcessor(BaseWorkerAgent):
             if items:
                 summary_parts.append(f"{cat}: {len(items)}")
 
-        await self.teach_ora(
+        await self.teach_aura(
             f"Feedback analysis ({now.strftime('%Y-%m-%d')}): "
             f"Processed {len(suggestions)} suggestions. "
             f"{', '.join(summary_parts)}. "

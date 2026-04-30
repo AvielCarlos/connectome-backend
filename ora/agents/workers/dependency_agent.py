@@ -72,7 +72,7 @@ class DependencyAgent(BaseWorkerAgent):
             await self._create_update_pr(critical_outdated, results)
 
         # Teach Ora
-        await self.teach_ora(
+        await self.teach_aura(
             f"Dependency health ({week}): {len(outdated)}/{len(PACKAGES)} packages outdated. "
             f"Critical updates needed: {len(critical_outdated)} ({', '.join(critical_outdated) or 'none'}). "
             f"{'PRs created for critical updates.' if critical_outdated else 'No critical security issues.'}",

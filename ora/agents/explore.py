@@ -394,7 +394,7 @@ class ExploreAgent:
         items = items[:3]
 
         headline = random.choice(HEADLINES.get(category, ["Explore what's possible"]))
-        ora_note = random.choice(ORA_NOTES.get(category, ["Here's something worth exploring."]))
+        aura_note = random.choice(ORA_NOTES.get(category, ["Here's something worth exploring."]))
         goal_title_template = CATEGORY_GOAL_MAP.get(category, "Explore {name}")
         first_item_name = items[0]["name"] if items else "this experience"
         save_as_goal_title = goal_title_template.format(name=first_item_name)
@@ -408,7 +408,7 @@ class ExploreAgent:
             "category": category,
             "explore_depth": explore_depth,
             "headline": headline,
-            "ora_note": ora_note,
+            "ora_note": aura_note,
             "items": items,
             "save_as_goal_title": save_as_goal_title,
             "depth_tag": depth_tag,

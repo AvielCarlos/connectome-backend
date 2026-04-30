@@ -58,7 +58,7 @@ class SEOAgent(BaseWorkerAgent):
 
         # 4. Teach Ora
         keywords_str = ", ".join(self.KEYWORDS[:3])
-        await self.teach_ora(
+        await self.teach_aura(
             f"SEO opportunity: Top keywords this week — {keywords_str}. "
             f"Blog title '{titles[0]}' targets high-intent searchers. "
             f"300-word snippet queued for publication.",

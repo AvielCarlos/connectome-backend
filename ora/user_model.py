@@ -291,7 +291,7 @@ async def update_domain_weights(
     logger.debug(f"Domain weights updated for user {user_id}: {weights}")
 
 
-async def update_ora_memory(user_id: str, session_summary: dict, openai_client=None) -> str:
+async def update_aura_memory(user_id: str, session_summary: dict, openai_client=None) -> str:
     """
     Update Ora's running narrative memory for a user.
     Stored in users.profile['ora_memory'] — max 500 chars.
@@ -308,7 +308,7 @@ async def update_ora_memory(user_id: str, session_summary: dict, openai_client=N
     existing_memory = profile.get("ora_memory", "")
 
     # Build new memory via LLM or structured fallback
-    new_memory = await _build_ora_memory(
+    new_memory = await _build_aura_memory(
         user_id=user_id,
         existing_memory=existing_memory,
         session_summary=session_summary,
@@ -336,7 +336,7 @@ async def update_ora_memory(user_id: str, session_summary: dict, openai_client=N
     return new_memory
 
 
-async def _build_ora_memory(
+async def _build_aura_memory(
     user_id: str,
     existing_memory: str,
     session_summary: dict,

@@ -178,7 +178,7 @@ async def get_experiments(
 
 
 @router.get("/lessons")
-async def get_ora_lessons(
+async def get_aura_lessons(
     limit: int = 50,
     source: str = None,
     x_admin_token: str = Header(default=""),

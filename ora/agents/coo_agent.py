@@ -269,7 +269,7 @@ class COOAgent(BaseExecutiveAgent):
             f"erroring_crons={len(data['erroring_crons'])}, "
             f"missing_reports={len(data['missing_agent_reports'])}."
         )
-        await self.teach_ora(insight, confidence=0.75)
+        await self.teach_aura(insight, confidence=0.75)
         actions_taken.append("Taught Ora operational state")
 
         if data["severity"] == "critical":

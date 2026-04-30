@@ -357,7 +357,7 @@ def _goal_complexity(structured_goal: Dict[str, Any]) -> Dict[str, Any]:
     return {"difficulty": difficulty, "present_state_gap": gap, "level": level}
 
 
-def _quote_ora_service(service_id: str, structured_goal: Dict[str, Any], work_units: int = 1) -> Dict[str, Any]:
+def _quote_aura_service(service_id: str, structured_goal: Dict[str, Any], work_units: int = 1) -> Dict[str, Any]:
     """Dynamic quote based on goal extensivity, present-state gap, and Ora-side work."""
     min_price, max_price = ORA_SERVICE_PRICE_BANDS.get(service_id, (19, 199))
     base = {
@@ -383,9 +383,9 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
     goal = structured_goal.get("measurable_outcome") or structured_goal.get("specifics") or structured_goal.get("title") or title
     timeline = structured_goal.get("timeline") or "30-90 days"
     constraints = structured_goal.get("constraints") or "unknown constraints"
-    map_quote = _quote_ora_service("ora-goal-path-map", structured_goal, 1)
-    scout_quote = _quote_ora_service("ora-opportunity-scout", structured_goal, 2)
-    delegate_quote = _quote_ora_service("ora-delegated-action-pack", structured_goal, 3)
+    map_quote = _quote_aura_service("ora-goal-path-map", structured_goal, 1)
+    scout_quote = _quote_aura_service("ora-opportunity-scout", structured_goal, 2)
+    delegate_quote = _quote_aura_service("ora-delegated-action-pack", structured_goal, 3)
     return [
         {
             "id": f"clarify-{uuid.uuid4()}",
@@ -641,7 +641,7 @@ Rules:
             suggested_path = []
             for i, node in enumerate(parsed.get("graph_nodes") or []):
                 service_id = node.get("service_id")
-                quote = _quote_ora_service(service_id, structured_goal, i + 1) if node.get("requires_payment") and service_id else {}
+                quote = _quote_aura_service(service_id, structured_goal, i + 1) if node.get("requires_payment") and service_id else {}
                 suggested_path.append({
                     "id": node.get("id") or str(uuid.uuid4()),
                     "title": node.get("title") or f"Node {i + 1}",
@@ -849,7 +849,7 @@ async def complete_goal(
     )
 
     # Generate celebration message
-    ora_celebration = await _generate_celebration(row["title"], user_id)
+    aura_celebration = await _generate_celebration(row["title"], user_id)
 
     # Check if coaching agent should suggest the next goal
     next_goal_suggestion = await _suggest_next_goal(user_id, goal_id)
@@ -861,7 +861,7 @@ async def complete_goal(
 
     return {
         "goal": _build_goal_out(updated),
-        "ora_celebration": ora_celebration,
+        "ora_celebration": aura_celebration,
         "next_goal_suggestion": next_goal_suggestion,
     }
 

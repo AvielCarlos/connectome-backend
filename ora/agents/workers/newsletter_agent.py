@@ -33,14 +33,14 @@ class NewsletterAgent(BaseWorkerAgent):
         filepath = os.path.join(NEWSLETTER_DIR, filename)
 
         # 1. Gather ingredients
-        ora_lessons = await self._fetch_ora_lessons()
+        aura_lessons = await self._fetch_aura_lessons()
         highlights = self._collect_highlights()
-        lesson_of_week = ora_lessons[0] if ora_lessons else "Consistency beats intensity every time."
+        lesson_of_week = aura_lessons[0] if aura_lessons else "Consistency beats intensity every time."
 
         # 2. Generate HTML email
         html = self._generate_html(
             week_label=week_label,
-            ora_insight=ora_lessons[0] if ora_lessons else "Focus on systems, not goals.",
+            aura_insight=aura_lessons[0] if aura_lessons else "Focus on systems, not goals.",
             features=["Improved daily screen personalization", "New goal categories added"],
             community_highlight="Our users collectively logged 10,000+ habit completions this week 🎉",
             lesson=lesson_of_week,
@@ -56,12 +56,12 @@ class NewsletterAgent(BaseWorkerAgent):
             "week": week_label,
             "generated_at": now.isoformat(),
             "filepath": filepath,
-            "ora_lessons_count": len(ora_lessons),
+            "ora_lessons_count": len(aura_lessons),
         })
         self._save_json(LOG_FILE, log)
 
         # 5. Teach Ora
-        await self.teach_ora(
+        await self.teach_aura(
             f"Newsletter for {week_label} generated. Community is active with habit completions. "
             f"Lesson of the week: '{lesson_of_week[:100]}'",
             confidence=0.7,
@@ -69,7 +69,7 @@ class NewsletterAgent(BaseWorkerAgent):
 
         logger.info(f"NewsletterAgent: saved to {filepath}")
 
-    async def _fetch_ora_lessons(self) -> list:
+    async def _fetch_aura_lessons(self) -> list:
         data = await self._get("/api/ora/lessons?limit=5")
         if data and isinstance(data, list):
             return [item.get("lesson", "") for item in data if item.get("lesson")]
@@ -81,7 +81,7 @@ class NewsletterAgent(BaseWorkerAgent):
     def _collect_highlights(self) -> list:
         return ["10,000 habit completions this week", "New users from organic search", "Top domain: Fitness & Wellness"]
 
-    def _generate_html(self, week_label, ora_insight, features, community_highlight, lesson) -> str:
+    def _generate_html(self, week_label, aura_insight, features, community_highlight, lesson) -> str:
         features_html = "".join(f"<li>{f}</li>" for f in features)
         return f"""<!DOCTYPE html>
 <html>

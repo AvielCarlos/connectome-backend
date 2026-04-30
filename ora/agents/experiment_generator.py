@@ -31,7 +31,7 @@ class ExperimentGeneratorAgent:
                 json={"email": "test@test.com", "password": "test1234"})
             return r.json()["access_token"]
 
-    async def _ask_ora(self, prompt: str) -> str:
+    async def _ask_aura(self, prompt: str) -> str:
         """Ask Ora to generate content via the chat API."""
         try:
             token = await self._get_token()
@@ -44,7 +44,7 @@ class ExperimentGeneratorAgent:
             logger.error(f"Ora API error: {e}")
             return ""
 
-    async def _teach_ora(self, lesson: str):
+    async def _teach_aura(self, lesson: str):
         """Teach Ora a lesson."""
         try:
             token = await self._get_token()
@@ -94,7 +94,7 @@ VARIANT_A: [content]
 VARIANT_B: [content]
 VARIANT_C: [content]"""
 
-        response = await self._ask_ora(prompt)
+        response = await self._ask_aura(prompt)
 
         new_variants = {}
         for line in response.split('\n'):
@@ -116,7 +116,7 @@ VARIANT_C: [content]"""
                 generation=(exp['generation'] or 0) + 1
             )
 
-            await self._teach_ora(
+            await self._teach_aura(
                 f"Experiment evolution: '{exp['name']}' winner was variant {winner_variant} ({winner_content}). "
                 f"New generation experiment '{new_id}' created with evolved variants. "
                 f"This is generation {(exp['generation'] or 0) + 1} of testing."
@@ -132,7 +132,7 @@ VARIANT_A: [description]
 VARIANT_B: [description]
 VARIANT_C: [description]"""
 
-        response = await self._ask_ora(prompt)
+        response = await self._ask_aura(prompt)
         variants = {}
         for line in response.split('\n'):
             for v in ['A', 'B', 'C']:
@@ -155,7 +155,7 @@ VARIANT_A: [description]
 VARIANT_B: [description]
 VARIANT_C: [description]"""
 
-        response = await self._ask_ora(prompt)
+        response = await self._ask_aura(prompt)
         variants = {}
         for line in response.split('\n'):
             for v in ['A', 'B', 'C']:
@@ -196,7 +196,7 @@ Format:
 PATTERN: [description of what consistently wins]
 NEW_EXPERIMENT: [page] | [experiment name] | [variant A] | [variant B] | [variant C]"""
 
-        response = await self._ask_ora(prompt)
+        response = await self._ask_aura(prompt)
 
         # Simple parse: look for NEW_EXPERIMENT lines
         for line in response.split('\n'):
@@ -235,7 +235,7 @@ NEW_EXPERIMENT: [page] | [experiment name] | [variant A] | [variant B] | [varian
             await redis.set('ora:ab:loser_patterns', json.dumps(loser_patterns[-50:]), ex=86400*30)
             await redis.aclose()
 
-            await self._teach_ora(
+            await self._teach_aura(
                 f"A/B learning — patterns that consistently lose and should NOT be used: "
                 f"{'; '.join(loser_patterns[:5])}. Avoid these patterns in future experiments."
             )
@@ -274,7 +274,7 @@ NEW_EXPERIMENT: [page] | [experiment name] | [variant A] | [variant B] | [varian
         lesson = f"Daily experiment evolution: {len(evolutions)} experiments evolved. "
         if evolutions:
             lesson += f"Evolved: {', '.join(evolutions[:3])}."
-        await self._teach_ora(lesson)
+        await self._teach_aura(lesson)
 
         logger.info(f"ExperimentGeneratorAgent: done. {len(evolutions)} evolutions.")
 

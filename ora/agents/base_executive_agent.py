@@ -213,7 +213,7 @@ class BaseExecutiveAgent(ABC):
             add("finding", f"{self.display_name} completed run: {summary}", 0.7)
         return insights
 
-    async def teach_ora(self, insight: str, confidence: float = 0.8) -> bool:
+    async def teach_aura(self, insight: str, confidence: float = 0.8) -> bool:
         """
         POST an insight to /api/ora/learn so Ora compounds in intelligence.
         Uses JWT auth. Returns True on success.

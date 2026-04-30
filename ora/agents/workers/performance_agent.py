@@ -76,7 +76,7 @@ class PerformanceAgent(BaseWorkerAgent):
                 f"Endpoint: /api/screens/next\n"
                 f"Time: {now.strftime('%Y-%m-%d %H:%M UTC')}"
             )
-            await self.teach_ora(
+            await self.teach_aura(
                 f"Performance degraded: /api/screens/next p95={p95}ms at {now.strftime('%Y-%m-%d %H:%M')}. "
                 f"This impacts user experience — slow screens reduce engagement by ~30%.",
                 confidence=0.9,
@@ -96,7 +96,7 @@ class PerformanceAgent(BaseWorkerAgent):
         avg_p95 = round(sum(all_p95) / len(all_p95))
         max_p95 = max(all_p95)
         min_p95 = min(all_p95)
-        await self.teach_ora(
+        await self.teach_aura(
             f"Weekly performance summary: avg p95={avg_p95}ms, max={max_p95}ms, min={min_p95}ms "
             f"over {len(all_p95)} hourly checks. API performance is "
             f"{'healthy' if avg_p95 < P95_THRESHOLD_MS else 'degraded'}.",

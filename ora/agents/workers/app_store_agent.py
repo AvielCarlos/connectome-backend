@@ -74,7 +74,7 @@ class AppStoreAgent(BaseWorkerAgent):
         }
 
         # 4. Teach Ora
-        await self.teach_ora(
+        await self.teach_aura(
             f"App metrics ({week}): {total_downloads} total APK downloads, +{velocity} this week. "
             f"Review strategy: target 7-day active users post 5th habit completion. "
             f"Download velocity {'is growing' if velocity > 0 else 'is flat — consider more promotion'}.",

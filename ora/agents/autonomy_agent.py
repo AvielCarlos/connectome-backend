@@ -46,7 +46,7 @@ FIXABLE_ERROR_PATTERNS = [
 ]
 
 
-class OraAutonomyAgent:
+class AuraAutonomyAgent:
     """
     Ora's autonomous improvement engine.
     Safe by design: every action is logged, reversible, or additive.
@@ -248,8 +248,8 @@ class OraAutonomyAgent:
         # H. Agent evolution cycle
         if not await self._is_step_disabled("evolution"):
             try:
-                from ora.agents.evolution_agent import OraEvolutionAgent
-                evolution_agent = OraEvolutionAgent(self._openai, self._telegram_token)
+                from ora.agents.evolution_agent import AuraEvolutionAgent
+                evolution_agent = AuraEvolutionAgent(self._openai, self._telegram_token)
                 evolution_result = await evolution_agent.run()
                 report["evolution"] = evolution_result
             except Exception as e:
@@ -1071,11 +1071,11 @@ def _get_brain_base_weights() -> Dict[str, float]:
 # ---------------------------------------------------------------------------
 # Module-level singleton
 # ---------------------------------------------------------------------------
-_autonomy_agent: Optional[OraAutonomyAgent] = None
+_autonomy_agent: Optional[AuraAutonomyAgent] = None
 
 
-def get_autonomy_agent(openai_client=None) -> OraAutonomyAgent:
+def get_autonomy_agent(openai_client=None) -> AuraAutonomyAgent:
     global _autonomy_agent
     if _autonomy_agent is None:
-        _autonomy_agent = OraAutonomyAgent(openai_client)
+        _autonomy_agent = AuraAutonomyAgent(openai_client)
     return _autonomy_agent

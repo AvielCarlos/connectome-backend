@@ -218,7 +218,7 @@ class StrategyAgent(BaseExecutiveAgent):
             f"Key opportunities: [{opportunities_str}]. "
             f"Main threat: large AI companies entering personal coaching space."
         )
-        await self.teach_ora(insight, confidence=0.7)
+        await self.teach_aura(insight, confidence=0.7)
         actions_taken.append("Taught Ora strategic priorities")
 
         # Send strategic brief to Avi if significant threats found

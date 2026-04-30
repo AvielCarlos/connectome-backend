@@ -53,11 +53,11 @@ from ora.agents.collective_intelligence import CollectiveIntelligenceAgent
 from ora.agents.discovery_interview import DiscoveryInterviewAgent
 from ora.agents.ui_ab_testing import UIABTestingAgent
 from ora.agents.explore import ExploreAgent
-from ora.agents.feature_lab import OraFeatureLabAgent
+from ora.agents.feature_lab import AuraFeatureLabAgent
 from ora.agents.dao_agent import DaoAgent
 from ora.agents.world_discovery_agent import WorldDiscoveryAgent
 from ora.agents.drive_agent import DriveAgent
-from ora.consciousness import OraConsciousness
+from ora.consciousness import AuraConsciousness
 from ora.content_quality import content_quality_check
 from ora.agents.context_agent import ContextAgent
 from ora.agent_registry import AgentRegistry
@@ -77,7 +77,7 @@ ORA_GOALS = {
 logger = logging.getLogger(__name__)
 
 
-class OraBrain:
+class AuraBrain:
     """
     Ora's central brain. One instance per application lifecycle.
     Owns all agent instances and orchestrates every screen request.
@@ -114,11 +114,11 @@ class OraBrain:
         self.drive_agent = DriveAgent(self._openai)
 
         # Ora's self-awareness layer
-        self.consciousness = OraConsciousness(self._openai)
+        self.consciousness = AuraConsciousness(self._openai)
 
         # Explore and FeatureLab agents
         self.explore = ExploreAgent(self._openai)
-        self.feature_lab = OraFeatureLabAgent(self._openai)
+        self.feature_lab = AuraFeatureLabAgent(self._openai)
 
         # DAO agent — contribution evaluation and rewards
         self.dao = DaoAgent(self._openai)
@@ -546,7 +546,7 @@ class OraBrain:
         # Increment consciousness decision counter; reflect every 100 decisions
         try:
             decision_count = await self.consciousness.increment_decision_count()
-            if decision_count > 0 and decision_count % OraConsciousness.DECISIONS_PER_REFLECTION == 0:
+            if decision_count > 0 and decision_count % AuraConsciousness.DECISIONS_PER_REFLECTION == 0:
                 asyncio.create_task(self.consciousness.reflect())
                 logger.info(f"Ora: triggered reflection at {decision_count} decisions")
         except Exception as _ce:
@@ -652,13 +652,13 @@ class OraBrain:
             serendipity_threshold = 0.30
 
             # Check Ora's daily exploratory mood toggle
-            ora_exploratory = False
+            aura_exploratory = False
             try:
                 from core.redis_client import get_redis
                 r = await get_redis()
                 mood_flag = await r.get('ora_mood_exploratory')
                 if mood_flag and mood_flag.decode() == '1':
-                    ora_exploratory = True
+                    aura_exploratory = True
                     serendipity_threshold = 0.50  # boost to 50% when exploratory
             except Exception:
                 pass
@@ -666,7 +666,7 @@ class OraBrain:
             should_inject = (
                 not has_goals
                 or serendipity_roll < serendipity_threshold
-                or ora_exploratory
+                or aura_exploratory
             )
 
             if not should_inject:
@@ -1690,7 +1690,7 @@ Return ONLY valid JSON."""
         """Generate a personalized re-engagement push message."""
         if self._openai and settings.has_openai:
             try:
-                ora_note = session_summary.get("ora_note", "")
+                aura_note = session_summary.get("ora_note", "")
                 prompt = (
                     f"Write a short, warm push notification (max 120 chars) to re-engage a user "
                     f"who is working toward: '{goal_title}'. "
@@ -1716,20 +1716,20 @@ Return ONLY valid JSON."""
 # ---------------------------------------------------------------------------
 # Singleton accessor — initialized on app startup
 # ---------------------------------------------------------------------------
-_brain: Optional[OraBrain] = None
+_brain: Optional[AuraBrain] = None
 
 
-def get_brain() -> OraBrain:
+def get_brain() -> AuraBrain:
     global _brain
     if _brain is None:
-        _brain = OraBrain()
+        _brain = AuraBrain()
     return _brain
 
 
 async def init_brain():
     """Call once on app startup."""
     global _brain
-    _brain = OraBrain()
+    _brain = AuraBrain()
     logger.info("Ora brain initialized")
 
     # Load Redis weights immediately on startup

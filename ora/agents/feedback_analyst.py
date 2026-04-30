@@ -678,11 +678,11 @@ Classify why the user left. Return ONLY valid JSON:
 
         for row in gt_rows:
             user_answer = row["user_answer"] or "other"
-            ora_category = row["category"] or "unknown"
+            aura_category = row["category"] or "unknown"
             expected_category = ANSWER_TO_CATEGORY.get(user_answer, "unknown")
             confidence = float(row["confidence"] or 0.0)
 
-            if expected_category == ora_category:
+            if expected_category == aura_category:
                 correct.append(confidence)
             else:
                 incorrect.append(confidence)

@@ -63,7 +63,7 @@ class AnalyticsAgent(BaseWorkerAgent):
         self._save_json(path, report)
 
         # 4. Teach Ora
-        await self.teach_ora(
+        await self.teach_aura(
             f"Daily analytics ({today}): Top engagement domain is '{top_domain}'. "
             f"Goal completion rate: {completion_rate}%. "
             f"Conversation engagement (>5 msgs): {conv_engagement}%. "

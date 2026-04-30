@@ -25,7 +25,7 @@ router = APIRouter(tags=["ora-ops"])
 # ---------------------------------------------------------------------------
 
 @router.get("/api/ora/health/dashboard")
-async def ora_health_dashboard() -> Dict[str, Any]:
+async def aura_health_dashboard() -> Dict[str, Any]:
     """
     Full system health dashboard. Returns status of all subsystems,
     user counts, content indexes, agent states, and last sync times.

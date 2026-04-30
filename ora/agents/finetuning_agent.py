@@ -119,7 +119,7 @@ class FinetuningAgent:
         logger.info(f"FinetuningAgent: {len(all_sessions)} candidate sessions found")
 
         # Get Ora's system prompt
-        system_prompt = await self._get_ora_system_prompt()
+        system_prompt = await self._get_aura_system_prompt()
 
         new_examples = 0
         jsonl_lines = []
@@ -234,7 +234,7 @@ class FinetuningAgent:
 
         return turns if len(turns) >= QUALITY_CRITERIA["min_conversation_turns"] * 2 else []
 
-    async def _get_ora_system_prompt(self) -> str:
+    async def _get_aura_system_prompt(self) -> str:
         """Get Ora's current system prompt from config."""
         try:
             from core.database import fetchrow

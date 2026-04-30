@@ -17,7 +17,7 @@ from ora.payments.growth_billing import (
     GrowthBillingError,
     create_api_access_checkout,
     create_corporate_plan_checkout,
-    create_ora_session_payment,
+    create_aura_session_payment,
 )
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ router = APIRouter(prefix="/api/cgo", tags=["cgo"])
 ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", os.getenv("ADMIN_SECRET", "connectome-admin-secret"))
 
 
-class OraSessionCheckoutRequest(BaseModel):
+class AuraSessionCheckoutRequest(BaseModel):
     session_type: str = "clarity"
 
 
@@ -139,13 +139,13 @@ async def billing_corporate_post(
 
 
 @router.post("/billing/ora-session")
-async def billing_ora_session(
-    body: OraSessionCheckoutRequest,
+async def billing_aura_session(
+    body: AuraSessionCheckoutRequest,
     user_id: str = Depends(get_current_user_id),
 ) -> Dict[str, Any]:
     """Create a one-off Stripe Checkout Session for a premium Ora Session."""
     try:
-        checkout = await create_ora_session_payment(user_id=user_id, session_type=body.session_type)
+        checkout = await create_aura_session_payment(user_id=user_id, session_type=body.session_type)
         return {
             "stream": "ora_session",
             "session_type": body.session_type,

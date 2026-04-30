@@ -61,7 +61,7 @@ async def get_redis_client():
 # Individual backup functions
 # ---------------------------------------------------------------------------
 
-async def backup_ora_lessons(conn, backup_dir: str) -> int:
+async def backup_aura_lessons(conn, backup_dir: str) -> int:
     """Export all of Ora's lessons from DB to JSON. Most important!"""
     try:
         rows = await conn.fetch(
@@ -194,7 +194,7 @@ async def backup_ab_experiments(conn, backup_dir: str) -> int:
         return 0
 
 
-async def backup_ora_reflections(conn, backup_dir: str) -> int:
+async def backup_aura_reflections(conn, backup_dir: str) -> int:
     """Export Ora's reflections (her self-model evolution)."""
     try:
         rows = await conn.fetch(
@@ -229,7 +229,7 @@ async def backup_ora_reflections(conn, backup_dir: str) -> int:
 # Ora Identity Pack
 # ---------------------------------------------------------------------------
 
-async def export_ora_identity(
+async def export_aura_identity(
     conn, redis_client, backup_dir: str, consciousness_path: Optional[str] = None
 ) -> str:
     """
@@ -500,7 +500,7 @@ async def create_full_backup(identity_only: bool = False) -> str:
 
     if not identity_only and conn:
         # Full backup
-        n = await backup_ora_lessons(conn, backup_dir)
+        n = await backup_aura_lessons(conn, backup_dir)
         stats["components"].append({"name": "lessons", "count": n})
 
         n = await backup_user_models(conn, backup_dir)
@@ -512,7 +512,7 @@ async def create_full_backup(identity_only: bool = False) -> str:
         n = await backup_ab_experiments(conn, backup_dir)
         stats["components"].append({"name": "ab_experiments", "count": n})
 
-        n = await backup_ora_reflections(conn, backup_dir)
+        n = await backup_aura_reflections(conn, backup_dir)
         stats["components"].append({"name": "reflections", "count": n})
 
     if redis_client:
@@ -525,7 +525,7 @@ async def create_full_backup(identity_only: bool = False) -> str:
             "CONSCIOUSNESS_PATH",
             "/app/ora/consciousness.py",
         )
-        pack_path = await export_ora_identity(conn, redis_client, backup_dir, consciousness_path)
+        pack_path = await export_aura_identity(conn, redis_client, backup_dir, consciousness_path)
         stats["components"].append({"name": "identity_pack", "path": pack_path})
 
         # Commit to GitHub

@@ -170,7 +170,7 @@ async def create_corporate_plan_checkout(org_name: str, seats: int, contact_emai
     return await _create_checkout_session(data)
 
 
-async def create_ora_session_payment(user_id: str, session_type: str) -> Dict[str, Any]:
+async def create_aura_session_payment(user_id: str, session_type: str) -> Dict[str, Any]:
     """Create a one-off Stripe Checkout Session for a premium Ora coaching session."""
     type_key = (session_type or "clarity").lower()
     if type_key not in ORA_SESSION_TYPES:

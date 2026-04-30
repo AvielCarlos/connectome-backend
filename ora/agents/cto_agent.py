@@ -180,7 +180,7 @@ class CTOAgent(BaseExecutiveAgent):
             f"health score={data['health_score']}/100, "
             f"CI={data['ci_status']}."
         )
-        await self.teach_ora(insight, confidence=0.9)
+        await self.teach_aura(insight, confidence=0.9)
         actions_taken.append("Taught Ora infrastructure state")
 
         # Alert if API is down or very slow
@@ -275,7 +275,7 @@ class CTOAgent(BaseExecutiveAgent):
                    f"{len(findings['passed'])} passed, {total_critical} critical, "
                    f"{len(findings['high'])} high. "
                    + (("Issues: " + "; ".join(findings["critical"][:2])) if findings["critical"] else "All clear."))
-        await self.teach_ora(summary, confidence=0.95)
+        await self.teach_aura(summary, confidence=0.95)
         await self.save_report(findings, f"cto_audit_{now.strftime('%Y%m%d')}.json")
 
         if total_critical > 0:

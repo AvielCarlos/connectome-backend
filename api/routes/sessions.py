@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from core.database import fetch
 from api.middleware import get_current_user_id
 from ora.brain import get_brain
-from ora.user_model import update_ora_memory
+from ora.user_model import update_aura_memory
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ async def end_session(
     # Update Ora's persistent memory for this user (non-blocking)
     try:
         openai_client = getattr(brain, '_openai', None)
-        await update_ora_memory(
+        await update_aura_memory(
             user_id=payload.user_id,
             session_summary=summary,
             openai_client=openai_client,
