@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 import os
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from api.middleware import decode_token
+from api.middleware import decode_token, get_current_user_id
 from core.database import fetchrow
 from core.redis_client import get_redis
 from uuid import UUID
