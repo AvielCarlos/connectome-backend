@@ -94,7 +94,7 @@ def _get_redirect_uri() -> str:
     )
 
 
-def _build_auth_url(scopes: list[str], state: str) -> str:
+def _build_auth_url(scopes: list[str], state: str, *, force_consent: bool = True) -> str:
     params = {
         "client_id": _get_google_client_id(),
         "redirect_uri": _get_redirect_uri(),
@@ -102,8 +102,13 @@ def _build_auth_url(scopes: list[str], state: str) -> str:
         "scope": " ".join(scopes),
         "state": state,
         "access_type": "offline",   # get refresh_token
-        "prompt": "consent",         # always show consent to ensure refresh_token
+        "include_granted_scopes": "true",
     }
+    if force_consent:
+        # Needed when requesting Drive/offline access so Google reliably returns
+        # a refresh_token, but avoid separate basic-login then Drive-login flows
+        # by requesting Drive during first sign-in from the web app.
+        params["prompt"] = "consent"
     return f"{GOOGLE_AUTH_URL}?{urllib.parse.urlencode(params)}"
 
 
@@ -296,7 +301,7 @@ async def google_login(
     if include_drive:
         state += ":drive"
 
-    auth_url = _build_auth_url(scopes, state)
+    auth_url = _build_auth_url(scopes, state, force_consent=include_drive)
     return RedirectResponse(auth_url)
 
 
@@ -426,6 +431,18 @@ async def drive_connect(
     Returns a redirect URL for the Google consent screen with Drive scope.
     The callback will then update their token record with the Drive access.
     """
+    existing = await fetchrow(
+        "SELECT drive_connected FROM google_oauth_tokens WHERE user_id = $1",
+        UUID(user_id),
+    )
+    if existing and existing["drive_connected"]:
+        return {
+            "ok": True,
+            "already_connected": True,
+            "auth_url": "",
+            "message": "Google Drive is already connected",
+        }
+
     # Build auth URL with Drive scope included
     state = secrets.token_urlsafe(32) + ":drive"
     scopes = BASIC_SCOPES + DRIVE_SCOPES
