@@ -16,7 +16,7 @@ from typing import Any, Dict, Optional
 import os
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from api.middleware import get_current_user_id
+from api.middleware import decode_token
 from core.database import fetchrow
 from core.redis_client import get_redis
 from uuid import UUID
@@ -34,17 +34,27 @@ ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "connectome-admin-secret")
 async def _require_admin(
     request: Request,
     x_admin_token: Optional[str] = Header(default=None, alias="x-admin-token"),
-    user_id: Optional[str] = Depends(get_current_user_id),
+    authorization: Optional[str] = Header(default=None),
 ) -> str:
-    """Dependency: allow admin users (by email) OR valid X-Admin-Token header."""
+    """Dependency: allow admin users (by email) OR valid X-Admin-Token header.
+
+    Important: token auth must work without a Bearer token for automation crons.
+    Do not depend on get_current_user_id here because its OAuth dependency raises
+    401 before this function can accept X-Admin-Token.
+    """
     # Token-based auth for automated crons
     if x_admin_token and x_admin_token == ADMIN_TOKEN:
         return "admin-token"
-    # Email-based auth for logged-in users
+
+    # Optional email-based auth for logged-in admin users
+    user_id: Optional[str] = None
+    if authorization and authorization.lower().startswith("bearer "):
+        user_id = decode_token(authorization.split(" ", 1)[1].strip())
     if user_id:
         row = await fetchrow("SELECT email FROM users WHERE id = $1", UUID(user_id))
         if row and row["email"] in ADMIN_EMAILS:
             return user_id
+
     raise HTTPException(status_code=403, detail="Admin access required")
 
 
