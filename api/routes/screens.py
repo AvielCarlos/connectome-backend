@@ -152,6 +152,7 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
 _STATIC_FALLBACK_CARDS = [
     {
         "title": "Take a 10-minute Aventi walk",
+        "image": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop",
         "body": "A tiny real-world exploration: step outside, choose one direction, and let curiosity pick the next turn. Notice one place, person, event poster, cafe, path, or view you could return to later.",
         "domain": "Aventi",
         "tag": "exploration",
@@ -167,6 +168,7 @@ _STATIC_FALLBACK_CARDS = [
     },
     {
         "title": "Reset your system with iVive",
+        "image": "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=1200&auto=format&fit=crop",
         "body": "A nervous-system reset for when your body is carrying friction. Drink water, loosen your jaw, drop your shoulders, and take five slow breaths before choosing the next task.",
         "domain": "iVive",
         "tag": "vitality",
@@ -182,6 +184,7 @@ _STATIC_FALLBACK_CARDS = [
     },
     {
         "title": "Send one Eviva spark",
+        "image": "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=1200&auto=format&fit=crop",
         "body": "A contribution-through-connection action: send one person a real appreciation, useful intro, helpful link, or warm check-in. Keep it one sentence and make it genuine.",
         "domain": "Eviva",
         "tag": "connection",
@@ -197,6 +200,7 @@ _STATIC_FALLBACK_CARDS = [
     },
     {
         "title": "Choose Rest on purpose",
+        "image": "https://images.unsplash.com/photo-1495195134817-aeb325a55b65?w=1200&auto=format&fit=crop",
         "body": "A deliberate recovery micro-step: put your phone down for three minutes and let your nervous system learn that nothing needs to be chased right now.",
         "domain": "Rest",
         "tag": "recovery",
@@ -232,6 +236,7 @@ async def _static_fallback_card(
         "type": "activity",
         "layout": "card_stack",
         "components": [
+            {"type": "hero_image", "source": item["image"], "alt": item["title"]},
             {"type": "category_badge", "text": item["domain"].upper(), "color": "#00d4aa"},
             {"type": "headline", "text": item["title"]},
             {"type": "body", "text": item["body"]},
@@ -263,6 +268,7 @@ async def _static_fallback_card(
         "card_data": {
             "title": item["title"],
             "body": item["body"],
+            "image_url": item["image"],
             "deep_dive": {
                 "time_to_start": item["needs"][0],
                 "difficulty": "easy",
