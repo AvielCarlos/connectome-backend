@@ -8,12 +8,60 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Depends
 
-from core.database import execute, fetchrow
+from core.database import execute, fetch, fetchrow
 from api.middleware import get_current_user_id
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+
+
+@router.get("")
+async def list_notifications(
+    current_user_id: str = Depends(get_current_user_id),
+):
+    """
+    Lightweight in-app notification inbox.
+
+    This intentionally reuses scheduled_notifications so the bell can be useful
+    without creating another always-on, model-heavy feature. Treat as an
+    experimental/chopping-block surface until engagement proves it deserves to
+    stay.
+    """
+    rows = await fetch(
+        """
+        SELECT id, goal_id, message, scheduled_for, sent, opened, created_at
+        FROM scheduled_notifications
+        WHERE user_id = $1
+        ORDER BY COALESCE(scheduled_for, created_at) DESC
+        LIMIT 20
+        """,
+        UUID(current_user_id),
+    )
+    items = []
+    unread_count = 0
+    for row in rows:
+        unread = bool(row["sent"] and not row["opened"])
+        if unread:
+            unread_count += 1
+        items.append({
+            "id": str(row["id"]),
+            "goal_id": str(row["goal_id"]) if row["goal_id"] else None,
+            "message": row["message"] or "Aura has an update for your path.",
+            "scheduled_for": row["scheduled_for"].isoformat() if row["scheduled_for"] else None,
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "sent": bool(row["sent"]),
+            "opened": bool(row["opened"]),
+            "unread": unread,
+            "type": "reengagement",
+        })
+    return {
+        "items": items,
+        "unread_count": unread_count,
+        "feature_status": "experimental",
+        "chopping_block": True,
+        "recommendation": "Keep only if notifications drive meaningful return visits or path completions without noisy model/tool spend.",
+    }
 
 
 @router.post("/{notification_id}/opened")
