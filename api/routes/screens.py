@@ -8,14 +8,13 @@ Endpoints:
   GET  /api/screens/:id     — retrieve a screen by ID
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 import random
 import uuid as _uuid_mod
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -230,7 +229,7 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
         RETURNING id
         """,
         json.dumps(spec_dict),
-        "IOOGraphAgent",
+        metadata.get("agent") or "IOOGraphAgent",
         metadata.get("domain"),
         node_uuid,
         screen_role,
@@ -255,6 +254,238 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
             logger.debug("Screen graph edge creation skipped for screen %s: %s", db_id[:8], err)
 
     return db_id
+
+
+# ---------------------------------------------------------------------------
+# Real-world/actionable feed cards
+# ---------------------------------------------------------------------------
+
+_CURATED_REAL_ACTIONS: list[dict[str, Any]] = [
+    {
+        "key": "vancouver_live_events",
+        "domain": "Aventi",
+        "tag": "live_events",
+        "kind": "Live events",
+        "title": "Find a live event in Vancouver this week",
+        "body": "Browse real upcoming Eventbrite listings for Vancouver and choose something you can actually attend.",
+        "image": "https://images.unsplash.com/photo-1501281668745-f7f57925c3b4?w=1200&auto=format&fit=crop",
+        "url": "https://www.eventbrite.ca/d/canada--vancouver/events/",
+        "button": "Browse live events →",
+        "needs": ["calendar check", "transport plan", "ticket/free RSVP"],
+        "steps": [
+            "Open the live listings.",
+            "Filter by date, price, and distance.",
+            "Pick one real event and RSVP/book or save it for later.",
+        ],
+        "why": "The feed should expose the real world: gatherings, classes, culture, and local possibilities.",
+    },
+    {
+        "key": "meditation_beginner_youtube",
+        "domain": "iVive",
+        "tag": "guided_meditation",
+        "kind": "Learnable video",
+        "title": "Do a real 10-minute guided meditation",
+        "body": "A verified beginner-friendly YouTube meditation you can follow immediately — not an abstract wellness prompt.",
+        "image": "https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=1200&auto=format&fit=crop",
+        "url": "https://www.youtube.com/watch?v=S-W1GFBJbt0",
+        "button": "Start the meditation →",
+        "needs": ["10 minutes", "headphones optional", "somewhere you can sit"],
+        "steps": [
+            "Open the video and sit comfortably.",
+            "Follow the breath/body cues without trying to be perfect.",
+            "Afterward, rate whether this made you calmer or clearer.",
+        ],
+        "why": "Aura should help you regulate in reality. This gives you an existing practice to follow now.",
+    },
+    {
+        "key": "yoga_beginner_youtube",
+        "domain": "iVive",
+        "tag": "yoga_video",
+        "kind": "Learnable video",
+        "title": "Follow a real beginner yoga class on YouTube",
+        "body": "Yoga With Adriene’s beginner class is a real, existing video you can follow from home today.",
+        "image": "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?w=1200&auto=format&fit=crop",
+        "url": "https://www.youtube.com/watch?v=v7AYKMP6rOE",
+        "button": "Open the yoga video →",
+        "needs": ["20–25 minutes", "floor space", "mat optional"],
+        "steps": [
+            "Open the video and clear a small patch of floor.",
+            "Follow at 70% intensity — the goal is momentum, not performance.",
+            "Tell Aura if this was too easy, too hard, or just right.",
+        ],
+        "why": "A good feed should contain followable practices, not only conceptual opportunities.",
+    },
+    {
+        "key": "vancouver_yoga_class",
+        "domain": "Aventi",
+        "tag": "local_yoga_class",
+        "kind": "Local class",
+        "title": "Attend a Vancouver yoga class this week",
+        "body": "YYOGA Downtown Flow has in-person classes and online booking. Check the live schedule and reserve a spot if the timing fits.",
+        "image": "https://images.unsplash.com/photo-1575052814086-f385e2e2ad1b?w=1200&auto=format&fit=crop",
+        "url": "https://yyoga.ca/locations/downtown-flow/",
+        "button": "Check class schedule →",
+        "needs": ["Vancouver access", "booking window", "class fee"],
+        "steps": [
+            "Open the live schedule.",
+            "Pick one class within the next 7 days.",
+            "Reserve it or save it for Aura to resurface.",
+        ],
+        "why": "Connectome should bridge inner vitality into real-world attendance and commitment.",
+    },
+    {
+        "key": "vancouver_skydiving",
+        "domain": "Aventi",
+        "tag": "adventure_skydiving",
+        "kind": "Adventure booking",
+        "title": "Book a real skydiving adventure near Vancouver",
+        "body": "Skydive Vancouver operates near Abbotsford. It’s weather-dependent, so check availability before committing.",
+        "image": "https://images.unsplash.com/photo-1521673461164-de300ebcfb17?w=1200&auto=format&fit=crop",
+        "url": "https://www.vancouver-skydiving.bc.ca/book-now/",
+        "button": "Check skydiving availability →",
+        "needs": ["transport", "weather window", "booking budget"],
+        "steps": [
+            "Open the booking page and check current availability.",
+            "Confirm weather, transport, and safety requirements.",
+            "Book it, invite someone, or save it as a high-aliveness goal.",
+        ],
+        "why": "Aventi should surface peak-aliveness options, not just generic inspiration.",
+    },
+]
+
+
+def _serialise_dt(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_action") -> dict:
+    """Build a server-driven card around a real URL/action the user can take."""
+    url = item.get("url") or ""
+    title = item.get("title") or "Real-world action"
+    domain = item.get("domain") or "Aventi"
+    components = [
+        {"type": "hero_image", "source": item.get("image") or item.get("image_url") or "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop", "alt": title},
+        {"type": "category_badge", "text": f"{domain.upper()} · {item.get('kind', 'Real action')}", "color": "#f59e0b" if domain == "Aventi" else "#10b981"},
+        {"type": "headline", "text": title},
+        {"type": "body", "text": item.get("body") or item.get("description") or "A real option you can open, verify, and act on."},
+        {"type": "context_strip", "items": [{"label": "Reality", "value": "Verified URL"}, {"label": "Mode", "value": item.get("kind", "Action")}, {"label": "Domain", "value": domain}]},
+    ]
+    if item.get("venue") or item.get("starts_at") or item.get("price"):
+        components.append({
+            "type": "constraint_panel",
+            "items": [
+                {"label": f"When: {_serialise_dt(item.get('starts_at'))}"} if item.get("starts_at") else None,
+                {"label": f"Where: {item.get('venue')}"} if item.get("venue") else None,
+                {"label": f"Price: {item.get('price')}"} if item.get("price") else None,
+            ],
+        })
+        components[-1]["items"] = [x for x in components[-1]["items"] if x]
+    components += [
+        {"type": "section_header", "text": "Why this belongs here"},
+        {"type": "body_text", "text": item.get("why") or "Aura is turning the feed into a path of concrete possibilities, not repeated generic cards."},
+        {"type": "section_header", "text": "Do it like this"},
+        {"type": "timeline_steps", "items": [{"title": step, "body": ""} for step in (item.get("steps") or [])[:4]]},
+        {"type": "action_button", "label": item.get("button") or "Open option →", "action": {"type": "open_url", "url": url, "payload": {"source": source, "tag": item.get("tag"), "verified_url": bool(url)}}},
+    ]
+    return {
+        "screen_id": str(_uuid_mod.uuid4()),
+        "type": "activity",
+        "layout": "real_world_action",
+        "components": components,
+        "feedback_overlay": {"type": "star_rating", "position": "bottom_right", "always_visible": True},
+        "metadata": {
+            "agent": "RealWorldActionAgent",
+            "source": source,
+            "domain": domain,
+            "tags": [item.get("tag") or "real_action", "diversity_seed"],
+            "url": url,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        },
+        "card_data": {
+            "title": title,
+            "body": item.get("body") or item.get("description"),
+            "image_url": item.get("image") or item.get("image_url"),
+            "url": url,
+            "deep_dive": {
+                "time_to_start": (item.get("needs") or ["open the link"])[0],
+                "difficulty": "easy" if domain == "iVive" else "medium",
+                "why_it_matters": item.get("why"),
+                "steps": item.get("steps") or [],
+                "resources": [{"label": item.get("button") or "Open", "url": url}] if url else [],
+                "stat": "Real URL/action card; user can verify and act.",
+            },
+        },
+    }
+
+
+async def _build_screen_response_from_spec(user_id: str, tier: str, daily_limit: int, spec_dict: dict) -> ScreenResponse:
+    db_id = await _store_ioo_screen_spec(spec_dict)
+    screens_today = await increment_daily_screen_count(user_id)
+    return ScreenResponse(
+        screen=ScreenSpec(
+            screen_id=spec_dict["screen_id"],
+            type=spec_dict.get("type", "activity"),
+            layout=spec_dict.get("layout", "card_stack"),
+            components=spec_dict.get("components", []),
+            feedback_overlay=FeedbackOverlay(**spec_dict.get("feedback_overlay", {"type": "star_rating", "position": "bottom_right", "always_visible": True})),
+            metadata=ScreenMetadata(**spec_dict.get("metadata", {"agent": "RealWorldActionAgent"})),
+        ),
+        screen_spec_db_id=db_id,
+        screens_today=screens_today,
+        daily_limit=daily_limit,
+        is_limited=(tier == "free"),
+    )
+
+
+async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> Optional[ScreenResponse]:
+    """Turn a stored live event into a feed card when the user's city has events."""
+    try:
+        from ora.agents.event_agent import EventAgent
+
+        events = await EventAgent().get_recommended_events(user_id=str(user_id), days_ahead=14, limit=8)
+        events = [ev for ev in events if ev.get("url")]
+        if not events:
+            return None
+        event = random.choice(events[: min(5, len(events))])
+        item = {
+            "domain": "Aventi",
+            "tag": "live_event",
+            "kind": "Live event",
+            "title": event.get("title") or "Local event",
+            "body": event.get("description") or "A local live event Aura found from the events pipeline.",
+            "image_url": event.get("image_url"),
+            "url": event.get("url"),
+            "button": "Open event details →",
+            "venue": event.get("venue_name") or event.get("address") or event.get("city"),
+            "starts_at": event.get("starts_at"),
+            "price": event.get("price_range"),
+            "steps": ["Open the event page.", "Check date, location, cost, and transport.", "Book, invite someone, or save it for later."],
+            "why": "This is the live Aventi layer: events you can actually attend, not conceptual prompts.",
+        }
+        return await _build_screen_response_from_spec(user_id, tier, daily_limit, _real_action_spec(item, source="live_event"))
+    except Exception as err:
+        logger.debug("Live event action card skipped for user %s: %s", str(user_id)[:8], err)
+        return None
+
+
+async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0) -> Optional[ScreenResponse]:
+    """Diversify the main feed with concrete learn/attend/book actions."""
+    # Prefer true live event data for the first Aventi slot, then fall back to
+    # curated verified URLs so the feed is never only generic Eviva cards.
+    if slot_index % 5 == 0:
+        live = await _try_live_event_action(user_id, tier, daily_limit)
+        if live is not None:
+            return live
+
+    digest = hashlib.sha256(f"{user_id}:{datetime.now(timezone.utc).date()}".encode("utf-8")).hexdigest()
+    start = int(digest[:8], 16) % len(_CURATED_REAL_ACTIONS)
+    idx = (start + slot_index) % len(_CURATED_REAL_ACTIONS)
+    item = _CURATED_REAL_ACTIONS[idx]
+    return await _build_screen_response_from_spec(user_id, tier, daily_limit, _real_action_spec(item))
 
 
 _STATIC_FALLBACK_CARDS = [
@@ -568,12 +799,17 @@ async def get_next_screen(
     except Exception:
         pass
 
-    # ── Smart IOO routing ──────────────────────────────────────────────────
-    # When the user has an active goal, 40 % of cards come from the IOO graph;
-    # the remaining 60 % (and all cards for goal-less users) use the brain.
-    # Feed is primarily IOO discovery — ~75% IOO nodes, ~25% brain coaching content
-    # No goals gate: discovery mode surfaces nodes across all domains, not just goal-aligned ones
-    if random.random() < 0.75:
+    # ── Smart feed routing ─────────────────────────────────────────────────
+    # Product principle: the feed must feel like a living path. Always give a
+    # meaningful share of cards to real actions (live events, videos, classes,
+    # adventures) so users are not trapped in generic Eviva/IOO opportunity loops.
+    if random.random() < 0.45:
+        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count)
+        if real_action is not None:
+            return real_action
+
+    # IOO remains the intelligence layer, but not the whole feed.
+    if random.random() < 0.55:
         ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
         if ioo_response is not None:
             return ioo_response
@@ -684,12 +920,29 @@ async def get_screen_batch(
     # Fetch screens sequentially to respect rate limits and user model updates
     for _ in range(count):
         try:
-            # Feed is primarily IOO discovery — ~75% IOO nodes, ~25% brain coaching content
-            # No goals gate: anyone can discover IOO nodes regardless of whether they have active goals
-            if random.random() < 0.75:
+            slot_index = len(results)
+
+            # Force diversity in every prefetched batch. Slots 0/2/4 are real
+            # actions where possible; slots 1/3 can use IOO/brain. This directly
+            # prevents repeated "Eviva Opportunities" cards from occupying the
+            # whole swipe queue.
+            if slot_index in (0, 2, 4):
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index)
+                if real_action is not None:
+                    results.append(real_action)
+                    continue
+
+            # No goals gate: anyone can discover IOO nodes regardless of whether they have active goals.
+            if random.random() < 0.50:
                 ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
                 if ioo_resp is not None:
                     results.append(ioo_resp)
+                    continue
+
+            if random.random() < 0.35:
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index)
+                if real_action is not None:
+                    results.append(real_action)
                     continue
 
             spec_dict, db_id, screens_today = await brain.get_screen(
