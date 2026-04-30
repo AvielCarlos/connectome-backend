@@ -224,34 +224,52 @@ def spawn_execution_plan(node: Any, user_context: Any, intent: str = "do_now") -
     location = _context_location(context) or n.requires_location
     minutes = _estimated_minutes(n, 30 if intent == "do_now" else 20)
 
-    first_step_description = "Confirm the exact version of this node you want to execute."
+    first_step_description = "Clarify the exact version of this outcome/experience you want."
     if location:
         first_step_description += f" Optimise around {location}."
     if n.description:
         first_step_description += f" Node context: {n.description}"
 
+    decision_levels = [
+        {
+            "level": "high",
+            "label": "What kind of path?",
+            "description": "Choose the broad experience/outcome shape: solo vs social, learning vs booking, calm vs adventurous, free vs paid, now vs later.",
+        },
+        {
+            "level": "mid",
+            "label": "Which concrete option?",
+            "description": "Choose among Aura-ranked real options, providers, locations, classes, events, tutorials, or routes.",
+        },
+        {
+            "level": "micro",
+            "label": "What exact real-world step?",
+            "description": "Confirm the booking link, place, time, invite, calendar event, budget fit, and first physical/digital action.",
+        },
+    ]
+
     steps = [
         {
-            "title": "Set execution constraints",
+            "title": "Clarify the decision",
             "description": first_step_description,
-            "step_type": "digital",
+            "step_type": "clarification",
+            "estimated_minutes": 3,
+        },
+        {
+            "title": "Choose from Aura’s best options",
+            "description": "Aura should do the search/research/ranking in the background; the user chooses from concrete options rather than maintaining the workflow.",
+            "step_type": "decision",
             "estimated_minutes": 5,
         },
         {
-            "title": "Find concrete options",
-            "description": "Search for real options, providers, tutorials, communities, routes, or links that can make this node actionable. No external booking/purchase/message is performed yet.",
-            "step_type": "digital" if n.step_type == "digital" else "hybrid",
-            "estimated_minutes": 15,
+            "title": "Confirm the micro-node",
+            "description": "Confirm location/link, activity, time, budget fit, calendar/invite details, and any required preparation.",
+            "step_type": "micro_node_confirmation",
+            "estimated_minutes": 5,
         },
         {
-            "title": "Choose the best path",
-            "description": "Compare options by fulfilment fit, friction, cost, distance, timing, safety, and likelihood of completion.",
-            "step_type": "digital",
-            "estimated_minutes": 10,
-        },
-        {
-            "title": "Commit and do the first action",
-            "description": "Take the smallest confirmed next action: block time, open the tutorial, prepare gear, start outreach draft, or confirm a booking flow for user approval.",
+            "title": "Do it in real life",
+            "description": "Execute the confirmed smallest real-world action, then capture completion/evidence so IOO can learn.",
             "step_type": n.step_type if n.step_type in {"digital", "physical", "hybrid"} else "hybrid",
             "estimated_minutes": minutes,
         },
@@ -289,7 +307,28 @@ def spawn_execution_plan(node: Any, user_context: Any, intent: str = "do_now") -
         }
 
     return {
-        "summary": f"Turn '{n.title}' from an IOO possibility node into a confirmed real-world action path.",
+        "summary": f"Turn '{n.title}' from an IOO possibility node into a mini-app that resolves into a confirmed real-world micro-node.",
+        "decision_levels": decision_levels,
+        "micro_node": {
+            "definition": "The lowest-granularity actionable unit: a real place/link/time/activity/invite/budget/calendar commitment the user can actually do.",
+            "required_fields": [
+                "specific activity or experience",
+                "location, venue, URL, route, class, tutorial, provider, or booking link",
+                "time window or selected start time",
+                "duration and preparation requirements",
+                "budget/funds confirmation or free option",
+                "friend/invite option when socially valuable",
+                "calendar event or external event link",
+                "completion evidence to capture after action",
+            ],
+            "optional_fields": [
+                "transport/directions",
+                "weather or safety constraints",
+                "equipment/gear checklist",
+                "micro-steps for workouts, practices, learning sessions, or routines",
+                "fallback option if the first choice is unavailable",
+            ],
+        },
         "steps": steps,
         "resources_needed": resources,
         "links_to_find": links_to_find,
