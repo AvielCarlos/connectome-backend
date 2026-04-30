@@ -21,3 +21,16 @@ env/
 .vscode/
 .idea/
 *.swp
+
+# Local-only/private notes must never be committed
+TOOLS.md
+MEMORY.md
+SOUL.md
+AGENTS.md
+DREAMS.md
+.env
+.env.*
+!.env.example
+USER.md
+IDENTITY.md
+HEARTBEAT.md

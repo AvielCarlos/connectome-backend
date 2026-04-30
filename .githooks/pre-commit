@@ -1,0 +1,2 @@
+#!/bin/sh
+python3 scripts/guard_no_public_secrets.py --staged
