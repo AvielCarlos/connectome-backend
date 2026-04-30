@@ -44,6 +44,17 @@ class UXSelectionResult:
     safety: dict[str, Any]
 
 
+@dataclass(frozen=True)
+class UXSelectionInput:
+    """Typed input contract for ranking IOO execution candidates."""
+
+    objective: str
+    node: Any
+    user_context: Any
+    candidate_actions: Iterable[Any]
+    intent: str = "do_now"
+
+
 def _as_dict(value: Any) -> dict[str, Any]:
     if value is None:
         return {}
@@ -397,8 +408,22 @@ def build_ux_selection_payload(
     return asdict(result)
 
 
+def select_ux_options(request: UXSelectionInput) -> dict[str, Any]:
+    """Rank UX options from the typed request object used by demos/tests."""
+
+    return build_ux_selection_payload(
+        objective=request.objective,
+        node=request.node,
+        user_context=request.user_context,
+        candidate_actions=request.candidate_actions,
+        intent=request.intent,
+    )
+
+
 __all__ = [
     "RankedUXOption",
+    "UXSelectionInput",
     "UXSelectionResult",
     "build_ux_selection_payload",
+    "select_ux_options",
 ]

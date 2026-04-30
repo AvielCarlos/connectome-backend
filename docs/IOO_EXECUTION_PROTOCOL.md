@@ -7,6 +7,16 @@
 
 Both agents are side-effect free. They may prepare links, search surfaces, prep paths, rankings, and recommendations, but they do not book, purchase, apply, or message anyone without explicit user confirmation.
 
+## UXSelectionAgent demo
+
+Run a standalone example input/output without the API or database:
+
+```bash
+python3 examples/ux_selection_demo.py
+```
+
+The demo uses the typed `UXSelectionInput` contract and prints ranked options with scores, human-readable rationale, tradeoffs, and the recommended next action. The same ranking function is called from the IOO execution flow after `SearchAgent` prepares candidate actions.
+
 ## Example request
 
 ```http
