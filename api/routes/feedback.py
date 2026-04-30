@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 GLOBAL_FEEDBACK_CP = 10
-GLOBAL_FEEDBACK_CATEGORIES = {"Bug", "Confusing", "Idea", "Design", "Praise", "Other"}
+GLOBAL_FEEDBACK_CATEGORIES = {"Bug", "Malfunction", "Bad Card/Node", "Confusing", "Idea", "Design", "Praise", "Other"}
 
 
 async def _ensure_global_feedback_schema() -> None:

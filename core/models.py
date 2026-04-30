@@ -142,7 +142,7 @@ class FeedbackSubmit(BaseModel):
     exit_point: Optional[str] = None
     completed: bool = False
     # Global in-app feedback fields
-    category: Optional[Literal["Bug", "Confusing", "Idea", "Design", "Praise", "Other"]] = None
+    category: Optional[Literal["Bug", "Malfunction", "Bad Card/Node", "Confusing", "Idea", "Design", "Praise", "Other"]] = None
     message: Optional[str] = None
     route: Optional[str] = None
     screenshot_data_url: Optional[str] = None
