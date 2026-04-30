@@ -1329,6 +1329,128 @@ class IOOGraphAgent:
             "principle": "grow from multiple angles, reinforce winners, prune weak branches, split/merge overloaded structure",
         }
 
+    async def upsert_world_signal_node(self, signal: dict) -> dict:
+        """
+        Turn a live world signal/event/opportunity into an IOO node.
+
+        World-aware Ora should continuously grow the IOO graph from live data:
+        local events, opportunities, learning resources, trends, cultural moments,
+        and useful places. These nodes are then reinforced/pruned by behaviour.
+        """
+        title = str(signal.get("title") or "Untitled world opportunity").strip()[:240]
+        if not title:
+            return {}
+        url = str(signal.get("url") or "").strip()
+        signal_type = str(signal.get("signal_type") or signal.get("type") or "opportunity").lower()
+        source = str(signal.get("source") or "world")
+        summary = str(signal.get("summary") or signal.get("description") or "")
+        location = str(signal.get("location") or signal.get("city") or "")
+        tags = signal.get("tags") or signal.get("relevance_tags") or []
+        if isinstance(tags, str):
+            try:
+                tags = json.loads(tags)
+            except Exception:
+                tags = [tags]
+        tags = [str(t).strip().lower() for t in tags if str(t).strip()]
+
+        node_type = "experience" if signal_type in {"event", "weather", "historical"} else "activity"
+        step_type = "physical" if signal_type == "event" or location not in {"", "Online", "online"} else "digital"
+        domain = "Aventi" if signal_type in {"event", "weather", "historical", "inspiration"} else "Eviva"
+        if any(t in tags for t in ["wellness", "fitness", "health", "mindfulness", "psychology", "wellbeing"]):
+            domain = "iVive"
+        requirements = {
+            "world_signal": True,
+            "world_signal_type": signal_type,
+            "world_signal_source": source,
+            "world_signal_url": url,
+            "external_id": signal.get("external_id") or signal.get("id"),
+            "starts_at": str(signal.get("starts_at") or ""),
+            "raw_location": location,
+        }
+
+        existing = None
+        if url:
+            existing = await fetchrow(
+                """
+                SELECT id, title FROM ioo_nodes
+                WHERE requirements->>'world_signal_url' = $1
+                LIMIT 1
+                """,
+                url,
+            )
+        if not existing:
+            existing = await fetchrow(
+                """
+                SELECT id, title FROM ioo_nodes
+                WHERE generation_source = 'world_signal'
+                  AND lower(title) = lower($1)
+                  AND COALESCE(requires_location, '') = COALESCE($2, '')
+                LIMIT 1
+                """,
+                title,
+                location,
+            )
+
+        if existing:
+            row = await fetchrow(
+                """
+                UPDATE ioo_nodes
+                SET description = COALESCE(NULLIF($2, ''), description),
+                    tags = $3,
+                    requirements = COALESCE(requirements, '{}'::jsonb) || $4::jsonb,
+                    engagement_score = LEAST(1.0, COALESCE(engagement_score, 0.5) + 0.01),
+                    neural_state = 'active',
+                    is_active = TRUE,
+                    updated_at = NOW()
+                WHERE id = $1::uuid
+                RETURNING id, title, generation_source, growth_angle
+                """,
+                str(existing["id"]),
+                summary,
+                tags,
+                json.dumps(requirements),
+            )
+            await self._log_graph_event("world_refresh", node_id=str(row["id"]), payload=requirements)
+            return dict(row)
+
+        row = await fetchrow(
+            """
+            INSERT INTO ioo_nodes
+                (type, title, description, tags, domain, step_type, goal_category,
+                 requires_location, requirements, difficulty_level, generation_source,
+                 growth_angle, neural_state, engagement_score, fulfilment_score)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,'world_signal',$11,'active',$12,$13)
+            RETURNING id, title, generation_source, growth_angle
+            """,
+            node_type,
+            title,
+            summary,
+            tags,
+            domain,
+            step_type,
+            signal_type,
+            location or None,
+            json.dumps(requirements),
+            3 if signal_type == "event" else 4,
+            signal_type,
+            max(0.1, min(float(signal.get("relevance_score") or 0.5), 1.0)),
+            0.55,
+        )
+        await self._log_graph_event("world_spawn", node_id=str(row["id"]), payload=requirements)
+        return dict(row)
+
+    async def ingest_world_signals(self, signals: list[dict], max_nodes: int = 25) -> dict:
+        """Bulk-import live world signals into the IOO neural graph."""
+        spawned_or_refreshed = []
+        for signal in signals[:max_nodes]:
+            try:
+                node = await self.upsert_world_signal_node(signal)
+                if node:
+                    spawned_or_refreshed.append(node)
+            except Exception as e:
+                logger.warning(f"IOO world-signal ingest failed for {signal.get('title', '?')}: {e}")
+        return {"ingested": len(spawned_or_refreshed), "nodes": spawned_or_refreshed}
+
     # ------------------------------------------------------------------
     # Seed initial nodes
     # ------------------------------------------------------------------

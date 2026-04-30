@@ -217,6 +217,7 @@ class WorldAgent:
 
         # Persist to DB
         await self._store_signals(deduped)
+        await self._grow_ioo_graph_from_signals(deduped)
 
         # Update Redis last_fetch timestamp
         try:
@@ -957,6 +958,19 @@ class WorldAgent:
                 )
             except Exception as e:
                 logger.warning(f"WorldAgent DB store error for '{sig.title[:40]}': {e}")
+
+    async def _grow_ioo_graph_from_signals(self, signals: List[WorldSignal]) -> None:
+        """Feed live events/opportunities into the IOO neural graph."""
+        if not signals:
+            return
+        try:
+            from ora.agents.ioo_graph_agent import get_graph_agent
+
+            payloads = [sig.to_dict() for sig in signals]
+            result = await get_graph_agent().ingest_world_signals(payloads, max_nodes=25)
+            logger.info(f"WorldAgent: IOO neural graph ingested {result.get('ingested', 0)} world signal nodes")
+        except Exception as e:
+            logger.warning(f"WorldAgent: IOO world-signal graph ingest skipped: {e}")
 
     async def _load_cached_signals(self) -> List[WorldSignal]:
         """Load signals fetched in the last 6 hours from DB."""

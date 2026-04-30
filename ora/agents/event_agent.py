@@ -544,6 +544,25 @@ async def _upsert_events(events: List[Dict], openai_client) -> int:
                 ev.get("relevance_tags", []),
                 embed_str,
             )
+            try:
+                from ora.agents.ioo_graph_agent import get_graph_agent
+
+                await get_graph_agent().upsert_world_signal_node({
+                    "id": ev.get("external_id"),
+                    "external_id": ev.get("external_id"),
+                    "signal_type": "event",
+                    "source": ev.get("source", "events"),
+                    "title": ev.get("title", ""),
+                    "summary": ev.get("description", ""),
+                    "url": ev.get("url", ""),
+                    "location": ev.get("city", ""),
+                    "city": ev.get("city", ""),
+                    "tags": ev.get("relevance_tags", []) or [ev.get("category", "general")],
+                    "relevance_score": 0.74,
+                    "starts_at": ev.get("starts_at"),
+                })
+            except Exception as graph_e:
+                logger.debug(f"EventAgent IOO graph ingest skipped for '{ev.get('title', '?')}': {graph_e}")
             inserted += 1
 
         except Exception as e:

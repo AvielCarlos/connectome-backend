@@ -182,3 +182,34 @@ grow from multiple angles → reinforce winners → prune weak branches → spli
 ## Engagement is not the final objective
 
 The graph optimises for engagement only as a nervous-system signal. The higher objective remains more lived experiences, meaningful activity, vitality, contribution, and fulfilment. A route that gets clicks but does not produce execution or fulfilment should eventually lose weight to routes that move someone into real life.
+
+## World-aware graph growth
+
+Ora's world-awareness agents are now graph-growth organs. Live signals should not only become feed cards — they should become IOO possibilities that can be completed, reinforced, pruned, split, merged, and recombined into user pathways.
+
+Sources include:
+
+- local events;
+- volunteering and service opportunities;
+- learning resources;
+- jobs/career opportunities;
+- cultural moments and trends;
+- useful places, weather, seasonal context, and timely experiences.
+
+`WorldAgent` and `EventAgent` feed signals into `IOOGraphAgent.upsert_world_signal_node(...)`. This creates or refreshes IOO nodes with:
+
+- `generation_source = "world_signal"`;
+- `growth_angle = <signal_type>`;
+- source URL/external ID/location in `requirements`;
+- appropriate domain mapping:
+  - `Aventi` for events, discovery, inspiration, culture;
+  - `Eviva` for opportunities, work, contribution;
+  - `iVive` for health, wellness, fitness, mindfulness.
+
+From there the same neural lifecycle applies:
+
+```text
+live world signal → IOO node → screen/execution path → user behaviour → reinforce/prune/grow/split/merge
+```
+
+This makes Ora's brain less like a static ontology and more like a living model of what the world is offering right now.
