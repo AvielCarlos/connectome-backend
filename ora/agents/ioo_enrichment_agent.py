@@ -22,16 +22,35 @@ logger = logging.getLogger(__name__)
 
 
 class IOOEnrichmentAgent:
-    CATEGORIES = [
-        "Eviva global meaningful work opportunities",
-        "Eviva volunteering roles with NGOs and social enterprises",
-        "Eviva open-source projects looking for contributors",
-        "Eviva impact-driven jobs remote 2026",
-        "Eviva meaningful volunteering opportunities 2026",
-        "Aventi fun adventure events dating travel friendship",
-        "iVive physical mental spiritual creative financial self-growth",
-        "health/fitness", "mental wellness", "career", "finance", "learning", "community",
-    ]
+    CATEGORIES_BY_DOMAIN = {
+        "iVive": [
+            "iVive physical mental spiritual creative financial self-growth",
+            "health/fitness",
+            "mental wellness",
+            "finance",
+            "learning",
+        ],
+        "Eviva": [
+            "Eviva global meaningful work opportunities",
+            "Eviva volunteering roles with NGOs and social enterprises",
+            "Eviva open-source projects looking for contributors",
+            "Eviva impact-driven jobs remote 2026",
+            "Eviva meaningful volunteering opportunities 2026",
+            "career",
+            "community",
+        ],
+        "Aventi": [
+            "Aventi fun adventure events dating travel friendship",
+            "Aventi local micro-adventures and friendship opportunities",
+            "Aventi creative dates, social hobbies, and travel readiness",
+        ],
+        "Rest": [
+            "Rest recovery sleep nervous system restoration",
+            "Rest Sabbath digital detox low-stimulation renewal",
+            "Rest active recovery after burnout or overwork",
+        ],
+    }
+    CATEGORIES = [category for categories in CATEGORIES_BY_DOMAIN.values() for category in categories]
 
     QUERY_TEMPLATES = [
         "complete step-by-step guide to {goal}",
@@ -52,10 +71,24 @@ class IOOEnrichmentAgent:
     def __init__(self, openai_client=None):
         self.openai = openai_client
 
-    def pick_categories(self, count: int = 3) -> List[str]:
-        # Deterministic daily rotation, with slight spread across the list.
-        start = int(hashlib.sha256(str(date.today()).encode()).hexdigest(), 16) % len(self.CATEGORIES)
-        return [self.CATEGORIES[(start + i) % len(self.CATEGORIES)] for i in range(count)]
+    def pick_categories(self, count: int = 4) -> List[str]:
+        """Pick a daily balanced slice across Ora's lived-action domains.
+
+        Feed quality drops when enrichment over-rotates into one silo. The
+        daily cycle should always touch iVive, Eviva, Aventi, and Rest so Ora
+        can build bridges between capability, service, adventure, and recovery.
+        """
+        seed = int(hashlib.sha256(str(date.today()).encode()).hexdigest(), 16)
+        picked: List[str] = []
+        for offset, (_domain, categories) in enumerate(self.CATEGORIES_BY_DOMAIN.items()):
+            picked.append(categories[(seed + offset) % len(categories)])
+        if count <= len(picked):
+            return picked[:count]
+        remaining = [category for category in self.CATEGORIES if category not in picked]
+        start = seed % len(remaining) if remaining else 0
+        while len(picked) < count and remaining:
+            picked.append(remaining[(start + len(picked)) % len(remaining)])
+        return picked
 
     async def _search_web(self, query: str) -> List[Dict[str, str]]:
         """Lightweight web search using DuckDuckGo HTML as a no-key fallback."""
@@ -112,6 +145,26 @@ class IOOEnrichmentAgent:
                 ("Complete a 5-minute daily mood check-in", "Track mood and triggers for one week.", "digital", ["mental wellness", "tracking"]),
                 ("Try a guided breathing exercise", "Use a short breath practice to downshift the nervous system.", "digital", ["breathing", "calm"]),
             ],
+            "Aventi local micro-adventures and friendship opportunities": [
+                ("Invite one person to a 60-minute local micro-adventure", "Pick a specific walk, market, gallery, or café route and send one low-pressure invitation.", "physical", ["Aventi", "friendship", "micro-adventure"]),
+                ("Build a three-option weekend adventure shortlist", "Choose three realistic nearby experiences with time, cost, transit, and social fit noted.", "hybrid", ["Aventi", "planning", "weekend"]),
+            ],
+            "Aventi creative dates, social hobbies, and travel readiness": [
+                ("Try one social hobby taster session", "Book or attend one beginner-friendly class, meetup, or creative group where conversation happens naturally.", "physical", ["Aventi", "social", "hobby"]),
+                ("Create a simple travel-readiness checklist", "List passport, budget, dates, destination constraints, and one first booking/research action.", "digital", ["Aventi", "travel", "readiness"]),
+            ],
+            "Rest recovery sleep nervous system restoration": [
+                ("Choose tonight's shutdown time and protect it", "Set a specific lights-out target, remove one sleep blocker, and start winding down 45 minutes before bed.", "physical", ["Rest", "sleep", "recovery"]),
+                ("Do a 10-minute nervous-system reset", "Use breath, stretching, yoga nidra, or a slow walk to shift out of stress before choosing the next action.", "physical", ["Rest", "nervous-system", "reset"]),
+            ],
+            "Rest Sabbath digital detox low-stimulation renewal": [
+                ("Schedule a two-hour low-stimulation block", "Pick a calendar window with no feeds, messages, or productivity pressure; choose one restorative activity.", "hybrid", ["Rest", "digital-detox", "renewal"]),
+                ("Prepare a phone-free recovery menu", "Write three offline options—walk, bath, reading, prayer, music, cooking—so rest has an easy next step.", "digital", ["Rest", "offline", "renewal"]),
+            ],
+            "Rest active recovery after burnout or overwork": [
+                ("Replace one hard task with active recovery", "Choose one non-urgent task to defer and do a gentle body-based recovery action instead.", "physical", ["Rest", "burnout", "active-recovery"]),
+                ("Name the next minimum viable obligation", "Reduce today's pressure to the one obligation that actually matters, then leave space for recovery.", "digital", ["Rest", "prioritisation", "burnout"]),
+            ],
             "finance": [
                 ("List all recurring monthly expenses", "Create visibility before making any financial changes.", "digital", ["finance", "budget"]),
                 ("Set up an automatic savings transfer", "Make saving happen by default each payday.", "digital", ["finance", "automation"]),
@@ -135,7 +188,7 @@ class IOOEnrichmentAgent:
             prompt = f"""
 Extract actionable IOO graph nodes for the goal category: {category}.
 Use the search evidence below. Return JSON only: {{"steps": [{{"title": str, "description": str, "step_type": "digital|physical|hybrid", "tags": [str], "confidence": 0-1, "source_url": str}}]}}
-Prefer clear opportunities, prerequisites, habits, metrics, physical actions, and digital actions. For Eviva categories, extract concrete jobs, volunteering roles, open-source contribution paths, community initiatives, impact startups, and prerequisites that may need iVive capability-building. Avoid vague motivation.
+Prefer clear opportunities, prerequisites, habits, metrics, physical actions, and digital actions. For Eviva categories, extract concrete jobs, volunteering roles, open-source contribution paths, community initiatives, impact startups, and prerequisites that may need iVive capability-building. For Aventi, prefer specific lived experiences, social invitations, local adventures, dating/friendship pathways, and travel-readiness bridges. For Rest, prefer recovery, sleep, nervous-system, Sabbath/digital-detox, and burnout-repair nodes that make action sustainable. Avoid vague motivation, generic content, and broad labels like "exercise more" unless the title itself contains a concrete next action.
 
 Evidence:
 {source_text}
@@ -216,7 +269,7 @@ Evidence:
                     step.get("description"),
                     category,
                     step.get("step_type") if step.get("step_type") in ("digital", "physical", "hybrid") else "hybrid",
-                    step.get("domain") or ("Eviva" if category.startswith("Eviva") else ("Aventi" if "adventure" in category.lower() or "fun" in category.lower() else "iVive")),
+                    step.get("domain") or self._infer_domain(category),
                     step.get("tags") or [category],
                     step.get("source_url") or source_url,
                     confidence,
@@ -227,6 +280,16 @@ Evidence:
                     if await self._promote_proposal(str(row["id"])):
                         promoted += 1
         return {"ok": True, "categories": categories, "proposed": proposed, "promoted": promoted, "skipped": skipped}
+
+    def _infer_domain(self, category: str) -> str:
+        lowered = category.lower()
+        if category.startswith("Eviva") or "career" in lowered or "community" in lowered:
+            return "Eviva"
+        if category.startswith("Aventi") or "adventure" in lowered or "dating" in lowered or "travel" in lowered:
+            return "Aventi"
+        if category.startswith("Rest") or "sleep" in lowered or "recovery" in lowered or "burnout" in lowered:
+            return "Rest"
+        return "iVive"
 
 
 _enrichment_agent: Optional[IOOEnrichmentAgent] = None
