@@ -7,7 +7,7 @@ services:
     healthCheckPath: /health
     envVars:
       - key: GOOGLE_PLACES_API_KEY
-        value: AIzaSyAIqOEHEp_oxRBy50eESE7MQbcMFO9vK_A
+        sync: false
       - key: OPENAI_API_KEY
         sync: false
       - key: DATABASE_URL

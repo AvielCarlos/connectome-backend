@@ -14,7 +14,7 @@ if [ -n "$OPENAI_API_KEY" ]; then
 fi
 
 echo "Setting GOOGLE_PLACES_API_KEY..."
-railway variables set GOOGLE_PLACES_API_KEY=AIzaSyAIqOEHEp_oxRBy50eESE7MQbcMFO9vK_A
+railway variables set GOOGLE_PLACES_API_KEY="$GOOGLE_PLACES_API_KEY"
 
 echo "Setting APP_ENV..."
 railway variables set APP_ENV=production
