@@ -1,11 +1,25 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-30T15:52:20.305963+00:00",
-  "exported_at": "2026-04-30T15:52:20.305963+00:00",
-  "collected_at": "2026-04-30T15:52:20.305963+00:00",
+  "timestamp": "2026-04-30T15:55:18.967792+00:00",
+  "exported_at": "2026-04-30T15:55:18.967792+00:00",
+  "collected_at": "2026-04-30T15:55:18.967792+00:00",
   "identity": {
-    "total_lessons": 959,
+    "total_lessons": 961,
     "lessons": [
+      {
+        "id": "e28fc6bd-5566-4cb2-a304-486000ca895f",
+        "lesson": "Operations health 2026-04-30: severity=degraded_reporting, operational_score=100/100, council_reporting_score=36/100, api_healthy=True, erroring_crons=0, missing_reports=8.",
+        "confidence": 0.75,
+        "source": "executive_council.coo",
+        "created_at": "2026-04-30 15:54:01.630926"
+      },
+      {
+        "id": "824d45fd-8252-4dd2-9e9f-deffd78c1d4d",
+        "lesson": "{\"proposal_id\": \"824d45fd-8252-4dd2-9e9f-deffd78c1d4d\", \"card_type\": \"adaptive_feedback_card\", \"hypothesis\": \"Users who interact with the adaptive feedback card will show a 20% increase in fulfilment scores.\", \"description\": \"This card type uses real-time sentiment analysis to adaptively change its content based on user interactions, providing personalized feedback and encouragement. For example, if a user rates their experience low, the card will offer resources or tips to improve their engagement, while high ratings will lead to celebration and motivation to continue. This continuous feedback loop aims to enhance users' overall satisfaction and keep them engaged longer.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-04-30T15:53:23.165738+00:00\", \"expires_at\": \"2026-05-02T15:53:23.165738+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-04-30 15:53:23.165738"
+      },
       {
         "id": "7889cf1a-deb6-49cb-897a-6f5a0761c51b",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -6820,7 +6834,7 @@
       "rollback": {}
     },
     "consciousness_version": "03eb391c7e6148ae",
-    "lessons_hash": "68d7632779e6ca61"
+    "lessons_hash": "04334a8d74a3b56e"
   },
   "platform_stats": {
     "total_users": 19,
