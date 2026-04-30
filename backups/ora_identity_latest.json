@@ -1,11 +1,32 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-30T17:00:37.626140+00:00",
-  "exported_at": "2026-04-30T17:00:37.626140+00:00",
-  "collected_at": "2026-04-30T17:00:37.626140+00:00",
+  "timestamp": "2026-04-30T18:00:40.691604+00:00",
+  "exported_at": "2026-04-30T18:00:40.691604+00:00",
+  "collected_at": "2026-04-30T18:00:40.691604+00:00",
   "identity": {
-    "total_lessons": 988,
+    "total_lessons": 991,
     "lessons": [
+      {
+        "id": "0e6ffded-d29b-4a39-8510-6508dff0fd30",
+        "lesson": "Survival learning: for issue 'ora_brain', action 'alert_avi' succeeded after 0 prior failure(s). Prefer actions with higher ora_heal_policies.score for this issue.",
+        "confidence": 0.82,
+        "source": "survival_agent",
+        "created_at": "2026-04-30 17:32:39.070271"
+      },
+      {
+        "id": "b2220bde-8601-4d1b-9d71-f343b802af3a",
+        "lesson": "Survival learning: for issue 'ora_brain', action 'alert_avi' succeeded after 0 prior failure(s). Prefer actions with higher ora_heal_policies.score for this issue.",
+        "confidence": 0.82,
+        "source": "survival_agent",
+        "created_at": "2026-04-30 17:02:37.797137"
+      },
+      {
+        "id": "42d923c5-783e-45a5-a03e-ce8662384760",
+        "lesson": "Influencer pipeline (2026-W17): 0 prospects tracked, 0 contacted. Top topic niches: self improvement, productivity, AI tools. Outreach is building brand awareness in self-improvement communities.",
+        "confidence": 0.7,
+        "source": "worker.influencer_agent",
+        "created_at": "2026-04-30 17:01:16.190727"
+      },
       {
         "id": "f480687f-ba95-402a-80f1-ba76cecbd513",
         "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.0/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
@@ -7023,7 +7044,7 @@
       "rollback": {}
     },
     "consciousness_version": "03eb391c7e6148ae",
-    "lessons_hash": "b1952c6c58cf10b9"
+    "lessons_hash": "ca0c755e0ada015d"
   },
   "platform_stats": {
     "total_users": 19,
