@@ -6,6 +6,7 @@ GET  /api/events                      — upcoming events for a city (7-day wind
 GET  /api/events/recommended          — personalized events for a user
 POST /api/events/sync                 — trigger a city sync (admin / cron)
 POST /api/users/location              — update user city + coords + event preferences
+POST /api/users/location/live         — browser GPS → city + IOO/event location sync
 
 Conveyor belt model:
   • DB stores up to 14 days of events (pipeline)
@@ -78,6 +79,15 @@ class LocationUpdate(BaseModel):
         None,
         description="Preferred event categories e.g. ['wellness', 'tech', 'music']"
     )
+
+
+class LiveLocationUpdate(BaseModel):
+    location_lat: float = Field(..., ge=-90, le=90)
+    location_lng: float = Field(..., ge=-180, le=180)
+    accuracy_m: Optional[float] = Field(None, ge=0)
+    city: Optional[str] = Field(None, min_length=1, max_length=100)
+    country: Optional[str] = Field(None, min_length=1, max_length=100)
+    event_preferences: Optional[List[str]] = None
 
 
 # ── GET /api/events ────────────────────────────────────────────────────────────
@@ -300,5 +310,117 @@ async def update_user_location(
         "location_lat": body.location_lat,
         "location_lng": body.location_lng,
         "event_preferences": body.event_preferences or [],
+        "user_id": user_id,
+    }
+
+
+@router.post("/api/users/location/live")
+async def update_user_live_location(
+    body: LiveLocationUpdate,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Activate browser GPS location for both local events and IOO graph filtering.
+
+    The web app sends user-approved coordinates. Backend resolves city/country
+    when not supplied, updates `users` for event recommendations, updates
+    `ioo_user_state` for location-aware graph recommendations, and triggers a
+    local event sync if needed.
+    """
+    geo = None
+    city = (body.city or "").strip()
+    country = (body.country or "").strip()
+    if not city or not country:
+        try:
+            from core.geo import reverse_geocode_lat_lng
+            geo = await reverse_geocode_lat_lng(body.location_lat, body.location_lng)
+            city = city or (geo or {}).get("city") or ""
+            country = country or (geo or {}).get("country") or ""
+        except Exception as e:
+            logger.debug(f"Live location reverse geocode skipped for user {user_id[:8]}: {e}")
+
+    if not city:
+        # Keep the coordinates useful even when reverse geocoding is unavailable.
+        city = f"Near {body.location_lat:.3f},{body.location_lng:.3f}"
+
+    prefs = body.event_preferences or ["wellness", "music", "arts", "community", "sports", "tech"]
+
+    try:
+        await execute(
+            """
+            UPDATE users
+            SET city              = $1,
+                location_lat      = $2,
+                location_lng      = $3,
+                event_preferences = $4
+            WHERE id = $5
+            """,
+            city,
+            body.location_lat,
+            body.location_lng,
+            prefs,
+            UUID(user_id),
+        )
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, location_city, location_country, state_json, last_updated)
+            VALUES ($1, $2, $3, $4::jsonb, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                location_city = EXCLUDED.location_city,
+                location_country = COALESCE(EXCLUDED.location_country, ioo_user_state.location_country),
+                state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || EXCLUDED.state_json,
+                last_updated = NOW()
+            """,
+            str(user_id),
+            city,
+            country or None,
+            __import__("json").dumps({
+                "live_location_enabled": True,
+                "location_lat": body.location_lat,
+                "location_lng": body.location_lng,
+                "accuracy_m": body.accuracy_m,
+                "geo_source": "browser_gps",
+            }),
+        )
+        try:
+            from ora.agents.ioo_graph_agent import get_graph_agent
+            await get_graph_agent().build_user_ioo_vector(str(user_id))
+        except Exception as e:
+            logger.debug(f"Live location IOO vector refresh skipped for {user_id[:8]}: {e}")
+    except Exception as e:
+        logger.error(f"POST /api/users/location/live error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Could not update live location")
+
+    import asyncio
+    try:
+        from core.database import fetchval
+        event_count = await fetchval(
+            "SELECT COUNT(*) FROM events WHERE city = $1 AND starts_at > NOW()",
+            city,
+        )
+        if not event_count and not city.startswith("Near "):
+            from core.config import settings
+            openai_client = None
+            if settings.has_openai:
+                try:
+                    from openai import AsyncOpenAI
+                    openai_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+                except Exception:
+                    pass
+            asyncio.create_task(EventAgent(openai_client=openai_client).sync_city(city))
+            logger.info(f"Triggered live-location event sync for city: {city}")
+    except Exception as bg_err:
+        logger.debug(f"Live location background event sync skipped: {bg_err}")
+
+    return {
+        "status": "updated",
+        "city": city,
+        "country": country or None,
+        "location_lat": body.location_lat,
+        "location_lng": body.location_lng,
+        "accuracy_m": body.accuracy_m,
+        "ioo_location_active": True,
+        "events_location_active": True,
+        "reverse_geocoded": bool(geo),
         "user_id": user_id,
     }

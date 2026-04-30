@@ -22,6 +22,7 @@ import httpx
 logger = logging.getLogger(__name__)
 
 GEO_API_URL = "http://ip-api.com/json/{ip}?fields=status,city,regionName,country,countryCode,timezone,lat,lon"
+REVERSE_GEO_URL = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={lat}&lon={lon}&zoom=10&addressdetails=1"
 CACHE_TTL_SECONDS = 86_400  # 24 hours
 
 
@@ -83,6 +84,69 @@ async def get_location_for_ip(ip: str) -> Optional[Dict[str, Any]]:
 
     except Exception as e:
         logger.debug(f"Geo lookup failed for {ip}: {e}")
+        return None
+
+
+async def reverse_geocode_lat_lng(lat: float, lon: float) -> Optional[Dict[str, Any]]:
+    """
+    Resolve browser GPS coordinates into coarse city/country context.
+
+    Privacy: callers should store only the user-approved coordinates plus city
+    context needed for local recommendations. We cache by rounded coordinate so
+    repeated feed opens do not hammer the public reverse-geocoder.
+    """
+    try:
+        lat_f = float(lat)
+        lon_f = float(lon)
+    except Exception:
+        return None
+    if lat_f < -90 or lat_f > 90 or lon_f < -180 or lon_f > 180:
+        return None
+
+    cache_key = f"geo:reverse:{lat_f:.3f}:{lon_f:.3f}"
+    try:
+        from core.redis_client import get_redis
+        r = await get_redis()
+        cached = await r.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        pass
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                REVERSE_GEO_URL.format(lat=lat_f, lon=lon_f),
+                headers={"User-Agent": "ConnectomeAura/1.0 live-location"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            address = data.get("address") or {}
+            city = (
+                address.get("city")
+                or address.get("town")
+                or address.get("village")
+                or address.get("municipality")
+                or address.get("county")
+                or ""
+            )
+            result = {
+                "city": city,
+                "region": address.get("state") or address.get("region") or "",
+                "country": address.get("country") or "",
+                "country_code": (address.get("country_code") or "").upper(),
+                "lat": lat_f,
+                "lon": lon_f,
+            }
+            try:
+                from core.redis_client import get_redis
+                r = await get_redis()
+                await r.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(result))
+            except Exception:
+                pass
+            return result
+    except Exception as e:
+        logger.debug(f"Reverse geo lookup failed for {lat_f},{lon_f}: {e}")
         return None
 
 
