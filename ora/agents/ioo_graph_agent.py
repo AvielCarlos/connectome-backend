@@ -1492,12 +1492,20 @@ class IOOGraphAgent:
         })
         embedding = await self._embed_text(embedding_text)
         embedding_vec = _embedding_to_pgvector(embedding) if embedding else None
+        domain_unlock_defaults = {
+            "iVive": ["Aventi", "Eviva"],
+            "Eviva": ["iVive", "Aventi"],
+            "Aventi": ["iVive", "Eviva"],
+        }
         contribution_domains = signal.get("contributes_to_domains") or signal.get("contribution_domains") or [domain]
         if isinstance(contribution_domains, str):
             contribution_domains = [contribution_domains]
+        contribution_domains = list(dict.fromkeys([str(d) for d in contribution_domains if d] + [domain]))
         unlocks_domains = signal.get("unlocks_domains") or []
         if isinstance(unlocks_domains, str):
             unlocks_domains = [unlocks_domains]
+        inferred_unlocks = domain_unlock_defaults.get(domain, [])
+        unlocks_domains = list(dict.fromkeys([str(d) for d in unlocks_domains if d] + inferred_unlocks))
         dimensional_axes = {
             "scale": signal.get("node_scale") or "micro",
             "macro_depth": int(signal.get("macro_depth") or 20),
