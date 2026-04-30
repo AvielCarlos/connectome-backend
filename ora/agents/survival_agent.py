@@ -182,10 +182,8 @@ class SurvivalAgent:
         "database": lambda: check_database(),
         "redis": lambda: check_redis(),
         "ora_brain": lambda: check_endpoint(
-            "/api/ora/chat",
-            method="POST",
-            body={"message": "ping"},
-            expected_key="reply",
+            "/api/ora/health/dashboard",
+            expected_key="api",
             timeout=15,
         ),
         "agent_registry": lambda: check_redis_key("ora:agent_registry"),
