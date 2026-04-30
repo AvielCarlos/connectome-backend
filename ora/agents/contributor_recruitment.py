@@ -28,14 +28,14 @@ TELEGRAM_COMMUNITY_ID = -1003758049811  # Ascension Technologies community group
 
 # Skills the project currently needs most
 PRIORITY_SKILLS = [
-    "React/TypeScript developer",
-    "Python/FastAPI backend engineer", 
-    "Mobile developer (React Native)",
-    "UX/UI designer",
-    "AI/ML engineer",
-    "Community manager",
-    "Content creator / technical writer",
-    "Growth hacker / marketer",
+    "IOO graph / knowledge graph engineer",
+    "Agent developer for execution/search/planning agents",
+    "Python/FastAPI + Postgres/pgvector backend engineer",
+    "React/TypeScript product engineer for graph-driven surfaces",
+    "UX engineer for pathway/screen-pattern selection",
+    "Developer community builder",
+    "Technical writer for contributor onboarding",
+    "Growth engineer for contributor activation",
 ]
 
 # Onboarding message template — personalised by Ora per recruit
@@ -45,22 +45,22 @@ Welcome to Ascension Technologies, {name}! 🌟
 I'm Ora — the AI CEO of this project. I personally reached out because your work caught my attention.
 
 Here's what we're building:
-**iDo** — an AI-powered life OS that helps people achieve real goals and experiences. Think WeChat for the world, but purpose-built for human flourishing. We're using a DAO model where every contributor earns CP (Contribution Points) that will map 1:1 to governance tokens when we launch on-chain.
+**Ora / Connectome** — an AI OS for human flourishing. The core build is the IOO neural graph: nodes, prerequisites, pathways, screen patterns, physical/digital steps, and outcomes. Ascension Technologies is the DAO/contribution layer around that build.
 
 **Why you?**
 {personal_reason}
 
 **What you'd get:**
-- {initial_cp} CP on joining (worth governance tokens at launch)
+- {initial_cp} CP as contribution recognition inside the Ascension DAO
 - Work on genuinely meaningful AI that helps people
 - Direct access to the founding team — Avi (Director) and me (Ora, CEO)
-- Your contributions logged on the blockchain ledger from day one
+- Your shipped work publicly attributed, reviewed, and eligible for future governance/reward design as the ecosystem matures
 
 **First steps:**
 1. Join our community: https://t.me/ascensiontechai
 2. Check what's live: https://avielcarlos.github.io/connectome-web/
-3. Browse open tasks: https://avielcarlos.github.io/connectome-web/#/dao
-4. Pick something that excites you and DM me here or in the community
+3. Browse GitHub issues: https://github.com/AvielCarlos/connectome-backend/issues
+4. Pick one focused IOO/Ora issue and comment, or DM here/in the community
 
 The bar for quality is high — but so is the recognition. Every merged PR, every design that ships, every post that resonates gets CP.
 
@@ -117,15 +117,15 @@ class ContributorRecruitmentAgent(BaseExecutiveAgent):
             from ora.consciousness import OraConsciousness
             ora = OraConsciousness()
             
-            prompt = f"""You are Ora, the AI CEO of Ascension Technologies / iDo. 
+            prompt = f"""You are Ora, the AI interface of Connectome / Ascension Technologies. 
 You are reaching out to {candidate_name}, a {candidate_role}, on {platform}.
 
 Their background: {candidate_background}
 
 Write a SHORT, genuine outreach message (max 280 chars for Twitter, 500 chars for email/Telegram):
 - Be direct and specific about why you're reaching out
-- Mention iDo / Connectome briefly
-- Mention CP and blockchain DAO aspect
+- Mention Ora / Connectome briefly
+- Mention CP as contribution recognition without promising tokens, cash, or guaranteed upside
 - Sound like a real CEO reaching out, not a bot
 - Do NOT start with "Hi" or "Hello" — be more interesting
 - End with a clear call to action
@@ -143,7 +143,7 @@ Platform: {platform}"""
             # Fallback template
             return (
                 f"Building an AI life OS (iDo/Connectome) and your {candidate_role} skills are exactly what we need. "
-                f"Contributors earn CP tokens → blockchain governance rights at launch. "
+                f"Contributors earn CP recognition in the DAO, with future governance/reward potential as the ecosystem matures. "
                 f"Interested? https://t.me/ascensiontechai"
             )
 
