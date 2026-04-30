@@ -96,6 +96,7 @@ class COOAgent(BaseExecutiveAgent):
             "analyzed_at": now.isoformat(),
             "api_health": {},
             "cron_jobs": [],
+            "cron_check": {"available": False, "error": None},
             "agent_reports": {},
             "erroring_crons": [],
             "stale_crons": [],
@@ -121,6 +122,7 @@ class COOAgent(BaseExecutiveAgent):
             if result.returncode == 0 and result.stdout.strip():
                 crons = json.loads(result.stdout)
                 metrics["cron_jobs"] = crons if isinstance(crons, list) else []
+                metrics["cron_check"] = {"available": True, "error": None}
 
                 for cron in metrics["cron_jobs"]:
                     cron_id = cron.get("id") or cron.get("jobId") or cron.get("name") or "unknown"
@@ -140,6 +142,7 @@ class COOAgent(BaseExecutiveAgent):
                         except Exception:
                             pass
         except Exception as e:
+            metrics["cron_check"] = {"available": False, "error": str(e)}
             logger.debug(f"COO: cron list failed: {e}")
 
         # ── Check agent reports in Redis and local report files ────────
@@ -235,7 +238,7 @@ class COOAgent(BaseExecutiveAgent):
             f"Operational score: {data.get('operational_score', 0)}/100\n"
             f"Council reporting: {data.get('council_reporting_score', 0)}/100\n"
             f"API: {'ok' if data.get('api_health', {}).get('healthy') else 'needs attention'}\n"
-            f"Cron jobs tracked: {len(data.get('cron_jobs', []))}\n"
+            f"Cron check: {'tracked ' + str(len(data.get('cron_jobs', []))) if data.get('cron_check', {}).get('available') else 'external/unavailable'}\n"
             f"Erroring crons: {len(data.get('erroring_crons', []))}\n"
             f"Active council reports: {active_agents}/{len(AGENTS)}\n"
             f"Missing reports: {len(data.get('missing_agent_reports', []))}\n"
