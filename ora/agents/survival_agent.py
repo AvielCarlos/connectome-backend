@@ -275,18 +275,25 @@ class SurvivalAgent:
     # Auto-heal
     # -----------------------------------------------------------------------
 
-    async def auto_heal(self, issues: List[str]) -> dict:
+    async def auto_heal(self, issues: List[str], diagnostic_report: Optional[dict] = None) -> dict:
         """
         For each issue, execute corresponding heal actions.
-        Tracks failure counts in Redis. If any action fails 3x: escalate to Avi.
+
+        Every attempted action is stored as feedback so Ora can learn which
+        interventions work for each failure mode, rank future actions, and distill
+        durable survival lessons into `ora_lessons`.
         """
         healed = []
         escalated = []
+        attempts = []
+        diagnostic_report = diagnostic_report or {}
 
         for issue in issues:
-            actions = self.SELF_HEAL_ACTIONS.get(issue, ["alert_avi"])
+            base_actions = self.SELF_HEAL_ACTIONS.get(issue, ["alert_avi"])
+            actions = await self._rank_heal_actions(issue, base_actions)
             for action in actions:
                 fail_key = f"ora:survival:heal_failures:{issue}:{action}"
+                fail_count = 0
                 try:
                     from core.redis_client import get_redis
                     r = await get_redis()
@@ -296,6 +303,17 @@ class SurvivalAgent:
                             f"SurvivalAgent: {action} for {issue} has failed {fail_count}x, escalating"
                         )
                         escalated.append({"issue": issue, "action": action, "fail_count": fail_count})
+                        attempts.append({"issue": issue, "action": action, "success": False, "escalated": True})
+                        await self._record_heal_learning(
+                            issue=issue,
+                            action=action,
+                            success=False,
+                            failure_count=fail_count,
+                            diagnostic_report=diagnostic_report,
+                            outcome={"reason": "failure_threshold", "escalated": True},
+                            escalated=True,
+                            error="failure threshold reached before retry",
+                        )
                         await self._send_telegram(
                             f"🆘 *Ora Heal Escalation*\n\n"
                             f"Issue: `{issue}`\n"
@@ -307,7 +325,25 @@ class SurvivalAgent:
                 except Exception:
                     pass
 
+                started = time.time()
                 success = await self._execute_action(action, issue)
+                latency_ms = int((time.time() - started) * 1000)
+                attempts.append({
+                    "issue": issue,
+                    "action": action,
+                    "success": success,
+                    "failure_count_before": fail_count,
+                    "latency_ms": latency_ms,
+                })
+                await self._record_heal_learning(
+                    issue=issue,
+                    action=action,
+                    success=success,
+                    failure_count=fail_count,
+                    diagnostic_report=diagnostic_report,
+                    outcome={"latency_ms": latency_ms, "failure_count_before": fail_count},
+                )
+
                 if success:
                     healed.append({"issue": issue, "action": action})
                     # Reset failure count on success
@@ -328,7 +364,158 @@ class SurvivalAgent:
                     except Exception:
                         pass
 
-        return {"healed": healed, "escalated": escalated}
+        return {"healed": healed, "escalated": escalated, "attempts": attempts}
+
+    async def _rank_heal_actions(self, issue: str, base_actions: List[str]) -> List[str]:
+        """Rank recovery actions using Ora's learned heal policy.
+
+        Unknown actions keep their configured order. Learned successes move an
+        action earlier; repeated failures/escalations move it later. Alert-only
+        actions remain fallbacks unless they are the only available option.
+        """
+        try:
+            from core.database import fetch
+            rows = await fetch(
+                """
+                SELECT action, score, attempts, successes, failures, escalations
+                FROM ora_heal_policies
+                WHERE issue = $1 AND action = ANY($2::text[])
+                """,
+                issue,
+                base_actions,
+            )
+            learned = {r["action"]: dict(r) for r in rows}
+        except Exception as e:
+            logger.debug(f"SurvivalAgent: heal policy lookup skipped: {e}")
+            learned = {}
+
+        def sort_key(item: tuple[int, str]) -> tuple[float, int]:
+            idx, action = item
+            row = learned.get(action)
+            alert_penalty = 1.0 if action.startswith("alert_") and len(base_actions) > 1 else 0.0
+            if not row:
+                # Preserve baseline priority, but keep alerts as fallbacks.
+                return (alert_penalty + idx / 100.0, idx)
+            # Lower sort key is better. Convert learned score to priority while
+            # still respecting baseline order enough to avoid wild thrashing.
+            learned_priority = -float(row.get("score") or 0.0)
+            return (alert_penalty + learned_priority + idx / 100.0, idx)
+
+        ranked = [action for _, action in sorted(enumerate(base_actions), key=sort_key)]
+        if ranked != base_actions:
+            logger.info(f"SurvivalAgent: learned heal order for {issue}: {ranked}")
+        return ranked
+
+    async def _record_heal_learning(
+        self,
+        *,
+        issue: str,
+        action: str,
+        success: bool,
+        failure_count: int,
+        diagnostic_report: dict,
+        outcome: Optional[dict] = None,
+        escalated: bool = False,
+        error: Optional[str] = None,
+    ) -> None:
+        """Persist one healing attempt and update Ora's survival policy."""
+        outcome = outcome or {}
+        diagnostic = {
+            "health_score": diagnostic_report.get("health_score"),
+            "issues": diagnostic_report.get("issues", []),
+            "check": (diagnostic_report.get("checks") or {}).get(issue, {}),
+            "run_at": diagnostic_report.get("run_at"),
+        }
+        try:
+            from core.database import execute
+
+            await execute(
+                """
+                INSERT INTO ora_heal_events
+                    (issue, action, success, failure_count, diagnostic, outcome, error, escalated)
+                VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
+                """,
+                issue,
+                action,
+                success,
+                failure_count,
+                json.dumps(diagnostic, default=str),
+                json.dumps(outcome, default=str),
+                error,
+                escalated,
+            )
+            await execute(
+                """
+                INSERT INTO ora_heal_policies
+                    (issue, action, attempts, successes, failures, escalations,
+                     success_rate, score, last_success_at, last_failure_at, updated_at)
+                VALUES (
+                    $1, $2, 1,
+                    CASE WHEN $3 THEN 1 ELSE 0 END,
+                    CASE WHEN $3 THEN 0 ELSE 1 END,
+                    CASE WHEN $4 THEN 1 ELSE 0 END,
+                    CASE WHEN $3 THEN 1.0 ELSE 0.0 END,
+                    CASE WHEN $3 THEN 1.0 ELSE -0.35 END - CASE WHEN $4 THEN 0.5 ELSE 0 END,
+                    CASE WHEN $3 THEN NOW() ELSE NULL END,
+                    CASE WHEN $3 THEN NULL ELSE NOW() END,
+                    NOW()
+                )
+                ON CONFLICT (issue, action) DO UPDATE SET
+                    attempts = ora_heal_policies.attempts + 1,
+                    successes = ora_heal_policies.successes + CASE WHEN EXCLUDED.successes > 0 THEN 1 ELSE 0 END,
+                    failures = ora_heal_policies.failures + CASE WHEN EXCLUDED.failures > 0 THEN 1 ELSE 0 END,
+                    escalations = ora_heal_policies.escalations + CASE WHEN EXCLUDED.escalations > 0 THEN 1 ELSE 0 END,
+                    success_rate = (
+                        (ora_heal_policies.successes + CASE WHEN EXCLUDED.successes > 0 THEN 1 ELSE 0 END)::float /
+                        GREATEST(ora_heal_policies.attempts + 1, 1)
+                    ),
+                    score = (
+                        (ora_heal_policies.successes + CASE WHEN EXCLUDED.successes > 0 THEN 1 ELSE 0 END)::float /
+                        GREATEST(ora_heal_policies.attempts + 1, 1)
+                    )
+                    - ((ora_heal_policies.failures + CASE WHEN EXCLUDED.failures > 0 THEN 1 ELSE 0 END)::float * 0.05)
+                    - ((ora_heal_policies.escalations + CASE WHEN EXCLUDED.escalations > 0 THEN 1 ELSE 0 END)::float * 0.20),
+                    last_success_at = CASE WHEN EXCLUDED.successes > 0 THEN NOW() ELSE ora_heal_policies.last_success_at END,
+                    last_failure_at = CASE WHEN EXCLUDED.failures > 0 THEN NOW() ELSE ora_heal_policies.last_failure_at END,
+                    updated_at = NOW()
+                """,
+                issue,
+                action,
+                success,
+                escalated,
+            )
+
+            if success or escalated or failure_count > 0:
+                lesson = (
+                    f"Survival learning: for issue '{issue}', action '{action}' "
+                    f"{'succeeded' if success else 'failed/escalated'} after "
+                    f"{failure_count} prior failure(s). Prefer actions with higher "
+                    f"ora_heal_policies.score for this issue."
+                )
+                await execute(
+                    """
+                    INSERT INTO ora_lessons (source, lesson, confidence, applies_to, created_at)
+                    VALUES ($1, $2, $3, $4::jsonb, NOW())
+                    """,
+                    "survival_agent",
+                    lesson,
+                    0.82 if success else 0.68,
+                    json.dumps({"issue": issue, "action": action, "survival_learning": True}),
+                )
+        except Exception as e:
+            # Learning must never break healing.
+            logger.debug(f"SurvivalAgent: heal learning persistence skipped: {e}")
+
+        try:
+            from core.redis_client import get_redis
+            r = await get_redis()
+            await r.hincrby(f"ora:survival:learn:{issue}:{action}", "attempts", 1)
+            await r.hincrby(f"ora:survival:learn:{issue}:{action}", "successes" if success else "failures", 1)
+            if escalated:
+                await r.hincrby(f"ora:survival:learn:{issue}:{action}", "escalations", 1)
+            await r.expire(f"ora:survival:learn:{issue}:{action}", 30 * 24 * 3600)
+        except Exception:
+            pass
 
     async def _execute_action(self, action: str, issue: str) -> bool:
         """Execute a single heal action. Returns True on success."""
@@ -644,7 +831,7 @@ class SurvivalAgent:
 
         if issues:
             logger.warning(f"SurvivalAgent: {len(issues)} issues found, starting auto-heal")
-            heal_result = await self.auto_heal(issues)
+            heal_result = await self.auto_heal(issues, diagnostic_report=report)
 
         # Alert Avi if health is critical
         score = report.get("health_score", 100)

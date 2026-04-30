@@ -612,6 +612,47 @@ async def run_migrations():
             )
         """)
 
+        # Survival learning: every self-heal attempt becomes feedback that Ora
+        # can use to rank future recovery actions and distill durable lessons.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ora_heal_events (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                issue TEXT NOT NULL,
+                action TEXT NOT NULL,
+                success BOOLEAN NOT NULL,
+                failure_count INT DEFAULT 0,
+                diagnostic JSONB DEFAULT '{}',
+                outcome JSONB DEFAULT '{}',
+                error TEXT,
+                escalated BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ora_heal_policies (
+                issue TEXT NOT NULL,
+                action TEXT NOT NULL,
+                attempts INT DEFAULT 0,
+                successes INT DEFAULT 0,
+                failures INT DEFAULT 0,
+                escalations INT DEFAULT 0,
+                success_rate FLOAT DEFAULT 0.0,
+                score FLOAT DEFAULT 0.0,
+                last_success_at TIMESTAMP,
+                last_failure_at TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT NOW(),
+                PRIMARY KEY (issue, action)
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ora_heal_events_issue_created
+            ON ora_heal_events(issue, created_at DESC)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ora_heal_policies_score
+            ON ora_heal_policies(issue, score DESC)
+        """)
+
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ora_reflections_created_at
             ON ora_reflections(created_at DESC)
