@@ -18,6 +18,7 @@ from typing import Any, Iterable
 from uuid import UUID
 
 from ora.agents.ioo_search_agent import build_search_agent_payload
+from ora.agents.ux_selection_agent import build_ux_selection_payload
 
 
 class ExecutionAgentRole:
@@ -311,13 +312,25 @@ def build_execution_protocol(node: Any, user_context: Any, intent: str = "do_now
     questions = clarify_execution_requirements(n.__dict__, context)
 
     search_agent = build_search_agent_payload(n.__dict__, context, intent)
+    ux_selection_agent = build_ux_selection_payload(
+        objective=f"Choose the best execution path for '{n.title}'",
+        node=n.__dict__,
+        user_context=context,
+        candidate_actions=search_agent.get("candidates", []),
+        intent=intent,
+    )
     execution_agents = _agent_directives(n, context, intent)
     for agent in execution_agents:
         if agent.get("role") == ExecutionAgentRole.SEARCH:
             agent["status"] = search_agent["status"]
             agent["candidate_count"] = len(search_agent.get("candidates", []))
             agent["fallback_used"] = bool(search_agent.get("fallback", {}).get("used"))
-            break
+        elif agent.get("role") == ExecutionAgentRole.UX_SELECTION:
+            agent["status"] = ux_selection_agent["status"]
+            agent["ranked_option_count"] = len(ux_selection_agent.get("ranked_options", []))
+            agent["recommended_option_id"] = (
+                ux_selection_agent.get("recommended_next_action") or {}
+            ).get("ranked_option_id")
 
     return {
         "node_id": n.id,
@@ -326,6 +339,7 @@ def build_execution_protocol(node: Any, user_context: Any, intent: str = "do_now
         "clarifying_questions": questions,
         "execution_agents": execution_agents,
         "search_agent": search_agent,
+        "ux_selection_agent": ux_selection_agent,
         "execution_plan": spawn_execution_plan(n.__dict__, context, intent),
         "safety": {
             "external_actions_require_confirmation": True,

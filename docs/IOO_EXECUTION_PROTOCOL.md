@@ -1,8 +1,11 @@
 # IOO Execution Protocol
 
-`POST /api/ioo/execute` turns a selected IOO node into a persisted execution run. The protocol now includes a production-shaped `search_agent` section: structured candidates with source, confidence, rationale, and next-action metadata.
+`POST /api/ioo/execute` turns a selected IOO node into a persisted execution run. The protocol includes:
 
-The SearchAgent is side-effect free. It may prepare links, search surfaces, and prep paths, but it does not book, purchase, apply, or message anyone without explicit user confirmation.
+- `search_agent`: production-shaped candidate discovery with source, confidence, rationale, and next-action metadata.
+- `ux_selection_agent`: deterministic ranking over candidate actions, returning scored options, rationale, tradeoffs, and a recommended next action.
+
+Both agents are side-effect free. They may prepare links, search surfaces, prep paths, rankings, and recommendations, but they do not book, purchase, apply, or message anyone without explicit user confirmation.
 
 ## Example request
 
@@ -32,6 +35,12 @@ Authorization: Bearer <token>
         "status": "fallback_ready",
         "candidate_count": 3,
         "fallback_used": true
+      },
+      {
+        "role": "UXSelectionAgent",
+        "status": "ranked",
+        "ranked_option_count": 3,
+        "recommended_option_id": "local-map-search"
       }
     ],
     "search_agent": {
@@ -69,6 +78,37 @@ Authorization: Bearer <token>
           }
         }
       ]
+    },
+    "ux_selection_agent": {
+      "role": "UXSelectionAgent",
+      "status": "ranked",
+      "objective": "Choose the best execution path for 'Join a local community initiative'",
+      "summary": "Ranked 3 option(s) for fit, constraints, friction, fulfilment, and source confidence.",
+      "ranked_options": [
+        {
+          "rank": 1,
+          "id": "local-map-search",
+          "title": "Local options for Join a local community initiative",
+          "score": 72.4,
+          "rationale": "Physical or hybrid IOO nodes need nearby, reviewable options before the user commits. Ranked highly for source confidence.",
+          "tradeoffs": ["Still needs user confirmation before any irreversible action."],
+          "next_action": {
+            "label": "Open map results and shortlist 2-3 realistic options",
+            "action_type": "open_link",
+            "requires_confirmation": false,
+            "url": "https://www.google.com/maps/search/?api=1&query=Join+a+local+community+initiative+Eviva+Vancouver%2C+Canada",
+            "candidate_id": "local-map-search"
+          }
+        }
+      ],
+      "recommended_next_action": {
+        "label": "Recommended: Open map results and shortlist 2-3 realistic options",
+        "action_type": "open_link",
+        "requires_confirmation": false,
+        "candidate_id": "local-map-search",
+        "ranked_option_id": "local-map-search",
+        "score": 72.4
+      }
     },
     "safety": {
       "external_actions_require_confirmation": true

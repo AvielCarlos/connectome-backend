@@ -85,6 +85,34 @@ def cp_for(title: str, source_kind: str) -> int:
     return 700
 
 
+def ltv_monthly_rate(contribution_type: str, title: str, cp: int) -> int:
+    """Lifetime-value matrix for imported GitHub work.
+
+    Base recurring value comes from contribution type, then strategic work gets
+    a higher monthly rate so durable architecture/agent/graph contributions keep
+    accruing CP while they continue serving the product.
+    """
+    base = {
+        "code": 30,
+        "agent": 50,
+        "design": 20,
+        "doc": 10,
+        "research": 10,
+        "feedback": 5,
+        "community": 15,
+    }.get(contribution_type, 10)
+    t = title.lower()
+    strategic_multiplier = 1.0
+    if any(k in t for k in ["graph", "neural", "intelligence", "aios", "council", "foundation"]):
+        strategic_multiplier = 2.0
+    elif any(k in t for k in ["agent", "protocol", "backup", "survival", "model evolution"]):
+        strategic_multiplier = 1.7
+    elif any(k in t for k in ["feedback", "onboarding", "social", "reward", "contribution"]):
+        strategic_multiplier = 1.4
+    cp_multiplier = max(1.0, min(2.0, cp / 700.0))
+    return max(5, int(round(base * strategic_multiplier * cp_multiplier)))
+
+
 def fetch_merged_pr_contributions() -> tuple[list[dict[str, Any]], set[str]]:
     contributions: list[dict[str, Any]] = []
     merge_shas: set[str] = set()
@@ -226,17 +254,26 @@ def import_contribution(cur, contributor_id, user_id, item: dict[str, Any]) -> t
         WHERE source_id = %s OR github_pr_url = %s OR external_link = %s
         LIMIT 1
     """, (source_id, url, url))
+    contribution_type = "code" if item["kind"] in {"github_pr", "github_commit"} else "custom"
+    monthly_rate = ltv_monthly_rate(contribution_type, item["title"], int(item["cp"]))
     if existing:
+        cur.execute("""
+            UPDATE contributions
+            SET ltv_monthly_rate = GREATEST(COALESCE(ltv_monthly_rate, 0), %s),
+                is_ltv_active = TRUE,
+                impact_data = COALESCE(impact_data, '{}'::jsonb) || %s::jsonb
+            WHERE id = %s
+        """, (monthly_rate, Json({"ltv_monthly_rate": monthly_rate, "ltv_matrix": "base contribution type × strategic durability × CP scope"}), existing[0]))
         return "skipped_existing", existing[0]
 
-    contribution_type = "code" if item["kind"] in {"github_pr", "github_commit"} else "custom"
     cur.execute("""
         INSERT INTO contributions (
             contributor_id, user_id, contribution_type, title, description,
             github_pr_url, external_link, source, source_id, status,
-            base_cp, multiplier, final_cp, ora_evaluation, impact_data
+            base_cp, multiplier, final_cp, ora_evaluation, impact_data,
+            ltv_monthly_rate, is_ltv_active, ltv_last_evaluated_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, 'github_import', %s, 'approved', %s, 1.0, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'github_import', %s, 'approved', %s, 1.0, %s, %s, %s, %s, TRUE, NOW())
         RETURNING id
     """, (
         contributor_id,
@@ -249,8 +286,17 @@ def import_contribution(cur, contributor_id, user_id, item: dict[str, Any]) -> t
         source_id,
         item["cp"],
         item["cp"],
-        f"Approved {item['kind'].replace('_', ' ')} imported into DAO contribution tracking.",
-        Json({"source": item["kind"], "repo": item["repo"], "identifier": item["number"], "cp_awarded": item["cp"], "url": url}),
+        f"Approved {item['kind'].replace('_', ' ')} imported into DAO contribution tracking with the lifetime-value matrix applied.",
+        Json({
+            "source": item["kind"],
+            "repo": item["repo"],
+            "identifier": item["number"],
+            "cp_awarded": item["cp"],
+            "url": url,
+            "ltv_monthly_rate": monthly_rate,
+            "ltv_matrix": "base contribution type × strategic durability × CP scope",
+        }),
+        monthly_rate,
     ))
     return "inserted", cur.fetchone()[0]
 

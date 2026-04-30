@@ -280,7 +280,7 @@ class DaoAgent:
                    c.is_ltv_active, c.ltv_last_evaluated_at,
                    c.final_cp, c.impact_data
             FROM contributions c
-            WHERE c.status = 'accepted'
+            WHERE c.status IN ('accepted', 'approved')
               AND c.is_ltv_active = TRUE
               AND (
                 c.ltv_last_evaluated_at IS NULL
