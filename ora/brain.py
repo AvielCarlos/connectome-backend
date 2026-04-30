@@ -1262,7 +1262,19 @@ class AuraBrain:
             agent_type,
             domain,
         )
-        return str(row["id"])
+        db_id = str(row["id"])
+        try:
+            from ora.agents.ioo_graph_agent import get_graph_agent
+
+            await get_graph_agent().integrate_screen_spec(
+                spec=spec_dict,
+                screen_spec_id=db_id,
+                agent_type=agent_type,
+                domain=domain or spec_dict.get("domain") or (spec_dict.get("metadata") or {}).get("domain"),
+            )
+        except Exception as e:
+            logger.debug("AuraBrain screen → IOO integration skipped for %s: %s", db_id[:8], e)
+        return db_id
 
     # -----------------------------------------------------------------------
     # Feedback Processing
@@ -1760,4 +1772,3 @@ async def init_brain():
     logger.info("OraFeatureLab run_lab_loop started")
 
     # NOTE: DaoAgent background loops are started in main.py lifespan (after brain init)
-

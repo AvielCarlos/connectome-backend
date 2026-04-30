@@ -77,6 +77,44 @@ def _node_embedding_text(node: dict) -> str:
         if part
     )
 
+
+def _screen_spec_embedding_text(spec: dict, agent_type: str = "", domain: str | None = None) -> str:
+    """Build semantic text for embedding/generated-card → IOO integration."""
+    components = spec.get("components") or []
+    component_text: list[str] = []
+    for comp in components:
+        if not isinstance(comp, dict):
+            continue
+        for key in ("text", "label", "title", "body", "prompt", "question"):
+            if comp.get(key):
+                component_text.append(str(comp.get(key)))
+        for item in comp.get("items") or []:
+            if isinstance(item, dict):
+                component_text.extend(str(item.get(k)) for k in ("label", "title", "body", "text", "value") if item.get(k))
+            elif item:
+                component_text.append(str(item))
+    metadata = spec.get("metadata") or {}
+    card_data = spec.get("card_data") or {}
+    deep_dive = spec.get("deep_dive") or card_data.get("deep_dive") or {}
+    tags = metadata.get("tags") or []
+    if isinstance(tags, str):
+        tags = [tags]
+    return " | ".join(
+        str(part)
+        for part in [
+            f"title: {card_data.get('title') or metadata.get('title') or ''}",
+            f"body: {card_data.get('body') or ''}",
+            f"components: {' '.join(component_text)[:4000]}",
+            f"deep_dive: {json.dumps(deep_dive, default=str)[:2000] if deep_dive else ''}",
+            f"agent: {agent_type or metadata.get('agent') or ''}",
+            f"domain: {domain or metadata.get('domain') or spec.get('domain') or ''}",
+            f"layout: {spec.get('layout') or ''}",
+            f"type: {spec.get('type') or ''}",
+            f"tags: {', '.join(str(t) for t in tags)}",
+        ]
+        if part
+    )
+
 class IOOGraphAgent:
     """Traverses and learns the IOO achievement graph."""
 
@@ -1433,9 +1471,21 @@ class IOOGraphAgent:
 
         node_type = "experience" if signal_type in {"event", "weather", "historical"} else "activity"
         step_type = "physical" if signal_type == "event" or location not in {"", "Online", "online"} else "digital"
-        domain = "Aventi" if signal_type in {"event", "weather", "historical", "inspiration"} else "Eviva"
+        domain = str(signal.get("domain") or "").strip() or ("Aventi" if signal_type in {"event", "weather", "historical", "inspiration"} else "Eviva")
         if any(t in tags for t in ["wellness", "fitness", "health", "mindfulness", "psychology", "wellbeing"]):
             domain = "iVive"
+        embedding_text = _node_embedding_text({
+            "title": title,
+            "description": summary,
+            "tags": tags,
+            "domain": domain,
+            "type": node_type,
+            "step_type": step_type,
+            "physical_context": location,
+            "goal_category": signal_type,
+        })
+        embedding = await self._embed_text(embedding_text)
+        embedding_vec = _embedding_to_pgvector(embedding) if embedding else None
         requirements = {
             "world_signal": True,
             "world_signal_type": signal_type,
@@ -1475,6 +1525,8 @@ class IOOGraphAgent:
                 UPDATE ioo_nodes
                 SET description = COALESCE(NULLIF($2, ''), description),
                     tags = $3,
+                    domain = COALESCE(NULLIF($5, ''), domain),
+                    embedding = COALESCE($6::vector, embedding),
                     requirements = COALESCE(requirements, '{}'::jsonb) || $4::jsonb,
                     engagement_score = LEAST(1.0, COALESCE(engagement_score, 0.5) + 0.01),
                     neural_state = 'active',
@@ -1487,6 +1539,8 @@ class IOOGraphAgent:
                 summary,
                 tags,
                 json.dumps(requirements),
+                domain,
+                embedding_vec,
             )
             await self._log_graph_event("world_refresh", node_id=str(row["id"]), payload=requirements)
             return dict(row)
@@ -1496,8 +1550,8 @@ class IOOGraphAgent:
             INSERT INTO ioo_nodes
                 (type, title, description, tags, domain, step_type, goal_category,
                  requires_location, requirements, difficulty_level, generation_source,
-                 growth_angle, neural_state, engagement_score, fulfilment_score)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,'world_signal',$11,'active',$12,$13)
+                 growth_angle, neural_state, engagement_score, fulfilment_score, embedding)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,'world_signal',$11,'active',$12,$13,$14::vector)
             RETURNING id, title, generation_source, growth_angle
             """,
             node_type,
@@ -1513,9 +1567,106 @@ class IOOGraphAgent:
             signal_type,
             max(0.1, min(float(signal.get("relevance_score") or 0.5), 1.0)),
             0.55,
+            embedding_vec,
         )
         await self._log_graph_event("world_spawn", node_id=str(row["id"]), payload=requirements)
         return dict(row)
+
+    async def integrate_screen_spec(
+        self,
+        spec: dict,
+        screen_spec_id: str,
+        agent_type: str,
+        domain: str | None = None,
+    ) -> dict:
+        """
+        Make every generated card part of the IOO neural graph.
+
+        Screen specs remain the UI artifact. IOO nodes are the durable semantic
+        possibility/action layer, so generated cards can be embedded, ranked,
+        reinforced, pruned, and connected to pathways instead of disappearing as
+        isolated feed content.
+        """
+        await self._ensure_vector_schema()
+        metadata = spec.get("metadata") or {}
+        effective_domain = domain or metadata.get("domain") or spec.get("domain")
+        semantic_text = _screen_spec_embedding_text(spec, agent_type=agent_type, domain=effective_domain)
+        embedding = await self._embed_text(semantic_text or json.dumps(spec, default=str)[:8000])
+        embedding_vec = _embedding_to_pgvector(embedding) if embedding else None
+
+        node_id = metadata.get("node_id") or metadata.get("ioo_node_id")
+        if node_id:
+            try:
+                await execute(
+                    """
+                    UPDATE screen_specs
+                    SET embedding = COALESCE($2::vector, embedding),
+                        ioo_node_id = $3::uuid,
+                        screen_role = COALESCE(screen_role, $4)
+                    WHERE id = $1::uuid
+                    """,
+                    str(screen_spec_id),
+                    embedding_vec,
+                    str(node_id),
+                    metadata.get("screen_role") or "recommend",
+                )
+                return {"screen_spec_id": str(screen_spec_id), "ioo_node_id": str(node_id), "linked_existing": True}
+            except Exception as e:
+                logger.debug("Existing IOO screen integration skipped for %s: %s", str(screen_spec_id)[:8], e)
+
+        title = ""
+        description = ""
+        for comp in spec.get("components") or []:
+            if not isinstance(comp, dict):
+                continue
+            if not title and comp.get("type") == "headline" and comp.get("text"):
+                title = str(comp.get("text"))
+            if not description and comp.get("type") in {"body", "body_text"} and comp.get("text"):
+                description = str(comp.get("text"))
+        card_data = spec.get("card_data") or {}
+        title = title or str(card_data.get("title") or metadata.get("title") or f"{agent_type} card")
+        description = description or str(card_data.get("body") or "A generated Connectome card integrated into the IOO graph.")
+        url = metadata.get("url") or card_data.get("url")
+        tags = metadata.get("tags") or []
+        if isinstance(tags, str):
+            tags = [tags]
+        signal = {
+            "id": str(screen_spec_id),
+            "external_id": f"screen_spec:{screen_spec_id}",
+            "signal_type": "screen_card",
+            "source": agent_type,
+            "title": title,
+            "summary": description,
+            "url": url or "",
+            "domain": effective_domain or "Aventi",
+            "tags": list(dict.fromkeys([str(t).lower() for t in tags if t] + ["screen_card", str(agent_type).lower()])),
+            "relevance_score": 0.55,
+        }
+        node = await self.upsert_world_signal_node(signal)
+        if node and node.get("id"):
+            await execute(
+                """
+                UPDATE screen_specs
+                SET embedding = COALESCE($2::vector, embedding),
+                    ioo_node_id = $3::uuid,
+                    screen_role = COALESCE(screen_role, 'recommend')
+                WHERE id = $1::uuid
+                """,
+                str(screen_spec_id),
+                embedding_vec,
+                str(node["id"]),
+            )
+            try:
+                from ora.agents.screen_graph_agent import create_screen_edge
+                await create_screen_edge(
+                    from_screen_id=str(screen_spec_id),
+                    relation_type="belongs_to_ioo_node",
+                    ioo_node_id=UUID(str(node["id"])),
+                    evidence={"source": "IOOGraphAgent.integrate_screen_spec", "agent_type": agent_type},
+                )
+            except Exception as e:
+                logger.debug("Screen graph edge creation skipped for integrated screen %s: %s", str(screen_spec_id)[:8], e)
+        return {"screen_spec_id": str(screen_spec_id), "ioo_node_id": str(node.get("id")) if node else None, "linked_existing": False}
 
     async def ingest_world_signals(self, signals: list[dict], max_nodes: int = 25) -> dict:
         """Bulk-import live world signals into the IOO neural graph."""

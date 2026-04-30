@@ -577,6 +577,18 @@ Classify why the user left. Return ONLY valid JSON:
         )
         new_spec_id = str(new_spec_row["id"])
 
+        try:
+            from ora.agents.ioo_graph_agent import get_graph_agent
+
+            await get_graph_agent().integrate_screen_spec(
+                spec=new_spec,
+                screen_spec_id=new_spec_id,
+                agent_type=original_row["agent_type"],
+                domain=(new_spec.get("metadata") or {}).get("domain") or new_spec.get("domain"),
+            )
+        except Exception as e:
+            logger.debug("Improved screen → IOO integration skipped for %s: %s", new_spec_id[:8], e)
+
         # Create A/B test between original and improved
         test_name = f"improvement_{screen_spec_id[:12]}"
         from ora.ab_testing import get_or_create_test

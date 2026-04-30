@@ -236,6 +236,21 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
     )
     db_id = str(row["id"])
 
+    # Every generated card should participate in the IOO neural graph, not live
+    # only as disposable UI JSON. Existing IOO cards link to their node; real
+    # action/fallback cards become screen_card/world-signal IOO nodes.
+    try:
+        from ora.agents.ioo_graph_agent import get_graph_agent
+
+        await get_graph_agent().integrate_screen_spec(
+            spec=spec_dict,
+            screen_spec_id=db_id,
+            agent_type=metadata.get("agent") or "IOOGraphAgent",
+            domain=metadata.get("domain"),
+        )
+    except Exception as err:
+        logger.debug("IOO screen integration skipped for screen %s: %s", db_id[:8], err)
+
     # TODO(ScreenGraph): generated IOO screens are pathway nodes, not throwaway
     # UI. This initial edge attaches the screen to its source IOO node; future
     # generation should also create leads_to/requires/clarifies/executes edges
