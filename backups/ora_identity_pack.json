@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-04-30T18:36:26.182338+00:00",
-  "exported_at": "2026-04-30T18:36:26.182338+00:00",
-  "collected_at": "2026-04-30T18:36:26.182338+00:00",
+  "timestamp": "2026-04-30T18:39:24.664803+00:00",
+  "exported_at": "2026-04-30T18:39:24.664803+00:00",
+  "collected_at": "2026-04-30T18:39:24.664803+00:00",
   "identity": {
-    "total_lessons": 1034,
+    "total_lessons": 1035,
     "lessons": [
+      {
+        "id": "87efc237-1591-4af8-8935-d8967d359a0d",
+        "lesson": "{\"proposal_id\": \"87efc237-1591-4af8-8935-d8967d359a0d\", \"card_type\": \"dynamic_feedback_card\", \"hypothesis\": \"Introducing a dynamic feedback card will improve user engagement by 25%.\", \"description\": \"This card type will prompt users to provide real-time feedback as they interact with the content, allowing them to rate their experience instantly. Based on their ratings, the card will dynamically suggest modifications or alternatives to their current task, ensuring that users feel heard and catered to throughout their journey.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-04-30T18:37:27.569670+00:00\", \"expires_at\": \"2026-05-02T18:37:27.569670+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-04-30 18:37:27.56967"
+      },
       {
         "id": "c3f4b2f6-a20c-4b16-911d-37fa974e9b74",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -7345,7 +7352,7 @@
       "rollback": {}
     },
     "consciousness_version": "03eb391c7e6148ae",
-    "lessons_hash": "9ae7d2236908cb65"
+    "lessons_hash": "3cc1d499a1708858"
   },
   "platform_stats": {
     "total_users": 19,
