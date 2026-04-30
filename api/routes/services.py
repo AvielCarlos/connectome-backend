@@ -37,6 +37,45 @@ FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://avielcarlos.github.i
 
 SERVICE_CATALOG = [
     {
+        "id": "ora-goal-path-map",
+        "name": "Ora Goal Path Map",
+        "description": (
+            "Ora turns one clarified intention into a practical IOO node map: attainable goal, "
+            "prerequisites, user-owned steps, Ora-owned actions, and next decisions. Price covers "
+            "model/search/tool costs plus a small growth margin."
+        ),
+        "price_usd": 19,
+        "delivery_hours": 24,
+        "agent": "ora_goal_path_agent",
+        "icon": "🧭",
+    },
+    {
+        "id": "ora-opportunity-scout",
+        "name": "Ora Opportunity Scout",
+        "description": (
+            "Ora researches concrete opportunities connected to a goal — people, places, tools, "
+            "events, jobs, communities, services, grants, or resources — then ranks the best next nodes. "
+            "Price covers research/tool/model costs plus growth margin."
+        ),
+        "price_usd": 49,
+        "delivery_hours": 48,
+        "agent": "ora_opportunity_scout_agent",
+        "icon": "🔎",
+    },
+    {
+        "id": "ora-delegated-action-pack",
+        "name": "Ora Delegated Action Pack",
+        "description": (
+            "Ora handles a small bundle of approved digital execution work for a goal: drafting, comparing, "
+            "planning, admin, setup, outreach prep, or booking research. External commitments still need user approval. "
+            "Price covers agent/tool costs plus growth margin."
+        ),
+        "price_usd": 99,
+        "delivery_hours": 72,
+        "agent": "ora_delegated_action_agent",
+        "icon": "⚡",
+    },
+    {
         "id": "ora-ai-os-setup-beta",
         "name": "Ora Personal AI OS Setup — Beta",
         "description": (

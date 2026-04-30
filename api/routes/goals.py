@@ -308,6 +308,8 @@ def _fallback_structured_goal(title: str, conversation: List[Dict[str, str]]) ->
         "title": title,
         "why": "To create meaningful momentum toward this goal.",
         "specifics": specifics[:500],
+        "measurable_outcome": specifics[:240] or title,
+        "success_metric": "A clearly observable real-world result, confirmed by the user.",
         "timeline": "Next 30-90 days",
         "constraints": "As discussed",
         "difficulty_estimate": 5,
@@ -316,12 +318,89 @@ def _fallback_structured_goal(title: str, conversation: List[Dict[str, str]]) ->
 
 def _fallback_clarify_question(goal_title: str, turn_count: int) -> str:
     questions = [
-        f"What would successfully achieving {goal_title} look like in real life?",
-        "Why does this matter to you right now?",
-        "What's the biggest constraint or obstacle we should design around?",
-        "What timeline feels both meaningful and realistic?",
+        f"What would make {goal_title} feel genuinely achieved in real life — what would be different, visible, or measurable?",
+        "What constraints should I design around first: time, money, location, energy, skills, confidence, or access?",
+        "Which parts do you want to do yourself, and which parts would you happily let Ora handle if the cost was covered?",
+        "What timeline feels ambitious but still attainable?",
     ]
     return questions[min(turn_count, len(questions) - 1)]
+
+
+def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Goal-aware IOO execution map when vector search has no strong nodes yet."""
+    goal = structured_goal.get("measurable_outcome") or structured_goal.get("specifics") or structured_goal.get("title") or title
+    timeline = structured_goal.get("timeline") or "30-90 days"
+    constraints = structured_goal.get("constraints") or "unknown constraints"
+    return [
+        {
+            "id": f"clarify-{uuid.uuid4()}",
+            "title": "Set the attainable target",
+            "description": f"Turn the intention into one measurable outcome for {timeline}: {goal}",
+            "domain": structured_goal.get("domain") or "iVive",
+            "node_type": "clarification",
+            "owner": "user",
+            "ora_can_do": False,
+            "user_action": "Confirm or edit the exact outcome, metric, and deadline.",
+            "ora_action": "Ora narrows the intention into a goal that can be mapped and tracked.",
+            "prerequisites": ["Honest desired outcome", "Realistic timeline"],
+        },
+        {
+            "id": f"map-{uuid.uuid4()}",
+            "title": "Map prerequisites and bridge nodes",
+            "description": f"Identify what must be true before this goal is easy: skills, money, time, location, people, tools, and constraints ({constraints}).",
+            "domain": structured_goal.get("domain") or "iVive",
+            "node_type": "graph_mapping",
+            "owner": "ora",
+            "ora_can_do": True,
+            "user_action": "Answer any missing constraint questions.",
+            "ora_action": "Ora builds the IOO node map, prerequisite chain, and first executable route.",
+            "service_id": "ora-goal-path-map",
+            "price_usd": 19,
+            "pricing_note": "Covers model/search/tool costs plus growth margin.",
+            "requires_payment": True,
+        },
+        {
+            "id": f"research-{uuid.uuid4()}",
+            "title": "Find real options and opportunities",
+            "description": "Search for concrete people, places, tools, offers, events, services, grants, jobs, communities, or resources connected to this path.",
+            "domain": structured_goal.get("domain") or "Aventi",
+            "node_type": "opportunity_search",
+            "owner": "ora",
+            "ora_can_do": True,
+            "user_action": "Choose which opportunities feel aligned.",
+            "ora_action": "Ora researches and ranks options, then turns the best ones into next nodes.",
+            "service_id": "ora-opportunity-scout",
+            "price_usd": 49,
+            "pricing_note": "Covers external research/tool costs plus growth margin.",
+            "requires_payment": True,
+        },
+        {
+            "id": f"first-step-{uuid.uuid4()}",
+            "title": "Take the first user-owned step",
+            "description": "Do the smallest action that creates real evidence: send the message, book the slot, make the list, visit the place, publish the draft, or complete the prerequisite.",
+            "domain": structured_goal.get("domain") or "iVive",
+            "node_type": "physical_or_digital_step",
+            "owner": "user",
+            "ora_can_do": False,
+            "user_action": "Complete the first concrete step and mark it done.",
+            "ora_action": "Ora tracks completion and adapts the next node.",
+        },
+        {
+            "id": f"delegate-{uuid.uuid4()}",
+            "title": "Delegate execution support to Ora",
+            "description": "When the path needs calls, drafting, booking, comparison, admin, setup, or deeper planning, Ora can execute the agentic work after payment unlocks the required tools/time.",
+            "domain": structured_goal.get("domain") or "Eviva",
+            "node_type": "delegated_execution",
+            "owner": "ora",
+            "ora_can_do": True,
+            "user_action": "Approve the action and any external commitments before Ora executes.",
+            "ora_action": "Ora performs the delegated digital work and reports back with outcomes.",
+            "service_id": "ora-delegated-action-pack",
+            "price_usd": 99,
+            "pricing_note": "Covers agent/tool costs plus a margin to grow Ora.",
+            "requires_payment": True,
+        },
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -410,12 +489,55 @@ async def clarify_goal(
     conversation = body.conversation or []
     turn_count = len([m for m in conversation if m.get("role") == "user"])
 
-    system = """You are Ora, an AI life coach helping someone clarify their goal.
-Ask ONE focused clarifying question per turn. Be warm, concise, direct.
-After 3-4 user exchanges, you have enough info. When complete, respond with a JSON block:
-{"complete": true, "structured_goal": {"title": "...", "why": "...", "specifics": "...", "timeline": "...", "constraints": "...", "difficulty_estimate": 5}, "first_step": "..."}
-Before that, just ask your next question naturally.
-Do not ask multiple questions in one message."""
+    system = """You are Ora, the interface to the IOO neural graph.
+Your job is NOT to produce generic productivity steps. Your job is to clarify an intention into an attainable, measurable goal, then map the first graph connections.
+
+Ask ONE focused clarifying question per turn. Be warm, concise, direct, and specific.
+Clarify in this order:
+1) What real-world outcome would prove the intention is achieved?
+2) What constraints matter most: time, money, location, energy, skills, confidence, access, relationships?
+3) Which parts should the user do themselves vs which parts would they pay Ora to handle?
+4) What timeline/target is ambitious but attainable?
+
+When you have enough information, respond with ONLY valid JSON:
+{
+  "complete": true,
+  "structured_goal": {
+    "title": "short goal title",
+    "why": "why this matters",
+    "specifics": "clear specific goal statement",
+    "measurable_outcome": "observable outcome that proves success",
+    "success_metric": "metric or proof of completion",
+    "target_value": "number/threshold if known",
+    "timeline": "attainable timeframe",
+    "constraints": "important constraints",
+    "difficulty_estimate": 1-10,
+    "domain": "iVive|Eviva|Aventi"
+  },
+  "graph_nodes": [
+    {
+      "title": "node title",
+      "description": "what this node unlocks",
+      "node_type": "clarification|prerequisite|opportunity_search|physical_step|digital_step|delegated_execution",
+      "owner": "user|ora",
+      "user_action": "what the user does",
+      "ora_action": "what Ora can do",
+      "ora_can_do": true,
+      "requires_payment": true,
+      "service_id": "ora-goal-path-map|ora-opportunity-scout|ora-delegated-action-pack|null",
+      "price_usd": 19,
+      "pricing_note": "covers model/search/tool costs plus growth margin",
+      "prerequisites": ["node or condition"]
+    }
+  ]
+}
+
+Rules:
+- The first node should usually be goal confirmation/measurement.
+- Include both user-owned nodes and Ora-owned nodes.
+- Paid Ora nodes are allowed only for work Ora can actually perform digitally/research/admin/planning; user approval is still required before external commitments.
+- Do not promise guaranteed life outcomes, money, dating success, medical outcomes, or token rewards.
+- Before complete, do not output JSON; just ask the next question."""
 
     messages = [{"role": "system", "content": system}]
     if body.user_profile:
@@ -438,7 +560,7 @@ Do not ask multiple questions in one message."""
                 model="gpt-4o-mini",
                 messages=messages,
                 temperature=0.7,
-                max_tokens=350,
+                max_tokens=900,
             )
             content = (resp.choices[0].message.content or "").strip()
         except Exception as e:
@@ -458,7 +580,34 @@ Do not ask multiple questions in one message."""
         if not structured_goal:
             structured_goal = _fallback_structured_goal(body.goal_title, conversation)
         structured_goal.setdefault("title", body.goal_title)
+        structured_goal.setdefault("measurable_outcome", structured_goal.get("specifics") or body.goal_title)
+        structured_goal.setdefault("success_metric", "Observable completion of the clarified outcome")
         structured_goal.setdefault("difficulty_estimate", structured_goal.get("difficulty", 5))
+
+        if parsed and parsed.get("graph_nodes"):
+            suggested_path = []
+            for i, node in enumerate(parsed.get("graph_nodes") or []):
+                suggested_path.append({
+                    "id": node.get("id") or str(uuid.uuid4()),
+                    "title": node.get("title") or f"Node {i + 1}",
+                    "description": node.get("description"),
+                    "domain": node.get("domain") or structured_goal.get("domain"),
+                    "step_type": node.get("step_type") or node.get("node_type"),
+                    "node_type": node.get("node_type") or node.get("step_type"),
+                    "goal_category": node.get("goal_category"),
+                    "owner": node.get("owner") or "user",
+                    "user_action": node.get("user_action"),
+                    "ora_action": node.get("ora_action"),
+                    "ora_can_do": bool(node.get("ora_can_do")),
+                    "requires_payment": bool(node.get("requires_payment")),
+                    "service_id": node.get("service_id"),
+                    "price_usd": node.get("price_usd"),
+                    "pricing_note": node.get("pricing_note"),
+                    "prerequisites": node.get("prerequisites") or [],
+                })
+
+        if not suggested_path:
+            suggested_path = _fallback_execution_path(body.goal_title, structured_goal)
 
         try:
             from ora.agents.ioo_graph_agent import get_graph_agent
@@ -468,20 +617,27 @@ Do not ask multiple questions in one message."""
                 goal_context=body.goal_title + " " + json.dumps(structured_goal),
                 limit=5,
             )
-            suggested_path = [
+            vector_nodes = [
                 {
                     "id": str(n.get("id", "")),
                     "title": n.get("title", ""),
                     "description": n.get("description"),
                     "domain": n.get("domain"),
                     "step_type": n.get("step_type"),
+                    "node_type": n.get("step_type") or "ioo_graph_node",
                     "goal_category": n.get("goal_category"),
+                    "owner": "user",
+                    "user_action": n.get("description") or n.get("title", "Complete this node."),
+                    "ora_action": "Ora uses this node to refine the next route.",
+                    "ora_can_do": False,
+                    "requires_payment": False,
                 }
                 for n in (nodes or [])[:5]
             ]
+            if vector_nodes:
+                suggested_path = (suggested_path[:3] + vector_nodes)[:7]
         except Exception as e:
             logger.warning(f"IOO path suggestion failed: {e}")
-            suggested_path = []
 
         display_msg = re.sub(r"```(?:json)?\s*\{.*?\}\s*```", "", content, flags=re.DOTALL).strip()
         display_msg = re.sub(r"\{.*\}", "", display_msg, flags=re.DOTALL).strip()
