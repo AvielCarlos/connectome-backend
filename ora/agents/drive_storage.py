@@ -18,14 +18,23 @@ All operations use the `gog` CLI with the carlosandromeda8@gmail.com account.
 
 import json
 import logging
+import mimetypes
 import os
+import shutil
 import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import httpx
+
 logger = logging.getLogger(__name__)
+
+GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GOOGLE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
+
+_MISSING_GOG_WARNED = False
 
 FOLDER_IDS_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/drive_folder_ids.json"
 
@@ -67,6 +76,99 @@ class DriveStorage:
     # Core upload helpers
     # ------------------------------------------------------------------
 
+    def _api_access_token(self) -> str:
+        """
+        Return an access token for production Drive uploads when Railway has
+        OAuth env vars configured. This avoids depending on the local `gog` CLI.
+
+        Expected env:
+          - GOOGLE_CLIENT_ID
+          - GOOGLE_CLIENT_SECRET
+          - ORA_DRIVE_REFRESH_TOKEN or GOOGLE_DRIVE_REFRESH_TOKEN
+        """
+        refresh_token = (
+            os.getenv("ORA_DRIVE_REFRESH_TOKEN")
+            or os.getenv("GOOGLE_DRIVE_REFRESH_TOKEN")
+            or ""
+        )
+        client_id = os.getenv("GOOGLE_CLIENT_ID", "")
+        client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "")
+        if not (refresh_token and client_id and client_secret):
+            return ""
+
+        try:
+            with httpx.Client(timeout=15) as client:
+                resp = client.post(
+                    GOOGLE_TOKEN_URL,
+                    data={
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                        "grant_type": "refresh_token",
+                        "refresh_token": refresh_token,
+                    },
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                )
+            if resp.status_code != 200:
+                logger.warning("DriveStorage: API token refresh failed: %s", resp.text[:300])
+                return ""
+            return resp.json().get("access_token", "")
+        except Exception as e:
+            logger.warning("DriveStorage: API token refresh exception: %s", e)
+            return ""
+
+    def _upload_bytes_via_api(
+        self,
+        content: bytes,
+        filename: str,
+        folder_id: str,
+        mime_type: str = "text/plain",
+    ) -> str:
+        """Upload bytes to Google Drive using the Drive REST API."""
+        access_token = self._api_access_token()
+        if not access_token:
+            return ""
+
+        metadata = {"name": filename, "parents": [folder_id]}
+        files = {
+            "metadata": (None, json.dumps(metadata), "application/json; charset=UTF-8"),
+            "file": (filename, content, mime_type),
+        }
+        try:
+            with httpx.Client(timeout=45) as client:
+                resp = client.post(
+                    GOOGLE_UPLOAD_URL,
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    files=files,
+                )
+            if resp.status_code not in (200, 201):
+                logger.warning(
+                    "DriveStorage: API upload failed for '%s': %s %s",
+                    filename,
+                    resp.status_code,
+                    resp.text[:300],
+                )
+                return ""
+            file_id = resp.json().get("id", "")
+            logger.info("DriveStorage: API uploaded '%s' (id=%s)", filename, file_id)
+            return file_id
+        except Exception as e:
+            logger.warning("DriveStorage: API upload exception for '%s': %s", filename, e)
+            return ""
+
+    def _gog_available(self) -> bool:
+        """Return whether the local gog CLI is available; warn once if absent."""
+        global _MISSING_GOG_WARNED
+        if shutil.which("gog"):
+            return True
+        if not _MISSING_GOG_WARNED:
+            logger.warning(
+                "DriveStorage: gog CLI unavailable and no API upload token configured; "
+                "Drive uploads are skipped. Set ORA_DRIVE_REFRESH_TOKEN in Railway "
+                "or install/configure gog in this runtime."
+            )
+            _MISSING_GOG_WARNED = True
+        return False
+
     def upload_text(self, content: str, filename: str, folder_key: str) -> str:
         """
         Upload a text string as a file to a Drive folder.
@@ -76,6 +178,18 @@ class DriveStorage:
         folder_id = folders.get(folder_key) or folders.get("ora_brain", "")
         if not folder_id:
             logger.warning(f"DriveStorage.upload_text: unknown folder_key={folder_key!r}")
+            return ""
+
+        api_id = self._upload_bytes_via_api(
+            content.encode("utf-8"),
+            filename,
+            folder_id,
+            "text/plain; charset=utf-8",
+        )
+        if api_id:
+            return api_id
+
+        if not self._gog_available():
             return ""
 
         try:
@@ -140,6 +254,19 @@ class DriveStorage:
         if not folder_id:
             logger.warning(f"DriveStorage.upload_file: unknown folder_key={folder_key!r}")
             return ""
+
+        try:
+            data = Path(local_path).read_bytes()
+            mime_type = mimetypes.guess_type(filename or local_path)[0] or "application/octet-stream"
+            api_id = self._upload_bytes_via_api(data, filename, folder_id, mime_type)
+            if api_id:
+                return api_id
+        except Exception as e:
+            logger.warning("DriveStorage: could not read file for API upload '%s': %s", local_path, e)
+
+        if not self._gog_available():
+            return ""
+
         try:
             result = subprocess.run(
                 [
