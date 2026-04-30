@@ -147,7 +147,7 @@ async def check_github_backup_age(max_hours: int = 26) -> dict:
             import base64
             raw = base64.b64decode(resp.json()["content"])
             data = json.loads(raw)
-            ts_str = data.get("collected_at") or data.get("exported_at", "")
+            ts_str = data.get("collected_at") or data.get("exported_at") or data.get("timestamp", "")
             if not ts_str:
                 return {"ok": False, "error": "No timestamp in backup"}
 

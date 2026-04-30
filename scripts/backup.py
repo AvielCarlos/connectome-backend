@@ -323,9 +323,12 @@ async def export_ora_identity(
         json.dumps([l["lesson"] for l in lessons[:100]]).encode()
     ).hexdigest()[:16]
 
+    exported_at = datetime.now(timezone.utc).isoformat()
     identity_pack = {
         "version": "1.0",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": exported_at,
+        "exported_at": exported_at,
+        "collected_at": exported_at,
         "identity": {
             "total_lessons": len(lessons),
             "lessons": lessons,
