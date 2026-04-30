@@ -269,6 +269,8 @@ class IOOGraphAgent:
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS estimated_duration_days INTEGER")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS difficulty_level INTEGER DEFAULT 5")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS variant_of_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS variant_key TEXT")
         await execute(
             """
             CREATE TABLE IF NOT EXISTS ioo_node_proposals (
@@ -1254,52 +1256,121 @@ class IOOGraphAgent:
         return children
 
     async def merge_duplicate_title_nodes(self, max_groups: int = 10) -> dict:
-        """Merge exact duplicate titles into the strongest surviving node."""
+        """Resolve duplicate active titles without wasting useful graph branches.
+
+        Exact duplicate titles are not left as duplicates. Instead of simply
+        deactivating them, the strongest node becomes the control and each extra
+        node is rewritten into a distinct A/B-testable variant. This preserves
+        potentially useful pathways while ensuring the active graph has no two
+        nodes with the same title.
+        """
+        await self._ensure_vector_schema()
         groups = await fetch(
             """
-            SELECT lower(title) AS key, array_agg(id ORDER BY success_count DESC, attempt_count DESC, created_at ASC) AS ids
+            SELECT lower(trim(title)) AS key,
+                   min(title) AS title,
+                   array_agg(id ORDER BY success_count DESC, attempt_count DESC, created_at ASC) AS ids
             FROM ioo_nodes
             WHERE is_active = TRUE
-            GROUP BY lower(title)
+            GROUP BY lower(trim(title))
             HAVING COUNT(*) > 1
             LIMIT $1
             """,
             int(max_groups),
         )
+        variants_created = 0
         merged = 0
+        variant_angles = [
+            "fastest", "easiest", "most_fulfilling", "most_social",
+            "lowest_cost", "growth_edge", "vitality", "novelty",
+        ]
         for group in groups:
             ids = [str(x) for x in group["ids"]]
             keep, duplicates = ids[0], ids[1:]
-            for duplicate in duplicates:
+            base = await fetchrow("SELECT id, title, description, tags, requirements FROM ioo_nodes WHERE id = $1::uuid", keep)
+            if not base:
+                continue
+            base_title = str(base["title"])
+            for idx, duplicate in enumerate(duplicates, start=1):
+                angle = variant_angles[(idx - 1) % len(variant_angles)]
+                variant_key = f"{angle}_variant_{idx}"
+                variant_title = f"{base_title} — {angle.replace('_', ' ')} variant"
+                # Avoid creating a second duplicate variant title if this sweep
+                # sees many copies of the same original over time.
+                existing_title = await fetchrow(
+                    "SELECT id FROM ioo_nodes WHERE lower(title) = lower($1) AND id <> $2::uuid LIMIT 1",
+                    variant_title,
+                    duplicate,
+                )
+                if existing_title:
+                    variant_title = f"{base_title} — {angle.replace('_', ' ')} variant {idx}"
+                try:
+                    original_requirements = base["requirements"] or {}
+                    if isinstance(original_requirements, str):
+                        original_requirements = json.loads(original_requirements)
+                except Exception:
+                    original_requirements = {}
+                requirements = dict(original_requirements)
+                requirements.update({
+                    "ab_variant": True,
+                    "variant_of_node_id": keep,
+                    "variant_key": variant_key,
+                    "variant_angle": angle,
+                    "duplicate_resolved_from_node_id": duplicate,
+                    "ab_test_principle": "Duplicate node transformed into a distinct pathway variant instead of being wasted.",
+                })
+                description = (
+                    f"A/B-testable {angle.replace('_', ' ')} variation of '{base_title}'. "
+                    f"Created from a duplicate IOO node so Ora can compare pathway outcomes instead of carrying redundant graph nodes."
+                )
                 await execute(
                     """
                     UPDATE ioo_nodes
-                    SET is_active = FALSE,
-                        neural_state = 'merged',
-                        merged_into_node_id = $2::uuid,
+                    SET title = $2,
+                        description = COALESCE(NULLIF(description, ''), $3),
+                        tags = array(SELECT DISTINCT unnest(COALESCE(tags, '{}') || $4::text[])),
+                        requirements = COALESCE(requirements, '{}'::jsonb) || $5::jsonb,
+                        growth_angle = COALESCE(growth_angle, $6),
+                        generation_source = 'duplicate_variant',
+                        variant_of_node_id = $7::uuid,
+                        variant_key = $8,
+                        parent_node_ids = array(SELECT DISTINCT unnest(COALESCE(parent_node_ids, '{}') || ARRAY[$7::uuid])),
+                        neural_state = 'active_variant',
+                        is_active = TRUE,
                         updated_at = NOW()
                     WHERE id = $1::uuid
                     """,
-                    duplicate, keep,
+                    duplicate,
+                    variant_title,
+                    description,
+                    ["ab_variant", angle],
+                    json.dumps(requirements),
+                    angle,
+                    keep,
+                    variant_key,
                 )
                 await execute(
                     """
-                    UPDATE ioo_edges
-                    SET from_node_id = CASE WHEN from_node_id = $1::uuid THEN $2::uuid ELSE from_node_id END,
-                        to_node_id = CASE WHEN to_node_id = $1::uuid THEN $2::uuid ELSE to_node_id END,
-                        relation_type = COALESCE(relation_type, 'merged_path'),
+                    INSERT INTO ioo_edges (from_node_id, to_node_id, relation_type, confidence, rationale)
+                    VALUES ($1::uuid, $2::uuid, 'ab_variant_of', 0.86, $3)
+                    ON CONFLICT (from_node_id, to_node_id) DO UPDATE
+                    SET relation_type = 'ab_variant_of',
+                        confidence = GREATEST(ioo_edges.confidence, 0.86),
+                        rationale = EXCLUDED.rationale,
                         updated_at = NOW()
-                    WHERE from_node_id = $1::uuid OR to_node_id = $1::uuid
                     """,
-                    duplicate, keep,
+                    keep,
+                    duplicate,
+                    f"Duplicate '{base_title}' transformed into {angle} A/B variant for outcome testing.",
                 )
-                await execute(
-                    "UPDATE ioo_nodes SET merged_from_node_ids = array_append(merged_from_node_ids, $2::uuid), updated_at = NOW() WHERE id = $1::uuid",
-                    keep, duplicate,
+                await self._log_graph_event(
+                    "duplicate_variant",
+                    node_id=duplicate,
+                    related_node_id=keep,
+                    payload={"angle": angle, "variant_key": variant_key, "old_title": base_title, "new_title": variant_title},
                 )
-                await self._log_graph_event("merge", node_id=duplicate, related_node_id=keep)
-                merged += 1
-        return {"merged": merged, "groups": len(groups)}
+                variants_created += 1
+        return {"merged": merged, "variants_created": variants_created, "groups": len(groups)}
 
     async def run_neural_lifecycle_sweep(self) -> dict:
         """One maintenance pass over the living IOO graph."""

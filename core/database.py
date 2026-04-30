@@ -1770,6 +1770,8 @@ async def run_migrations():
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS split_from_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS merged_into_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS merged_from_node_ids UUID[] DEFAULT '{}'",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS variant_of_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS variant_key TEXT",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS spawned_count INT DEFAULT 0",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS engagement_score NUMERIC(8,4) DEFAULT 0.5",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS fulfilment_score NUMERIC(8,4) DEFAULT 0.5",
@@ -1785,6 +1787,10 @@ async def run_migrations():
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ioo_nodes_growth_angle
             ON ioo_nodes(growth_angle)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_variant_of
+            ON ioo_nodes(variant_of_node_id)
         """)
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ioo_node_proposals (
