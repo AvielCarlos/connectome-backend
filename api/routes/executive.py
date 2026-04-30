@@ -113,9 +113,16 @@ async def get_agent_status(
             "has_redis_summary": redis_summary is not None,
             "last_run_at": None,
             "age_hours": None,
-            "health": "red",  # red / yellow / green
+            "health": "missing",  # green / yellow / red / missing
             "summary_preview": None,
         }
+
+        if redis_summary:
+            # Redis summaries are the live council heartbeat. Treat them as
+            # healthy even when the local report file is unavailable on an
+            # ephemeral/container filesystem.
+            status["health"] = "green"
+            status["summary_preview"] = redis_summary[:200]
 
         if report_data:
             saved_at = report_data.get("_saved_at") or report_data.get("analyzed_at")
@@ -127,16 +134,14 @@ async def get_agent_status(
                     status["age_hours"] = round(age_h, 1)
                     if age_h < 24:
                         status["health"] = "green"
-                    elif age_h < 168:  # 7 days
+                    elif age_h < 168 and status["health"] != "green":  # 7 days
                         status["health"] = "yellow"
-                    else:
+                    elif status["health"] != "green":
                         status["health"] = "red"
                 except Exception:
                     pass
 
-        if redis_summary:
-            status["summary_preview"] = redis_summary[:200]
-        elif report_data:
+        if not redis_summary and report_data:
             # Build a preview from the report
             status["summary_preview"] = json.dumps(report_data, default=str)[:200]
 
@@ -148,6 +153,7 @@ async def get_agent_status(
         "healthy": sum(1 for s in statuses if s["health"] == "green"),
         "warning": sum(1 for s in statuses if s["health"] == "yellow"),
         "critical": sum(1 for s in statuses if s["health"] == "red"),
+        "missing": sum(1 for s in statuses if s["health"] == "missing"),
         "checked_at": now.isoformat(),
     }
 
