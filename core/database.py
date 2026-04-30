@@ -1563,6 +1563,24 @@ async def run_migrations():
         await conn.execute("""
             ALTER TABLE goals ADD COLUMN IF NOT EXISTS last_engaged_at TIMESTAMPTZ
         """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS intention_text TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS measurable_outcome TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS success_metric TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS target_value TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS target_date TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE goals ADD COLUMN IF NOT EXISTS graph_metadata JSONB DEFAULT '{}'
+        """)
 
         # ---------------------------------------------------------------
         # Vector Recommendation Engine — card_popularity + user_interest_vectors

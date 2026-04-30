@@ -240,6 +240,12 @@ def _build_goal_out(row) -> GoalOut:
     raw_steps = row["steps"]
     if isinstance(raw_steps, str):
         raw_steps = json.loads(raw_steps)
+    raw_graph_metadata = row["graph_metadata"] if "graph_metadata" in row.keys() else {}
+    if isinstance(raw_graph_metadata, str):
+        try:
+            raw_graph_metadata = json.loads(raw_graph_metadata)
+        except Exception:
+            raw_graph_metadata = {}
     return GoalOut(
         id=row["id"],
         title=row["title"],
@@ -249,6 +255,12 @@ def _build_goal_out(row) -> GoalOut:
         progress=row["progress"] or 0.0,
         created_at=row["created_at"],
         domain=row["domain"] if "domain" in row.keys() else None,
+        intention_text=row["intention_text"] if "intention_text" in row.keys() else None,
+        measurable_outcome=row["measurable_outcome"] if "measurable_outcome" in row.keys() else None,
+        success_metric=row["success_metric"] if "success_metric" in row.keys() else None,
+        target_value=row["target_value"] if "target_value" in row.keys() else None,
+        target_date=row["target_date"] if "target_date" in row.keys() else None,
+        graph_metadata=raw_graph_metadata or {},
     )
 
 
@@ -348,10 +360,20 @@ async def create_goal(
     else:
         steps = await _get_breakdown_steps(body.title, body.description)
 
+    graph_metadata = body.graph_metadata or {}
+    graph_metadata.setdefault("state_model", "intention_to_measurable_goal_to_steps")
+    graph_metadata.setdefault("source", "goals_collection")
+    graph_metadata.setdefault("intention_text", body.intention_text or body.title)
+    graph_metadata.setdefault("measurable_outcome", body.measurable_outcome or body.title)
+
     row = await fetchrow(
         """
-        INSERT INTO goals (user_id, title, description, steps, status, progress, domain)
-        VALUES ($1, $2, $3, $4, 'active', 0.0, $5)
+        INSERT INTO goals (
+            user_id, title, description, steps, status, progress, domain,
+            intention_text, measurable_outcome, success_metric, target_value,
+            target_date, graph_metadata
+        )
+        VALUES ($1, $2, $3, $4, 'active', 0.0, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
         """,
         str(user_id),
@@ -359,6 +381,12 @@ async def create_goal(
         body.description,
         json.dumps(steps),
         body.domain or "iVive",
+        body.intention_text or body.title,
+        body.measurable_outcome or body.title,
+        body.success_metric,
+        body.target_value,
+        body.target_date,
+        json.dumps(graph_metadata),
     )
 
     # Invalidate user model cache
@@ -505,6 +533,19 @@ async def update_goal(
     new_desc = body.description if body.description is not None else row["description"]
     new_status = body.status if body.status is not None else row["status"]
     new_domain = body.domain if body.domain is not None else (row["domain"] if "domain" in row.keys() else "iVive")
+    new_intention_text = body.intention_text if body.intention_text is not None else (row["intention_text"] if "intention_text" in row.keys() else row["title"])
+    new_measurable_outcome = body.measurable_outcome if body.measurable_outcome is not None else (row["measurable_outcome"] if "measurable_outcome" in row.keys() else row["title"])
+    new_success_metric = body.success_metric if body.success_metric is not None else (row["success_metric"] if "success_metric" in row.keys() else None)
+    new_target_value = body.target_value if body.target_value is not None else (row["target_value"] if "target_value" in row.keys() else None)
+    new_target_date = body.target_date if body.target_date is not None else (row["target_date"] if "target_date" in row.keys() else None)
+    existing_graph_metadata = row["graph_metadata"] if "graph_metadata" in row.keys() else {}
+    if isinstance(existing_graph_metadata, str):
+        try:
+            existing_graph_metadata = json.loads(existing_graph_metadata)
+        except Exception:
+            existing_graph_metadata = {}
+    new_graph_metadata = {**(existing_graph_metadata or {}), **(body.graph_metadata or {})}
+    new_graph_metadata.setdefault("state_model", "intention_to_measurable_goal_to_steps")
 
     if body.steps is not None:
         new_steps = json.dumps([s.model_dump() for s in body.steps])
@@ -519,11 +560,15 @@ async def update_goal(
     updated = await fetchrow(
         """
         UPDATE goals
-        SET title = $1, description = $2, status = $3, steps = $4, progress = $5, domain = $6
-        WHERE id = $7
+        SET title = $1, description = $2, status = $3, steps = $4, progress = $5, domain = $6,
+            intention_text = $7, measurable_outcome = $8, success_metric = $9,
+            target_value = $10, target_date = $11, graph_metadata = $12
+        WHERE id = $13
         RETURNING *
         """,
-        new_title, new_desc, new_status, new_steps, new_progress, new_domain, UUID(goal_id),
+        new_title, new_desc, new_status, new_steps, new_progress, new_domain,
+        new_intention_text, new_measurable_outcome, new_success_metric,
+        new_target_value, new_target_date, json.dumps(new_graph_metadata), UUID(goal_id),
     )
 
     from core.redis_client import redis_delete

@@ -179,6 +179,12 @@ class GoalCreate(BaseModel):
     description: Optional[str] = None
     steps: Optional[List[GoalStep]] = None
     domain: Optional[DomainType] = None
+    intention_text: Optional[str] = None
+    measurable_outcome: Optional[str] = None
+    success_metric: Optional[str] = None
+    target_value: Optional[str] = None
+    target_date: Optional[str] = None
+    graph_metadata: Optional[Dict[str, Any]] = None
 
 
 class GoalUpdate(BaseModel):
@@ -188,6 +194,12 @@ class GoalUpdate(BaseModel):
     steps: Optional[List[GoalStep]] = None
     progress: Optional[float] = Field(None, ge=0.0, le=1.0)
     domain: Optional[DomainType] = None
+    intention_text: Optional[str] = None
+    measurable_outcome: Optional[str] = None
+    success_metric: Optional[str] = None
+    target_value: Optional[str] = None
+    target_date: Optional[str] = None
+    graph_metadata: Optional[Dict[str, Any]] = None
 
 
 class GoalOut(BaseModel):
@@ -199,6 +211,12 @@ class GoalOut(BaseModel):
     progress: float
     created_at: datetime
     domain: Optional[str] = None
+    intention_text: Optional[str] = None
+    measurable_outcome: Optional[str] = None
+    success_metric: Optional[str] = None
+    target_value: Optional[str] = None
+    target_date: Optional[str] = None
+    graph_metadata: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
