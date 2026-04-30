@@ -75,7 +75,13 @@ class ReporterAgent:
             "users": {"total": 0, "active_today": 0},
             "engagement": {"top_card": "N/A", "avg_rating": 0.0},
             "goals": {"completed": 0, "active": 0},
-            "suggestions": {"submitted": 0, "accepted": 0},
+            "suggestions": {
+                "submitted": 0,
+                "accepted": 0,
+                "pending_total": 0,
+                "app_feedback_today": 0,
+                "latest": [],
+            },
             "events": {"count": 0, "cities": []},
             "drive": {"docs": 0},
             "system": {"api": "ok", "db": "ok", "redis": "ok"},
@@ -132,20 +138,65 @@ class ReporterAgent:
             logger.warning(f"ReporterAgent: goals metrics failed: {e}")
 
         try:
-            # Suggestions / contributions
+            # Explicit community suggestions submitted through /api/suggestions.
+            # Keep this separate from global app feedback so Avi can see whether
+            # the product loop is actually hearing user-submitted ideas.
             sugg_row = await fetchrow(
                 """
-                SELECT COUNT(*) AS submitted,
-                       SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) AS accepted
-                FROM contributions
-                WHERE created_at > NOW() - INTERVAL '1 day'
+                SELECT
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') AS submitted_today,
+                    COUNT(*) FILTER (WHERE status IN ('accepted', 'implemented', 'adopted')) AS accepted_total,
+                    COUNT(*) FILTER (WHERE status IN ('pending', 'new')) AS pending_total
+                FROM user_suggestions
                 """
             )
             if sugg_row:
-                metrics["suggestions"]["submitted"] = sugg_row["submitted"] or 0
-                metrics["suggestions"]["accepted"] = sugg_row["accepted"] or 0
-        except Exception:
-            pass
+                metrics["suggestions"]["submitted"] = sugg_row["submitted_today"] or 0
+                metrics["suggestions"]["accepted"] = sugg_row["accepted_total"] or 0
+                metrics["suggestions"]["pending_total"] = sugg_row["pending_total"] or 0
+        except Exception as e:
+            logger.warning(f"ReporterAgent: user suggestion metrics failed: {e}")
+
+        try:
+            # Global feedback button submissions. This is the path Avi is most
+            # likely using in-app, so include it in the daily report even when it
+            # does not land in user_suggestions.
+            feedback_row = await fetchrow(
+                """
+                SELECT COUNT(*) AS submitted_today
+                FROM app_feedback
+                WHERE created_at > NOW() - INTERVAL '1 day'
+                """
+            )
+            if feedback_row:
+                metrics["suggestions"]["app_feedback_today"] = feedback_row["submitted_today"] or 0
+
+            latest_rows = await fetch(
+                """
+                SELECT category, message, route, created_at
+                FROM app_feedback
+                ORDER BY created_at DESC
+                LIMIT 3
+                """
+            )
+            metrics["suggestions"]["latest"] = [
+                {
+                    "category": row["category"] or "Feedback",
+                    "message": row["message"] or "",
+                    "route": row["route"] or "",
+                }
+                for row in latest_rows
+                if row["message"]
+            ]
+        except Exception as e:
+            logger.warning(f"ReporterAgent: app feedback metrics failed: {e}")
+
+        # The report headline should include both explicit suggestions and the
+        # global feedback button, without double-counting contribution rows.
+        metrics["suggestions"]["submitted"] = (
+            int(metrics["suggestions"].get("submitted") or 0)
+            + int(metrics["suggestions"].get("app_feedback_today") or 0)
+        )
 
         try:
             # Events from Redis (world signals cache)
@@ -190,6 +241,9 @@ class ReporterAgent:
         goals_active = metrics["goals"]["active"]
         suggestions_submitted = metrics["suggestions"]["submitted"]
         suggestions_accepted = metrics["suggestions"]["accepted"]
+        suggestions_pending = metrics["suggestions"].get("pending_total", 0)
+        app_feedback_today = metrics["suggestions"].get("app_feedback_today", 0)
+        latest_feedback = metrics["suggestions"].get("latest") or []
         events_count = metrics["events"]["count"]
         cities = ", ".join(metrics["events"]["cities"]) or "none"
         docs = metrics["drive"]["docs"]
@@ -200,12 +254,25 @@ class ReporterAgent:
             f"{k}={v}" for k, v in system.items() if v != "ok"
         )
 
+        latest_line = ""
+        if latest_feedback:
+            snippets = []
+            for item in latest_feedback[:2]:
+                message = str(item.get("message") or "").replace("\n", " ").strip()
+                if len(message) > 72:
+                    message = message[:69].rstrip() + "…"
+                category = item.get("category") or "Feedback"
+                snippets.append(f"{category}: {message}")
+            latest_line = "\n📝 Latest feedback: " + " | ".join(snippets)
+
         return (
             f"🧠 Ora Daily Report — {date}\n\n"
             f"👥 Users: {total_users} total, {active_today} active today\n"
             f"📊 Engagement: {top_card} cards performing best\n"
             f"🎯 Goals: {goals_completed} completed, {goals_active} active\n"
-            f"💡 Suggestions: {suggestions_submitted} submitted, {suggestions_accepted} accepted\n"
+            f"💡 Suggestions/feedback: {suggestions_submitted} today "
+            f"({app_feedback_today} app notes), {suggestions_pending} pending, {suggestions_accepted} accepted/adopted"
+            f"{latest_line}\n"
             f"🌍 Events: {events_count} indexed for {cities}\n"
             f"📚 Drive: {docs} docs indexed\n\n"
             f"🔧 System: {system_line}\n"
