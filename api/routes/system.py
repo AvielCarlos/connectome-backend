@@ -23,7 +23,7 @@ def _jsonish(value: Any, fallback: Any) -> Any:
 DEFAULT_AI_OS_STATE = {
     "id": None,
     "ruling_goals": [],
-    "featured_apps": ["iDo", "Aventi", "iVive", "Eviva"],
+    "featured_apps": ["iDo", "IOO Graph", "Goals", "Contribute"],
     "ora_mission_statement": "Ora is evolving into an AI OS for human fulfilment — guiding vitality, adventure, contribution, and discovery.",
     "evolution_notes": "No AIOS evolution run has completed yet; using default launcher order.",
     "user_count": 0,
