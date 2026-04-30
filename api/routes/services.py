@@ -29,12 +29,41 @@ router = APIRouter(prefix="/api/services", tags=["services"])
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://avielcarlos.github.io/connectome-web").rstrip("/")
 
 # ---------------------------------------------------------------------------
 # Service catalog
 # ---------------------------------------------------------------------------
 
 SERVICE_CATALOG = [
+    {
+        "id": "ora-ai-os-setup-beta",
+        "name": "Ora Personal AI OS Setup — Beta",
+        "description": (
+            "Founder-led private AI operating system setup for entrepreneurs, creators, and "
+            "mission-led operators. Includes discovery, OS map, custom Ora persona/system "
+            "instructions, 3-5 practical AI workflows, and a 30-day implementation path. "
+            "Founder Beta: 3 private builds only."
+        ),
+        "price_usd": 1500,
+        "delivery_hours": 168,
+        "agent": "ora_ai_os_setup_agent",
+        "icon": "🧭",
+    },
+    {
+        "id": "ora-ai-os-setup-standard",
+        "name": "Ora Personal AI OS Setup — Standard",
+        "description": (
+            "Bespoke 14-day personal AI OS build for clarity, execution, and momentum. "
+            "Avi maps your life/business domains, architects your knowledge and context layer, "
+            "creates personalised assistant instructions, and installs repeatable AI workflows "
+            "around your real goals and tools."
+        ),
+        "price_usd": 3500,
+        "delivery_hours": 336,
+        "agent": "ora_ai_os_setup_agent",
+        "icon": "🧬",
+    },
     {
         "id": "research-report",
         "name": "Research Report",
@@ -156,8 +185,9 @@ async def create_service_order(
     order_id = str(uuid.uuid4())
     price_cents = service["price_usd"] * 100
 
-    # Determine the base URL for success/cancel redirects
-    origin = str(request.base_url).rstrip("/")
+    # Redirect customers back to the web app, not the API origin.
+    # FRONTEND_BASE_URL should be set in Railway if the production frontend moves.
+    origin = FRONTEND_BASE_URL
 
     try:
         import httpx
