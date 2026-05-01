@@ -1,9 +1,13 @@
 """
 Feedback screenshot storage.
 
-Stores data-URL screenshots outside Postgres. Production can use any S3/R2-compatible
-bucket; development falls back to local files so text feedback is never coupled to
-object storage availability.
+Stores data-URL screenshots outside Postgres when a temporary object reference is
+needed. Production can use any S3/R2-compatible bucket; development falls back to
+local files so text feedback is never coupled to object storage availability.
+
+Privacy principle: callers should treat screenshots as ephemeral context. Analyse
+or extract the useful signal, then delete the raw image unless an explicit product
+workflow requires retaining it.
 """
 
 from __future__ import annotations
@@ -159,3 +163,54 @@ async def store_feedback_screenshot(data_url: str, user_id: str) -> StoredScreen
     if backend != "local":
         logger.warning("Unknown feedback screenshot backend %r; using local fallback", backend)
     return _store_local(payload, key, content_type)
+
+
+def _delete_local(key: str) -> bool:
+    target = Path(settings.FEEDBACK_SCREENSHOT_LOCAL_DIR) / key
+    try:
+        if target.exists():
+            target.unlink()
+            return True
+    except Exception as err:
+        logger.warning("Local feedback screenshot delete failed for %s: %s", key, err)
+    return False
+
+
+def _delete_s3(key: str) -> bool:
+    try:
+        import boto3  # type: ignore
+    except ImportError as err:
+        raise ScreenshotStorageError("boto3 is required for S3/R2 screenshot deletion") from err
+
+    bucket = settings.FEEDBACK_SCREENSHOT_S3_BUCKET.strip()
+    if not bucket:
+        raise ScreenshotStorageError("FEEDBACK_SCREENSHOT_S3_BUCKET is required")
+
+    session = boto3.session.Session(
+        aws_access_key_id=settings.FEEDBACK_SCREENSHOT_S3_ACCESS_KEY_ID or None,
+        aws_secret_access_key=settings.FEEDBACK_SCREENSHOT_S3_SECRET_ACCESS_KEY or None,
+        region_name=settings.FEEDBACK_SCREENSHOT_S3_REGION or None,
+    )
+    client = session.client(
+        "s3",
+        endpoint_url=settings.FEEDBACK_SCREENSHOT_S3_ENDPOINT_URL or None,
+    )
+    client.delete_object(Bucket=bucket, Key=key)
+    return True
+
+
+async def delete_feedback_screenshot(stored: StoredScreenshot) -> bool:
+    """Delete a previously stored feedback screenshot object.
+
+    Best-effort by design: raw screenshot deletion should be attempted quickly,
+    while the feedback submission itself must still succeed. Returns True when a
+    delete request was successfully issued/performed.
+    """
+
+    backend = (stored.backend or settings.FEEDBACK_SCREENSHOT_STORAGE_BACKEND).lower().strip()
+    if backend == "s3":
+        return _delete_s3(stored.key)
+    if backend == "local":
+        return _delete_local(stored.key)
+    logger.warning("Unknown feedback screenshot backend %r; cannot delete %s", backend, stored.key)
+    return False

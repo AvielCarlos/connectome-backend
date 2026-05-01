@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     FEEDBACK_SCREENSHOT_S3_ENDPOINT_URL: str = ""
     FEEDBACK_SCREENSHOT_S3_ACCESS_KEY_ID: str = ""
     FEEDBACK_SCREENSHOT_S3_SECRET_ACCESS_KEY: str = ""
+    FEEDBACK_SCREENSHOT_EPHEMERAL_DELETE: bool = True
+    FEEDBACK_SCREENSHOT_AI_ANALYSIS_ENABLED: bool = True
+    FEEDBACK_SCREENSHOT_AI_MODEL: str = "gpt-4o-mini"
 
     # Google OAuth (for Sign In with Google + Drive integration)
     # Setup: console.cloud.google.com → APIs & Services → Credentials → OAuth 2.0 Client ID

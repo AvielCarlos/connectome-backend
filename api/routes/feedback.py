@@ -16,11 +16,73 @@ from core.models import FeedbackSubmit, FeedbackResponse
 from api.middleware import get_current_user_id
 from ora.brain import get_brain
 from core.database import execute, fetchrow
-from core.feedback_storage import ScreenshotStorageError, store_feedback_screenshot
+from openai import AsyncOpenAI
+
+from core.feedback_storage import ScreenshotStorageError, delete_feedback_screenshot, store_feedback_screenshot
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
+
+
+async def _analyse_feedback_screenshot(data_url: str, *, message: str, route: Optional[str], category: str) -> dict:
+    """Extract useful UX context from a screenshot without retaining the raw image.
+
+    The screenshot is sent directly to the configured vision model as request
+    context. We store only the model's structured summary in feedback metadata.
+    Failures are non-fatal because text feedback is still valuable.
+    """
+
+    if not settings.FEEDBACK_SCREENSHOT_AI_ANALYSIS_ENABLED:
+        return {"enabled": False}
+    if not settings.OPENAI_API_KEY:
+        return {"enabled": False, "skipped_reason": "OPENAI_API_KEY not configured"}
+
+    try:
+        client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        response = await client.chat.completions.create(
+            model=settings.FEEDBACK_SCREENSHOT_AI_MODEL,
+            temperature=0.2,
+            max_tokens=450,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You analyse app feedback screenshots for Aura/Connectome. "
+                        "Return concise JSON only with keys: summary, visible_screen, likely_issue, "
+                        "severity, user_intent, suggested_fix, privacy_note. Do not transcribe "
+                        "sensitive personal data; describe it generically if visible."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": (
+                                f"Feedback category: {category}\n"
+                                f"Route: {route or 'unknown'}\n"
+                                f"User message: {message}\n\n"
+                                "Analyse the screenshot context for product/debugging signal."
+                            ),
+                        },
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                    ],
+                },
+            ],
+        )
+        content = response.choices[0].message.content or ""
+        try:
+            parsed = json.loads(content)
+            if isinstance(parsed, dict):
+                parsed["model"] = settings.FEEDBACK_SCREENSHOT_AI_MODEL
+                return parsed
+        except Exception:
+            pass
+        return {"model": settings.FEEDBACK_SCREENSHOT_AI_MODEL, "summary": content[:2000]}
+    except Exception as err:
+        logger.warning("Feedback screenshot AI analysis failed (non-fatal): %s", err)
+        return {"enabled": True, "error": "analysis_failed"}
 
 GLOBAL_FEEDBACK_CP = 10
 GLOBAL_FEEDBACK_CATEGORIES = {"Bug", "Malfunction", "Bad Card/Node", "Confusing", "Idea", "Design", "Praise", "Other"}
@@ -343,6 +405,12 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
     screenshot_data_url = None
 
     if body.screenshot_data_url:
+        metadata["screenshot_ai_analysis"] = await _analyse_feedback_screenshot(
+            body.screenshot_data_url,
+            message=message,
+            route=body.route,
+            category=category,
+        )
         try:
             stored_screenshot = await store_feedback_screenshot(body.screenshot_data_url, str(user_uuid))
             screenshot_url = stored_screenshot.url
@@ -352,7 +420,25 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
                 "storage": stored_screenshot.backend,
                 "content_type": stored_screenshot.content_type,
                 "size_bytes": stored_screenshot.size_bytes,
+                "retention": "ephemeral",
             }
+            if settings.FEEDBACK_SCREENSHOT_EPHEMERAL_DELETE:
+                try:
+                    deleted = await delete_feedback_screenshot(stored_screenshot)
+                    metadata["screenshot"].update({
+                        "deleted_after_analysis": bool(deleted),
+                        "public_url_retained": False,
+                    })
+                    # The raw image is gone; do not keep dead object references
+                    # in feedback/contribution records.
+                    screenshot_url = None
+                    screenshot_key = None
+                except Exception as err:
+                    logger.warning("Feedback screenshot ephemeral delete failed (non-fatal): %s", err)
+                    metadata["screenshot"].update({
+                        "deleted_after_analysis": False,
+                        "delete_error": "delete_failed",
+                    })
         except ScreenshotStorageError as err:
             logger.warning(f"Feedback screenshot storage failed (non-fatal): {err}")
             metadata["screenshot_storage_error"] = str(err)
