@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T19:40:08.206717+00:00",
-  "exported_at": "2026-05-01T19:40:08.206717+00:00",
-  "collected_at": "2026-05-01T19:40:08.206717+00:00",
+  "timestamp": "2026-05-01T19:43:01.734712+00:00",
+  "exported_at": "2026-05-01T19:43:01.734712+00:00",
+  "collected_at": "2026-05-01T19:43:01.734712+00:00",
   "identity": {
-    "total_lessons": 1287,
+    "total_lessons": 1288,
     "lessons": [
+      {
+        "id": "bf6f3345-e8de-40b9-833a-34c296ef433f",
+        "lesson": "{\"proposal_id\": \"bf6f3345-e8de-40b9-833a-34c296ef433f\", \"card_type\": \"contextual_action_card\", \"hypothesis\": \"Introducing the Contextual Action Card could increase user engagement by 25%, particularly for tasks they have shown interest in but haven\\u2019t yet completed.\", \"description\": \"This card type provides personalized suggestions based on user activity and preferences, presenting actionable items or content directly related to their interests. It allows users to choose between multiple pathways based on what they\\u2019re currently engaged with or have recently skipped, making the experience feel tailored and responsive.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T19:41:04.777785+00:00\", \"expires_at\": \"2026-05-03T19:41:04.777785+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-01 19:41:04.777785"
+      },
       {
         "id": "225d142d-19cf-4e85-b771-bdaa085934f4",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -3879,7 +3886,7 @@
       },
       {
         "id": "85a0afee-201b-47ee-9a7b-2da20920adea",
-        "lesson": "{\"proposal_id\": \"85a0afee-201b-47ee-9a7b-2da20920adea\", \"card_type\": \"interest_based_recommendation\", \"hypothesis\": \"Introducing interest-based recommendation cards could increase user engagement by 25%.\", \"description\": \"These cards would analyze user behavior and preferences to suggest personalized content or actions based on their expressed interests. By utilizing machine learning to adapt suggestions in real-time, users are more likely to find relevant material, enhancing their session experience and keeping them engaged.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-04-29T19:27:18.659113+00:00\", \"expires_at\": \"2026-05-01T19:27:18.659113+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"85a0afee-201b-47ee-9a7b-2da20920adea\", \"card_type\": \"interest_based_recommendation\", \"hypothesis\": \"Introducing interest-based recommendation cards could increase user engagement by 25%.\", \"description\": \"These cards would analyze user behavior and preferences to suggest personalized content or actions based on their expressed interests. By utilizing machine learning to adapt suggestions in real-time, users are more likely to find relevant material, enhancing their session experience and keeping them engaged.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-04-29T19:27:18.659113+00:00\", \"expires_at\": \"2026-05-01T19:27:18.659113+00:00\", \"result\": {\"observed_improvement\": 0.021, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-05-01T19:41:04.791164+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-04-29 19:27:18.659113"
@@ -9116,7 +9123,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "d379fa6f0406eab3"
+    "lessons_hash": "26c6418b04b7577f"
   },
   "platform_stats": {
     "total_users": 20,
