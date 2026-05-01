@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T22:47:58.844327+00:00",
-  "exported_at": "2026-05-01T22:47:58.844327+00:00",
-  "collected_at": "2026-05-01T22:47:58.844327+00:00",
+  "timestamp": "2026-05-01T22:50:50.242087+00:00",
+  "exported_at": "2026-05-01T22:50:50.242087+00:00",
+  "collected_at": "2026-05-01T22:50:50.242087+00:00",
   "identity": {
-    "total_lessons": 1308,
+    "total_lessons": 1309,
     "lessons": [
+      {
+        "id": "b770b65e-de3c-4b3a-a905-d59644407988",
+        "lesson": "{\"proposal_id\": \"b770b65e-de3c-4b3a-a905-d59644407988\", \"card_type\": \"progress_checkpoint\", \"hypothesis\": \"Introducing a Progress Checkpoint card will improve user engagement by 25%.\", \"description\": \"This card type will periodically pop up to show users their progress and achievements within the app, allowing them to reflect on what they\\u2019ve accomplished and set tangible next steps. It will also include motivational quotes or customizable goals, encouraging users to stay engaged and push towards completion.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T22:48:52.256058+00:00\", \"expires_at\": \"2026-05-03T22:48:52.256058+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-01 22:48:52.256058"
+      },
       {
         "id": "ee6aa05c-9e84-4212-a406-ccfa26f944c4",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -3746,7 +3753,7 @@
       },
       {
         "id": "485bd9bf-b903-4ee5-b9f3-0c8acac090ab",
-        "lesson": "{\"proposal_id\": \"485bd9bf-b903-4ee5-b9f3-0c8acac090ab\", \"card_type\": \"interactive_quiz_card\", \"hypothesis\": \"Introducing interactive quiz cards will increase user engagement by 25%.\", \"description\": \"This card type presents users with engaging quizzes related to their interests or previously consumed content. Users will answer multiple-choice questions, and upon completion, they receive personalized feedback or rewards, encouraging further interaction. This makes the content more dynamic and fosters a sense of achievement.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-04-29T21:37:52.616614+00:00\", \"expires_at\": \"2026-05-01T21:37:52.616614+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"485bd9bf-b903-4ee5-b9f3-0c8acac090ab\", \"card_type\": \"interactive_quiz_card\", \"hypothesis\": \"Introducing interactive quiz cards will increase user engagement by 25%.\", \"description\": \"This card type presents users with engaging quizzes related to their interests or previously consumed content. Users will answer multiple-choice questions, and upon completion, they receive personalized feedback or rewards, encouraging further interaction. This makes the content more dynamic and fosters a sense of achievement.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-04-29T21:37:52.616614+00:00\", \"expires_at\": \"2026-05-01T21:37:52.616614+00:00\", \"result\": {\"observed_improvement\": 0.128, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-05-01T22:48:52.282825+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-04-29 21:37:52.616614"
@@ -3816,7 +3823,7 @@
       },
       {
         "id": "a0b53b1f-e750-4968-9895-141481e1d479",
-        "lesson": "{\"proposal_id\": \"a0b53b1f-e750-4968-9895-141481e1d479\", \"card_type\": \"contextual_tooltip\", \"hypothesis\": \"Implementing contextual tooltips that offer relevant tips or insights based on user interactions will improve user engagement by 25%.\", \"description\": \"These tooltips will dynamically appear when a user hovers over or clicks on specific elements within the UI, providing personalized guidance or motivational messages tailored to their current activity. By offering situational support, users will feel more empowered and less likely to skip or move past content without engaging fully.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-04-29T21:05:33.475692+00:00\", \"expires_at\": \"2026-05-01T21:05:33.475692+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"a0b53b1f-e750-4968-9895-141481e1d479\", \"card_type\": \"contextual_tooltip\", \"hypothesis\": \"Implementing contextual tooltips that offer relevant tips or insights based on user interactions will improve user engagement by 25%.\", \"description\": \"These tooltips will dynamically appear when a user hovers over or clicks on specific elements within the UI, providing personalized guidance or motivational messages tailored to their current activity. By offering situational support, users will feel more empowered and less likely to skip or move past content without engaging fully.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-04-29T21:05:33.475692+00:00\", \"expires_at\": \"2026-05-01T21:05:33.475692+00:00\", \"result\": {\"observed_improvement\": 0.074, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-05-01T22:48:52.295590+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-04-29 21:05:33.475692"
@@ -9263,7 +9270,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "39db5d84418fad2e"
+    "lessons_hash": "0cd2de4ad0d9a91f"
   },
   "platform_stats": {
     "total_users": 20,
