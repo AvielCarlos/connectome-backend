@@ -390,6 +390,54 @@ VARIANT_TTL = 7 * 24 * 3600  # 7 days
 ASSIGNMENT_TTL = 24 * 3600   # 24h for bulk assignments
 
 
+def _assignment_bucket(user_id: str, experiment_id: str, salt: str = "") -> float:
+    """Stable 0-1 bucket for deterministic weighted assignment."""
+    seed = f"{user_id}:{experiment_id}:{salt}"
+    return int(hashlib.md5(seed.encode()).hexdigest(), 16) / (16 ** 32)
+
+
+def _weighted_variant(
+    user_id: str,
+    experiment_id: str,
+    allocation: dict,
+    variants: Optional[list] = None,
+) -> Optional[str]:
+    """Return a deterministic weighted variant from an allocation map."""
+    allowed_variants = variants or VARIANTS
+    valid_weights = {}
+    for variant, weight in (allocation or {}).items():
+        if variant not in allowed_variants:
+            continue
+        try:
+            parsed_weight = float(weight)
+        except (TypeError, ValueError):
+            continue
+        if parsed_weight > 0:
+            valid_weights[variant] = parsed_weight
+    total = sum(valid_weights.values())
+    if total <= 0:
+        return None
+
+    bucket = _assignment_bucket(user_id, experiment_id, json.dumps(valid_weights, sort_keys=True))
+    cumulative = 0.0
+    for variant, weight in valid_weights.items():
+        cumulative += weight / total
+        if bucket <= cumulative:
+            return variant
+    return next(reversed(valid_weights))
+
+
+async def _get_allocation(redis, experiment_id: str) -> Optional[dict]:
+    """Read an optional server-side bandit allocation map."""
+    try:
+        raw_allocation = await redis.get(f"ab:allocation:{experiment_id}")
+        if raw_allocation:
+            return json.loads(raw_allocation.decode() if isinstance(raw_allocation, bytes) else raw_allocation)
+    except Exception as e:
+        logger.warning(f"Redis allocation get failed for {experiment_id}: {e}")
+    return None
+
+
 class AssignBody(BaseModel):
     experiment_id: str
 
@@ -416,11 +464,14 @@ async def assign_variant(
     except Exception as e:
         logger.warning(f"Redis get failed for {cache_key}: {e}")
 
-    try:
-        hash_val = int(user_id[-8:], 16)
-    except (ValueError, TypeError):
-        hash_val = hash(user_id)
-    variant = VARIANTS[abs(hash_val) % 4]
+    allocation = await _get_allocation(redis, body.experiment_id)
+    variant = _weighted_variant(user_id, body.experiment_id, allocation or {}, VARIANTS)
+    if not variant:
+        try:
+            hash_val = int(user_id[-8:], 16)
+        except (ValueError, TypeError):
+            hash_val = hash(user_id)
+        variant = VARIANTS[abs(hash_val) % 4]
 
     try:
         await redis.setex(cache_key, VARIANT_TTL, variant)
@@ -578,8 +629,11 @@ async def get_all_assignments(
                 continue
         except Exception:
             pass
-        # Deterministic assignment
-        assignments[exp_name] = _assign_variant(user_id, exp_name, variants)
+        allocation = await _get_allocation(redis, exp_name)
+        assignments[exp_name] = (
+            _weighted_variant(user_id, exp_name, allocation or {}, variants)
+            or _assign_variant(user_id, exp_name, variants)
+        )
 
     # Cache for 24h
     try:

@@ -470,6 +470,14 @@ async def get_autonomy_status(
             winner_raw.decode() if winner_raw else None
         )
 
+        evolution_raw = await r.get("ab:evolution_plan:primary_landing_v1")
+        evolution_plan: Optional[Dict[str, Any]] = None
+        if evolution_raw:
+            try:
+                evolution_plan = json.loads(evolution_raw.decode() if isinstance(evolution_raw, bytes) else evolution_raw)
+            except Exception:
+                pass
+
         # Current agent weights
         weights_raw = await r.get("ora:agent_weights")
         current_weights: Optional[Dict[str, float]] = None
@@ -482,6 +490,11 @@ async def get_autonomy_status(
         return {
             "last_run": last_run,
             "current_ab_winner": current_winner,
+            "ab_winner_source": (evolution_plan or {}).get("official_winner_source"),
+            "ab_top_performer": (evolution_plan or {}).get("top_performer"),
+            "ab_allocation": (evolution_plan or {}).get("allocation", {}),
+            "ab_status": (evolution_plan or {}).get("status"),
+            "ab_generated_variants": (evolution_plan or {}).get("generated_variants", []),
             "current_agent_weights": current_weights,
             "status_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -529,4 +542,3 @@ async def get_product_proposals(
     except Exception as e:
         logger.error(f"OraAutonomy: product proposals failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

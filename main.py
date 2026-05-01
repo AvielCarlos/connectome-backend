@@ -351,7 +351,7 @@ async def health_check():
         "database": "ok" if db_ok else "error",
         "redis": "ok" if redis_ok else "error",
         "version": "1.0.0",
-        "brain": "Ora",
+        "brain": "Aura",
     }
 
 
@@ -359,7 +359,7 @@ async def health_check():
 async def root():
     return {
         "app": "Connectome",
-        "brain": "Ora",
+        "brain": "Aura",
         "tagline": "Living AI.OS for human fulfilment",
         "docs": "/docs",
     }
