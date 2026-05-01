@@ -328,40 +328,158 @@ PATH_PROGRESSION_STAGES: list[dict[str, str]] = [
 ]
 
 
+PATH_PROGRESSION_VARIANTS: dict[str, dict[str, Any]] = {
+    "baseline": {
+        "label": "Path progression",
+        "mutation": "baseline",
+        "description": "The standard feed → micro-node → evidence loop.",
+        "stages": PATH_PROGRESSION_STAGES,
+    },
+    "trimmed_decision": {
+        "label": "Fast path",
+        "mutation": "trim",
+        "description": "A shorter path for cards that already have a concrete link or booking action.",
+        "stages": [
+            PATH_PROGRESSION_STAGES[0],
+            PATH_PROGRESSION_STAGES[3],
+            PATH_PROGRESSION_STAGES[4],
+            PATH_PROGRESSION_STAGES[5],
+            PATH_PROGRESSION_STAGES[6],
+        ],
+    },
+    "split_micro_node": {
+        "label": "Mini-app path",
+        "mutation": "split",
+        "description": "Splits the micro-node into clarify → choose → commit for higher-friction opportunities.",
+        "stages": [
+            PATH_PROGRESSION_STAGES[0],
+            PATH_PROGRESSION_STAGES[2],
+            {
+                "id": "clarify_constraints",
+                "label": "Clarify",
+                "user_role": "Confirm budget, location, timing, energy, and social context.",
+                "aura_role": "Ask only the missing questions and hide system scaffolding.",
+            },
+            {
+                "id": "choose_concrete_option",
+                "label": "Choose option",
+                "user_role": "Pick the exact page, provider, event, product, or service.",
+                "aura_role": "Rank concrete options and keep the best links close.",
+            },
+            PATH_PROGRESSION_STAGES[4],
+            PATH_PROGRESSION_STAGES[5],
+            PATH_PROGRESSION_STAGES[6],
+        ],
+    },
+    "grown_social": {
+        "label": "Shared path",
+        "mutation": "grow",
+        "description": "Adds invite/share/follow-up nodes when belonging or contribution is part of the action.",
+        "stages": [
+            *PATH_PROGRESSION_STAGES[:5],
+            {
+                "id": "invite_or_share",
+                "label": "Invite / share",
+                "user_role": "Invite someone, share the opportunity, or make it communal.",
+                "aura_role": "Suggest the right person, message, or group context without being pushy.",
+            },
+            PATH_PROGRESSION_STAGES[5],
+            {
+                "id": "follow_up",
+                "label": "Follow up",
+                "user_role": "Close the loop with a message, reflection, review, or next step.",
+                "aura_role": "Capture outcomes and suggest the next relational/contribution node.",
+            },
+            PATH_PROGRESSION_STAGES[6],
+        ],
+    },
+}
+
+
+def _select_path_progression_variant(*, kind: str, domain: Optional[str], current_stage: str, source_node_id: Optional[str] = None) -> str:
+    """Deterministically A/B test graph morphologies without needing client state."""
+    normalized_domain = "iVive" if domain == "Rest" else (domain or "open")
+    seed = f"{kind}:{normalized_domain}:{current_stage}:{source_node_id or ''}"
+    bucket = int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:8], 16) % 100
+    if normalized_domain == "Eviva" and bucket < 45:
+        return "grown_social"
+    if kind in {"real_world_action", "user_created_opportunity"} and bucket < 45:
+        return "trimmed_decision"
+    if bucket < 72:
+        return "split_micro_node"
+    return "baseline"
+
+
+def _progression_stages_for_variant(variant: str) -> list[dict[str, str]]:
+    return list(PATH_PROGRESSION_VARIANTS.get(variant, PATH_PROGRESSION_VARIANTS["baseline"])["stages"])
+
+
 def _path_progression_metadata(
     *,
     kind: str,
     domain: Optional[str],
     current_stage: str = "confirm_micro_node",
     source_node_id: Optional[str] = None,
+    variant: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Describe how this feed card participates in the Path Feed progression graph."""
-    stage_ids = [stage["id"] for stage in PATH_PROGRESSION_STAGES]
-    current_index = stage_ids.index(current_stage) if current_stage in stage_ids else 3
+    """Describe how this feed card participates in a morphable Path Feed graph.
+
+    The graph can grow, split, or trim into testable variants of the same core
+    pathway pattern. User responses can later promote winning variants per
+    domain, card kind, city, user state, or opportunity source.
+    """
+    selected_variant = variant or _select_path_progression_variant(
+        kind=kind, domain=domain, current_stage=current_stage, source_node_id=source_node_id
+    )
+    variant_def = PATH_PROGRESSION_VARIANTS.get(selected_variant, PATH_PROGRESSION_VARIANTS["baseline"])
+    variant_stages = _progression_stages_for_variant(selected_variant)
+    stage_ids = [stage["id"] for stage in variant_stages]
+    if current_stage not in stage_ids:
+        # Map canonical micro-node state to the closest equivalent inside the
+        # currently tested morphology. This keeps cards comparable while letting
+        # graph shapes diverge.
+        if selected_variant == "split_micro_node":
+            current_stage = "choose_concrete_option"
+        elif selected_variant == "trimmed_decision":
+            current_stage = "confirm_micro_node"
+        else:
+            current_stage = stage_ids[min(3, len(stage_ids) - 1)]
+    current_index = stage_ids.index(current_stage) if current_stage in stage_ids else min(3, len(stage_ids) - 1)
     stages: list[dict[str, Any]] = []
-    for index, stage in enumerate(PATH_PROGRESSION_STAGES):
+    for index, stage in enumerate(variant_stages):
         status = "complete" if index < current_index else "active" if index == current_index else "upcoming"
         stages.append({**stage, "status": status})
-    next_stage = PATH_PROGRESSION_STAGES[min(current_index + 1, len(PATH_PROGRESSION_STAGES) - 1)]["id"]
+    next_stage = variant_stages[min(current_index + 1, len(variant_stages) - 1)]["id"]
     return {
-        "graph": "path_feed_progression_v1",
+        "graph": "path_feed_progression_v2_morphable",
+        "base_graph": "path_feed_progression_v1",
+        "ab_test_id": "path_progression_morphology_v1",
+        "variant": selected_variant,
+        "variant_label": variant_def["label"],
+        "mutation": variant_def["mutation"],
+        "variant_description": variant_def["description"],
         "kind": kind,
         "domain": "iVive" if domain == "Rest" else domain,
         "current_stage": current_stage,
         "next_stage": next_stage,
         "source_node_id": source_node_id,
         "stages": stages,
-        "principle": "The feed is a neural graph for building and progressing life paths, not a passive content stream.",
+        "principle": "The feed is a morphable neural graph: pathways can grow, split, trim, and be A/B tested while preserving the same fulfilment loop.",
+        "promote_if": ["higher do-now rate", "more saved nodes become completed", "better post-action rating", "lower skip rate"],
+        "prune_if": ["users skip before commit", "clarification adds friction", "links do not convert to action"],
     }
 
 
-def _path_progression_component(*, kind: str, domain: Optional[str], current_stage: str = "confirm_micro_node") -> dict[str, Any]:
-    progression = _path_progression_metadata(kind=kind, domain=domain, current_stage=current_stage)
+def _path_progression_component(*, kind: str, domain: Optional[str], current_stage: str = "confirm_micro_node", source_node_id: Optional[str] = None) -> dict[str, Any]:
+    progression = _path_progression_metadata(kind=kind, domain=domain, current_stage=current_stage, source_node_id=source_node_id)
     return {
         "type": "path_progression",
-        "text": "Path progression",
+        "text": progression["variant_label"],
         "current_stage": progression["current_stage"],
         "next_stage": progression["next_stage"],
+        "variant": progression["variant"],
+        "mutation": progression["mutation"],
+        "ab_test_id": progression["ab_test_id"],
         "items": progression["stages"],
     }
 
@@ -637,7 +755,7 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "domain": domain,
             "city": item.get("city"),
             "opportunity_kind": item.get("kind"),
-            "path_progression": _path_progression_metadata(kind="real_world_action", domain=domain, current_stage="confirm_micro_node"),
+            "path_progression": _path_progression_metadata(kind="user_created_opportunity" if source == "user_created_opportunity" else "real_world_action", domain=domain, current_stage="confirm_micro_node"),
             "tags": [item.get("tag") or "real_action", "diversity_seed"],
             "url": url,
             "links": links,
