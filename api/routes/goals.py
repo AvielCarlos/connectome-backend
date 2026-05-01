@@ -479,25 +479,48 @@ async def list_goals(
     return [_build_goal_out(r) for r in rows]
 
 
+# Tier → path_limit mapping
+TIER_PATH_LIMITS = {"free": 4, "explorer": 12, "sovereign": 999}
+
+
+async def _get_effective_limit(user_id: str) -> int:
+    """Return effective path limit for user based on tier + explicit path_limit column."""
+    row = await fetchrow(
+        "SELECT path_limit, subscription_tier FROM users WHERE id = $1", str(user_id)
+    )
+    if not row:
+        return 4
+    tier = row["subscription_tier"] or "free"
+    tier_limit = TIER_PATH_LIMITS.get(tier, 4)
+    explicit = row["path_limit"] or 4
+    # Use whichever is higher — tier upgrade or manually set
+    return max(tier_limit, explicit)
+
+
 @router.get("/path-status")
 async def get_path_status(user_id: str = Depends(get_current_user_id)):
-    """Return the user's active path count and limit."""
+    """Return the user's active path count, limit, and credits."""
     active_count = await fetchrow(
         "SELECT COUNT(*) AS cnt FROM goals WHERE user_id = $1 AND status = 'active'",
         str(user_id),
     )
     user_row = await fetchrow(
-        "SELECT path_limit FROM users WHERE id = $1",
+        "SELECT path_limit, path_credits, subscription_tier FROM users WHERE id = $1",
         str(user_id),
     )
-    limit = (user_row["path_limit"] if user_row else None) or 4
+    limit = await _get_effective_limit(user_id)
+    credits = int(user_row["path_credits"]) if user_row and user_row["path_credits"] else 0
     count = int(active_count["cnt"]) if active_count else 0
+    tier = (user_row["subscription_tier"] if user_row else None) or "free"
     return {
         "active_paths": count,
         "path_limit": limit,
+        "path_credits": credits,
         "paths_remaining": max(0, limit - count),
-        "at_limit": count >= limit,
-        "is_subscribed": limit > 4,
+        "at_limit": count >= limit and credits == 0,
+        "can_use_credit": count >= limit and credits > 0,
+        "subscription_tier": tier,
+        "is_subscribed": tier not in ("free", None, ""),
     }
 
 
@@ -508,26 +531,36 @@ async def create_goal(
 ):
     """Create a new goal. Automatically generates AI-powered steps via Ora."""
     # Enforce path limit gate
-    active_count = await fetchrow(
+    active_count_row = await fetchrow(
         "SELECT COUNT(*) AS cnt FROM goals WHERE user_id = $1 AND status = 'active'",
         str(user_id),
     )
     user_row = await fetchrow(
-        "SELECT path_limit FROM users WHERE id = $1",
+        "SELECT path_credits, subscription_tier FROM users WHERE id = $1",
         str(user_id),
     )
-    path_limit = (user_row["path_limit"] if user_row else None) or 4
-    active = int(active_count["cnt"]) if active_count else 0
+    path_limit = await _get_effective_limit(user_id)
+    credits = int(user_row["path_credits"]) if user_row and user_row["path_credits"] else 0
+    active = int(active_count_row["cnt"]) if active_count_row else 0
+
     if active >= path_limit:
-        raise HTTPException(
-            status_code=402,
-            detail={
-                "code": "path_limit_reached",
-                "active_paths": active,
-                "path_limit": path_limit,
-                "message": "You have reached your open path limit. Archive a path or subscribe to unlock more.",
-            },
-        )
+        if credits > 0:
+            # Consume one credit to open an extra path
+            await execute(
+                "UPDATE users SET path_credits = path_credits - 1 WHERE id = $1 AND path_credits > 0",
+                str(user_id),
+            )
+            logger.info(f"Path credit consumed for user {user_id[:8]} (active={active}, limit={path_limit})")
+        else:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "code": "path_limit_reached",
+                    "active_paths": active,
+                    "path_limit": path_limit,
+                    "message": "You have reached your open path limit. Archive a path, buy credits, or subscribe.",
+                },
+            )
 
     # Generate steps (AI or smart mock)
     if body.steps:

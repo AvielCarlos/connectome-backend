@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     STRIPE_PRICE_EXPLORER_YEARLY: str = ""
     STRIPE_PRICE_SOVEREIGN_MONTHLY: str = ""
     STRIPE_PRICE_SOVEREIGN_YEARLY: str = ""
+    # Credits — one-time purchase, 5 extra path slots for $9
+    STRIPE_PRICE_PATH_CREDITS: str = ""  # set in Railway after creating price in Stripe
 
     # Admin emails (comma-separated) — these users get admin privileges
     ADMIN_EMAILS: str = "carlosandromeda8@gmail.com"
