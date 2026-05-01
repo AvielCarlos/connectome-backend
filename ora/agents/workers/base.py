@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 API_BASE = os.getenv("CONNECTOME_API_BASE", "https://connectome-api-production.up.railway.app")
 AVI_TELEGRAM_CHAT_ID = int(os.getenv("ORA_TELEGRAM_CHAT_ID", "5716959016"))
 WORKER_CHANNEL_ID = int(os.getenv("WORKER_TELEGRAM_CHANNEL_ID", "-1003968154861"))
+APP_ENV = os.getenv("APP_ENV", "development").lower()
 
 
 class BaseWorkerAgent(ABC):
@@ -131,12 +132,20 @@ class BaseWorkerAgent(ABC):
         if token:
             self._jwt = token
             return token
-        # Fall back to fresh login in dev/test only.
+        # Fall back to fresh login in dev/test only, and only with explicit env creds.
+        if APP_ENV == "production":
+            logger.warning(f"{self.name}: ORA_JWT_TOKEN/CONNECTOME_WORKER_JWT missing; skipping prod login fallback")
+            return None
+        test_email = os.environ.get("CONNECTOME_TEST_EMAIL")
+        test_password = os.environ.get("CONNECTOME_TEST_PASSWORD")
+        if not test_email or not test_password:
+            logger.warning(f"{self.name}: no worker JWT or CONNECTOME_TEST_EMAIL/PASSWORD configured")
+            return None
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.post(
                     f"{API_BASE}/api/users/login",
-                    json={"email": "test@test.com", "password": "test1234"},
+                    json={"email": test_email, "password": test_password},
                 )
                 if resp.status_code == 200:
                     body = resp.json()

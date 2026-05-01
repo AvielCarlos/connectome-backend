@@ -23,6 +23,7 @@ CLI primitives used:
 import asyncio
 import json
 import logging
+import os
 import re
 import subprocess
 from datetime import datetime, timezone
@@ -32,6 +33,7 @@ from core.config import settings
 from core.database import execute, fetch, fetchrow, fetchval
 
 logger = logging.getLogger(__name__)
+GOG_CLI_ENABLED = os.getenv("GOG_CLI_ENABLED", "").lower() in {"1", "true", "yes"}
 
 # Supported MIME types we know how to extract content from
 INDEXABLE_MIME_TYPES = {
@@ -79,6 +81,12 @@ class DriveAgent:
             "files_errored": 0,
             "errors": [],
         }
+
+        if settings.is_production and not GOG_CLI_ENABLED:
+            summary["errors"].append("Legacy gog Drive sync disabled in production; use DriveAgentV2/API sync")
+            summary["finished_at"] = datetime.now(timezone.utc).isoformat()
+            logger.warning("DriveAgent: legacy gog sync skipped in production")
+            return summary
 
         try:
             files = await self._list_drive_files(max_files)

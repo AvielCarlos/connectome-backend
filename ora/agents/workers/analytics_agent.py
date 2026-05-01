@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-ANALYTICS_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/analytics"
+ANALYTICS_DIR = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "analytics")
 
 
 class AnalyticsAgent(BaseWorkerAgent):

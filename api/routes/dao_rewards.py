@@ -25,7 +25,7 @@ from api.middleware import get_current_user_id
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/dao/rewards", tags=["dao-rewards"])
 
-ADMIN_SECRET = os.getenv("ADMIN_SECRET", "connectome-admin-secret")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
 
 # C-suite domains — each agent nominates in their area
 CSUITE_DOMAINS = {

@@ -14,6 +14,7 @@ Redis cache TTLs:
 
 import logging
 import json
+import os
 import subprocess
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
@@ -33,6 +34,7 @@ router = APIRouter(prefix="/api/public/dao", tags=["dao-public"])
 TTL_PULSE = 5 * 60       # 5 minutes
 TTL_ORA_THOUGHT = 60 * 60  # 1 hour
 TTL_LEADERBOARD = 5 * 60  # 5 minutes
+CONNECTOME_REPO_DIR = os.getenv("CONNECTOME_REPO_DIR", os.getcwd())
 
 CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -103,7 +105,7 @@ async def _get_recent_commit_frequency() -> str:
     try:
         result = subprocess.run(
             ["git", "log", "--oneline", "--since=24 hours ago"],
-            cwd="/Users/avielcarlos/.openclaw/workspace/connectome",
+            cwd=CONNECTOME_REPO_DIR,
             capture_output=True,
             text=True,
             timeout=3,
@@ -114,7 +116,7 @@ async def _get_recent_commit_frequency() -> str:
 
         result_week = subprocess.run(
             ["git", "log", "--oneline", "--since=7 days ago"],
-            cwd="/Users/avielcarlos/.openclaw/workspace/connectome",
+            cwd=CONNECTOME_REPO_DIR,
             capture_output=True,
             text=True,
             timeout=3,
@@ -356,7 +358,7 @@ async def get_aura_thought():
     try:
         result = subprocess.run(
             ["git", "log", "--oneline", "--since=7 days ago", "--format=%s"],
-            cwd="/Users/avielcarlos/.openclaw/workspace/connectome",
+            cwd=CONNECTOME_REPO_DIR,
             capture_output=True,
             text=True,
             timeout=3,

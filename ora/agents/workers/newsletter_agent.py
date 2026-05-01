@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-NEWSLETTER_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/content"
-LOG_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/content/newsletter_log.json"
+NEWSLETTER_DIR = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "content")
+LOG_FILE = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "content", "newsletter_log.json")
 
 
 class NewsletterAgent(BaseWorkerAgent):

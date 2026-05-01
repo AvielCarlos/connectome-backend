@@ -19,11 +19,11 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 
+from core.telegram import send_telegram_message as send_cloud_telegram_message
 from ora.agents.base_executive_agent import BaseExecutiveAgent
 
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN_PATH = "/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt"
 TELEGRAM_COMMUNITY_ID = -1003758049811  # Ascension Technologies community group
 
 # Skills the project currently needs most
@@ -160,17 +160,11 @@ Platform: {platform}"""
 
     async def send_telegram_message(self, chat_id: int, message: str) -> bool:
         """Send a Telegram message."""
-        try:
-            with open(BOT_TOKEN_PATH) as f:
-                token = f.read().strip()
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(
-                    f"https://api.telegram.org/bot{token}/sendMessage",
-                    json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"},
-                )
-            return resp.status_code == 200
-        except Exception:
-            return False
+        return await send_cloud_telegram_message(
+            message,
+            chat_id=str(chat_id),
+            parse_mode="Markdown",
+        )
 
     async def onboard_contributor(
         self,

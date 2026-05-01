@@ -17,8 +17,9 @@ import httpx
 logger = logging.getLogger(__name__)
 
 TELEGRAM_CHAT_ID = 5716959016
-LOG_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/executive_council"
-API_BASE = "https://connectome-api-production.up.railway.app"
+LOG_DIR = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "executive_council")
+API_BASE = os.getenv("CONNECTOME_API_BASE", "https://connectome-api-production.up.railway.app")
+APP_ENV = os.getenv("APP_ENV", "development").lower()
 
 
 AGENT_DOMAINS = {
@@ -307,14 +308,26 @@ class BaseExecutiveAgent(ABC):
             logger.warning(f"{self.name}: Telegram send failed: {e}")
 
     async def _get_jwt(self) -> Optional[str]:
-        """Get JWT by logging in with test credentials."""
+        """Get a worker JWT from env, with explicit dev/test login fallback only."""
         if self._jwt_token:
             return self._jwt_token
+        token = os.environ.get("ORA_JWT_TOKEN") or os.environ.get("CONNECTOME_WORKER_JWT")
+        if token:
+            self._jwt_token = token
+            return token
+        if APP_ENV == "production":
+            logger.warning(f"{self.name}: ORA_JWT_TOKEN/CONNECTOME_WORKER_JWT missing; skipping prod login fallback")
+            return None
+        test_email = os.environ.get("CONNECTOME_TEST_EMAIL")
+        test_password = os.environ.get("CONNECTOME_TEST_PASSWORD")
+        if not test_email or not test_password:
+            logger.warning(f"{self.name}: no executive JWT or CONNECTOME_TEST_EMAIL/PASSWORD configured")
+            return None
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.post(
                     f"{API_BASE}/api/users/login",
-                    json={"email": "test@test.com", "password": "test1234"},
+                    json={"email": test_email, "password": test_password},
                 )
                 if resp.status_code == 200:
                     self._jwt_token = resp.json().get("token") or resp.json().get("access_token")

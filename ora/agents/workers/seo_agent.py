@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-BLOG_QUEUE = "/Users/avielcarlos/.openclaw/workspace/tmp/content/blog_queue.json"
+BLOG_QUEUE = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "content", "blog_queue.json")
 
 
 class SEOAgent(BaseWorkerAgent):

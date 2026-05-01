@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-PROSPECTS_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/biz_dev/influencer_prospects.json"
+PROSPECTS_FILE = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "biz_dev", "influencer_prospects.json")
 TOPICS = ["self improvement", "productivity", "AI tools", "habit building", "personal growth"]
 
 

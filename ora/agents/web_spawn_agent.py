@@ -23,6 +23,7 @@ import ast
 import base64
 import json
 import logging
+import os
 import re
 import uuid
 from datetime import datetime, timezone
@@ -462,7 +463,8 @@ class WebSpawnAgent:
         Uses Railway's GraphQL API if RAILWAY_TOKEN is available,
         otherwise falls back to the CLI-based approach.
         """
-        import asyncio
+        import os
+        import shlex
         import subprocess
 
         if self._railway_token:
@@ -477,7 +479,6 @@ class WebSpawnAgent:
                 }
                 """
                 # Variables are environment-specific; fall through to CLI if not set
-                import os
                 service_id = os.environ.get("RAILWAY_SERVICE_ID", "")
                 environment_id = os.environ.get("RAILWAY_ENVIRONMENT_ID", "")
                 if service_id and environment_id:
@@ -502,20 +503,24 @@ class WebSpawnAgent:
             except Exception as e:
                 logger.warning(f"Railway API redeploy failed: {e}")
 
-        # Fallback: CLI deploy (non-blocking subprocess)
-        try:
-            cmd = (
-                "cd /tmp/connectome-backend-deploy && "
-                "git pull 2>/dev/null && "
-                "railway up --detach --service connectome-api 2>/dev/null"
+        if os.getenv("APP_ENV", "development").lower() == "production":
+            logger.warning(
+                "WebSpawnAgent: Railway redeploy skipped; set RAILWAY_SERVICE_ID "
+                "and RAILWAY_ENVIRONMENT_ID for API-based production redeploys"
             )
+            return
+
+        # Local/dev fallback only: CLI deploy (non-blocking subprocess)
+        deploy_dir = os.getenv("CONNECTOME_DEPLOY_DIR", "/tmp/connectome-backend-deploy")
+        try:
+            cmd = f"cd {shlex.quote(deploy_dir)} && git pull 2>/dev/null && railway up --detach --service connectome-api 2>/dev/null"
             subprocess.Popen(
                 cmd,
                 shell=True,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            logger.info("WebSpawnAgent: Railway redeploy triggered via CLI (detached)")
+            logger.info("WebSpawnAgent: Railway redeploy triggered via local CLI (detached)")
         except Exception as e:
             logger.warning(f"WebSpawnAgent: Railway CLI redeploy failed: {e}")
 

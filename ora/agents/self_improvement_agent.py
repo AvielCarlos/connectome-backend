@@ -26,6 +26,8 @@ from uuid import uuid4
 
 import httpx
 
+from core.telegram import send_telegram_message
+
 logger = logging.getLogger(__name__)
 
 TELEGRAM_CHAT_ID = 5716959016
@@ -1006,27 +1008,10 @@ Return ONLY the prompt text, no JSON, no markdown."""
             logger.debug(f"SelfImprovement._record_pending_eval: {e}")
 
     async def _send_telegram(self, message: str) -> None:
-        token = self._telegram_token
-        if not token:
-            token = os.environ.get("ORA_TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
-        if not token:
-            try:
-                with open("/app/secrets/telegram-bot-token.txt") as f:
-                    token = f.read().strip()
-            except Exception:
-                pass
-        if not token:
-            logger.warning("SelfImprovement: no Telegram token")
-            return
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                await client.post(
-                    f"https://api.telegram.org/bot{token}/sendMessage",
-                    json={
-                        "chat_id": TELEGRAM_CHAT_ID,
-                        "text": message,
-                        "parse_mode": "Markdown",
-                    },
-                )
-        except Exception as e:
-            logger.warning(f"SelfImprovement: Telegram send failed: {e}")
+        ok = await send_telegram_message(
+            message,
+            chat_id=str(TELEGRAM_CHAT_ID),
+            parse_mode="Markdown",
+        )
+        if not ok:
+            logger.warning("SelfImprovement: Telegram send skipped/failed")

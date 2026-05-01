@@ -22,14 +22,14 @@ from core.database import fetchrow
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/executive", tags=["executive"])
 
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "connectome-admin-secret")
-LOG_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/executive_council"
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN") or os.getenv("ADMIN_SECRET", "")
+LOG_DIR = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "executive_council")
 
 AGENT_NAMES = ["cfo", "cgo", "cmo", "cpo", "cto", "coo", "community", "strategy", "executive_council"]
 
 
 def _require_admin(x_admin_token: str = Header(default="")):
-    if x_admin_token != ADMIN_TOKEN:
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 

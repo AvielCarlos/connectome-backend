@@ -18,7 +18,12 @@ from ora.agents.base_executive_agent import BaseExecutiveAgent
 
 logger = logging.getLogger(__name__)
 
-RECRUITING_LOG = "/tmp/ascension/recruiting/sent_log.json"
+RECRUITING_LOG = os.path.join(
+    os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"),
+    "ascension",
+    "recruiting",
+    "sent_log.json",
+)
 GH_REPO = "AvielCarlos/connectome-backend"
 
 

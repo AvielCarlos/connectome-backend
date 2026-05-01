@@ -19,6 +19,7 @@ import os
 
 from fastapi import APIRouter, HTTPException, Request
 
+from core.config import settings
 from core.telegram import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ TELEGRAM_CHAT_ID = "5716959016"
 
 def _verify_signature(payload: bytes, signature: str) -> bool:
     if not WEBHOOK_SECRET:
-        return True  # Skip verification if no secret set
+        return False
     expected = "sha256=" + hmac.new(
         WEBHOOK_SECRET.encode(), payload, hashlib.sha256
     ).hexdigest()
@@ -50,7 +51,11 @@ async def github_webhook(request: Request):
     signature = request.headers.get("X-Hub-Signature-256", "")
     event = request.headers.get("X-GitHub-Event", "")
 
-    if WEBHOOK_SECRET and not _verify_signature(payload, signature):
+    if not WEBHOOK_SECRET:
+        if settings.is_production:
+            raise HTTPException(status_code=503, detail="GitHub webhook secret not configured")
+        logger.warning("GitHub webhook secret not configured — accepting webhook only because APP_ENV is not production")
+    elif not _verify_signature(payload, signature):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
     try:

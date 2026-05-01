@@ -211,7 +211,7 @@ class CTOAgent(BaseExecutiveAgent):
 
         token = await self._get_jwt()
         headers = {"Authorization": f"Bearer {token}"} if token else {}
-        admin_headers = {"X-Admin-Token": "connectome-admin-secret"}
+        admin_headers = {"X-Admin-Token": os.getenv("ADMIN_TOKEN") or os.getenv("ADMIN_SECRET", "")}
 
         endpoints = [
             ("/health", {}, 200, "API health"),

@@ -22,7 +22,7 @@ from ora.payments.growth_billing import (
 
 logger = logging.getLogger(__name__)
 
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", os.getenv("ADMIN_SECRET", "connectome-admin-secret"))
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN") or os.getenv("ADMIN_SECRET", "")
 
 
 class CGOAgent(BaseExecutiveAgent):

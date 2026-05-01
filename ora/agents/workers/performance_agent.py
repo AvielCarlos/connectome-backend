@@ -16,7 +16,7 @@ import httpx
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-METRICS_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/perf/metrics.json"
+METRICS_FILE = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "perf", "metrics.json")
 P95_THRESHOLD_MS = 5000
 
 

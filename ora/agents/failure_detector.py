@@ -22,7 +22,6 @@ import httpx
 logger = logging.getLogger(__name__)
 
 API_BASE = os.getenv("API_BASE_URL", "https://connectome-api-production.up.railway.app")
-BOT_TOKEN_PATH = "/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt"
 TELEGRAM_CHAT_ID = 5716959016
 
 CHECKS = [
@@ -78,13 +77,8 @@ CHECKS = [
 
 async def _send_telegram(msg: str) -> None:
     try:
-        with open(BOT_TOKEN_PATH) as f:
-            token = f.read().strip()
-        async with httpx.AsyncClient(timeout=10) as client:
-            await client.post(
-                f"https://api.telegram.org/bot{token}/sendMessage",
-                json={"chat_id": TELEGRAM_CHAT_ID, "text": msg, "parse_mode": "Markdown"},
-            )
+        from core.telegram import send_telegram_message
+        await send_telegram_message(msg, chat_id=str(TELEGRAM_CHAT_ID), parse_mode="Markdown")
     except Exception as e:
         logger.error(f"FailureDetector: Telegram alert failed: {e}")
 
