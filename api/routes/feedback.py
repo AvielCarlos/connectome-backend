@@ -25,6 +25,19 @@ router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 GLOBAL_FEEDBACK_CP = 10
 GLOBAL_FEEDBACK_CATEGORIES = {"Bug", "Malfunction", "Bad Card/Node", "Confusing", "Idea", "Design", "Praise", "Other"}
 
+VALUE_SIGNAL_ALIASES = {
+    "enlightenment": ["enlightenment", "awakening", "wisdom", "consciousness", "spiritual", "truth"],
+    "peace": ["peace", "calm", "rest", "sleep", "regulate", "nervous", "ease"],
+    "pleasure": ["pleasure", "joy", "fun", "play", "sensual", "enjoy"],
+    "love": ["love", "relationship", "connection", "friend", "family", "romance", "belonging"],
+    "vitality": ["vitality", "health", "fitness", "energy", "body", "yoga", "walk", "nutrition"],
+    "freedom": ["freedom", "travel", "choice", "time", "sovereignty", "independence"],
+    "mastery": ["mastery", "skill", "learn", "practice", "craft", "study", "training"],
+    "contribution": ["contribution", "service", "volunteer", "community", "dao", "build", "help"],
+    "abundance": ["abundance", "money", "income", "career", "business", "wealth", "work"],
+    "adventure": ["adventure", "event", "explore", "discovery", "novelty", "museum", "park", "experience"],
+}
+
 
 async def _ensure_global_feedback_schema() -> None:
     """Idempotent schema hardening for the lightweight global feedback loop."""
@@ -96,6 +109,89 @@ async def _get_or_create_feedback_contributor(user_uuid: UUID) -> Any:
         email,
         user_uuid,
     )
+
+
+def _infer_value_signals_from_spec(spec: dict) -> list[str]:
+    meta = spec.get("metadata", {}) if isinstance(spec, dict) else {}
+    components = spec.get("components", []) if isinstance(spec, dict) else []
+    chunks = [str(meta.get("domain") or ""), str(spec.get("type") or "")]
+    chunks.extend(str(tag) for tag in (meta.get("tags") or []))
+    for comp in components[:12]:
+        if isinstance(comp, dict):
+            chunks.extend(str(comp.get(k) or "") for k in ("text", "label", "title", "body"))
+            for item in comp.get("items") or []:
+                if isinstance(item, dict):
+                    chunks.extend(str(item.get(k) or "") for k in ("label", "title", "body", "text"))
+                else:
+                    chunks.append(str(item))
+    text = " ".join(chunks).lower()
+    signals = [value for value, aliases in VALUE_SIGNAL_ALIASES.items() if any(alias in text for alias in aliases)]
+    domain = str(meta.get("domain") or "").lower()
+    if domain == "ivive":
+        signals.extend(["vitality", "peace", "mastery"])
+    elif domain == "eviva":
+        signals.extend(["contribution", "abundance", "love"])
+    elif domain == "aventi":
+        signals.extend(["adventure", "pleasure", "freedom"])
+    return list(dict.fromkeys(signals))[:5]
+
+
+async def _record_value_feedback_signal(user_id: str, body: FeedbackSubmit) -> None:
+    """Let explicit value weights evolve gently from swipes, saves, choices, and completions."""
+    if not body.screen_spec_id or not body.rating:
+        return
+    try:
+        row = await fetchrow(
+            "SELECT spec FROM screen_specs WHERE id = $1::uuid",
+            UUID(body.screen_spec_id) if len(body.screen_spec_id) == 36 else None,
+        )
+        if not row:
+            return
+        spec = row["spec"]
+        if isinstance(spec, str):
+            spec = json.loads(spec)
+        signals = _infer_value_signals_from_spec(spec if isinstance(spec, dict) else {})
+        if not signals:
+            return
+        rating = int(body.rating or 0)
+        if rating >= 4 or body.completed:
+            delta = 0.25
+        elif rating <= 2 or body.exit_point == "skip":
+            delta = -0.18
+        else:
+            delta = 0.0
+        if delta == 0:
+            return
+        state_row = await fetchrow("SELECT state_json FROM ioo_user_state WHERE user_id = $1::uuid", user_id)
+        state_json = state_row["state_json"] if state_row and state_row["state_json"] else {}
+        if isinstance(state_json, str):
+            state_json = json.loads(state_json)
+        learned = dict(state_json.get("value_weights_learned") or {}) if isinstance(state_json, dict) else {}
+        for value in signals:
+            learned[value] = max(1.0, min(10.0, float(learned.get(value, 5.0)) + delta))
+        payload = {
+            "signals": signals,
+            "rating": rating,
+            "exit_point": body.exit_point,
+            "completed": body.completed,
+            "delta": delta,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, state_json, last_updated)
+            VALUES ($1, jsonb_build_object('value_learning_last', $2::jsonb, 'value_weights_learned', $3::jsonb), NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+              state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb)
+                || jsonb_build_object('value_learning_last', $2::jsonb, 'value_weights_learned', $3::jsonb),
+              last_updated = NOW()
+            """,
+            user_id,
+            json.dumps(payload),
+            json.dumps(learned),
+        )
+    except Exception as exc:
+        logger.warning("Value feedback signal insert failed for user %s: %s", user_id[:8], exc)
 
 
 async def _record_skill_feedback_signal(user_id: str, body: FeedbackSubmit) -> None:
@@ -449,6 +545,7 @@ async def submit_feedback(
     # - do_now         -> trigger IOO Execution Protocol and record outcome
     await _record_ioo_outcome_if_applicable(user_id, body.screen_spec_id, body.rating)
     await _record_skill_feedback_signal(user_id, body)
+    await _record_value_feedback_signal(user_id, body)
 
     # Build a human-readable message based on the insight
     signal = insight.get("signal_type", "neutral")
