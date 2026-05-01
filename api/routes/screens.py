@@ -12,6 +12,7 @@ import hashlib
 import json
 import logging
 import random
+import re
 import uuid as _uuid_mod
 from datetime import datetime, timezone
 from typing import Any, List, Optional
@@ -853,6 +854,7 @@ _CURATED_REAL_ACTIONS: list[dict[str, Any]] = [
     {
         "key": "vancouver_yoga_class",
         "domain": "Aventi",
+        "city": "Vancouver, BC",
         "tag": "local_yoga_class",
         "kind": "Local class",
         "title": "Attend a Vancouver yoga class this week",
@@ -871,6 +873,7 @@ _CURATED_REAL_ACTIONS: list[dict[str, Any]] = [
     {
         "key": "vancouver_skydiving",
         "domain": "Aventi",
+        "city": "Vancouver, BC",
         "tag": "adventure_skydiving",
         "kind": "Adventure booking",
         "title": "Book a real skydiving adventure near Vancouver",
@@ -1213,19 +1216,58 @@ async def _user_city(user_id: str) -> Optional[str]:
         return None
 
 
+def _city_token(value: Optional[str]) -> str:
+    """Extract a robust city token from values like 'Victoria, Canada'."""
+    if not value:
+        return ""
+    token = str(value).lower().split(",")[0]
+    token = re.sub(r"(city of|near)", "", token)
+    token = re.sub(r"[^a-z0-9]+", " ", token).strip()
+    return token
+
+
+def _item_location_text(item: dict[str, Any]) -> str:
+    return " ".join(
+        str(item.get(key) or "")
+        for key in ("city", "title", "body", "url", "source_url", "provider_url", "booking_url", "map_url")
+    ).lower()
+
+
 def _city_rank(item: dict[str, Any], preferred_city: Optional[str]) -> int:
     if not preferred_city:
         return 0
-    item_city = str(item.get("city") or "").lower()
-    city = preferred_city.lower()
-    if item_city and (city in item_city or item_city in city):
+    preferred = _city_token(preferred_city)
+    if not preferred:
         return 0
+    item_city = _city_token(item.get("city"))
     if item_city:
-        # Wrong-city physical opportunities should come after local and
-        # location-neutral options. Vancouver should not outrank Victoria for a
-        # Victoria user just because it appears earlier in the curated list.
+        if preferred == item_city or preferred in item_city or item_city in preferred:
+            return 0
+        # Wrong-city physical opportunities should be ineligible for a user
+        # with a known location. This is a hard filter upstream, not just a
+        # ranking hint.
         return 4
+
+    # Defensive fallback for older curated cards that forgot to set `city` but
+    # clearly mention a city in title/body/URLs (e.g. Vancouver yoga). Known user
+    # location must still win over those legacy cards.
+    text = _item_location_text(item)
+    known_local_markers = {
+        "victoria": ("victoria", "greater victoria", "gvpl", "viatec"),
+        "vancouver": ("vancouver", "stanley park", "science world", "yyoga", "abbotsford"),
+    }
+    for city_name, markers in known_local_markers.items():
+        if any(marker in text for marker in markers):
+            return 0 if city_name == preferred else 4
     return 1
+
+
+def _filter_location_eligible(candidates: list[dict[str, Any]], preferred_city: Optional[str]) -> list[dict[str, Any]]:
+    """Hard-filter wrong-city local opportunities when user location is known."""
+    if not preferred_city:
+        return candidates
+    eligible = [item for item in candidates if _city_rank(item, preferred_city) <= 1]
+    return eligible or [item for item in candidates if not item.get("city")]
 
 
 async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None, preferred_city: Optional[str] = None) -> Optional[ScreenResponse]:
@@ -1244,8 +1286,7 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
     if preferred_city:
-        local_or_neutral = [item for item in candidates if _city_rank(item, preferred_city) <= 1]
-        candidates = local_or_neutral or candidates
+        candidates = _filter_location_eligible(candidates, preferred_city)
         candidates = sorted(candidates, key=lambda item: (_city_rank(item, preferred_city), item.get("key", "")))
     start = int(digest[:8], 16) % len(candidates)
     idx = (start + slot_index + current_count) % len(candidates)
