@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T21:05:41.803054+00:00",
-  "exported_at": "2026-05-01T21:05:41.803054+00:00",
-  "collected_at": "2026-05-01T21:05:41.803054+00:00",
+  "timestamp": "2026-05-01T22:05:45.695864+00:00",
+  "exported_at": "2026-05-01T22:05:45.695864+00:00",
+  "collected_at": "2026-05-01T22:05:45.695864+00:00",
   "identity": {
-    "total_lessons": 1298,
+    "total_lessons": 1299,
     "lessons": [
+      {
+        "id": "3562e576-fd6a-4adb-9358-f2f13cf98915",
+        "lesson": "Newsletter for 2026-W17 generated. Community is active with habit completions. Lesson of the week: '{\"proposal_id\": \"1f777560-6259-41ff-a91d-4700ccd4de13\", \"card_type\": \"personalized_reflection\", \"hyp'",
+        "confidence": 0.7,
+        "source": "worker.newsletter_agent",
+        "created_at": "2026-05-01 22:01:54.529524"
+      },
       {
         "id": "1f777560-6259-41ff-a91d-4700ccd4de13",
         "lesson": "{\"proposal_id\": \"1f777560-6259-41ff-a91d-4700ccd4de13\", \"card_type\": \"personalized_reflection\", \"hypothesis\": \"Introducing a personalized reflection card will increase engagement by 20% as users find value in reflecting on their experiences.\", \"description\": \"This card will prompt users to reflect on their interactions within the app, asking them to jot down key takeaways or insights from their recent activities. By making the experience intuitive and visually appealing, users are encouraged to connect personally with their journey, ultimately fostering a deeper engagement with the content.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T21:03:43.388248+00:00\", \"expires_at\": \"2026-05-03T21:03:43.388248+00:00\", \"result\": null}",
@@ -9193,7 +9200,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "46f606ca62062a8a"
+    "lessons_hash": "f2d1f907089e4eac"
   },
   "platform_stats": {
     "total_users": 20,
