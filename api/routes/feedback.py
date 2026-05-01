@@ -135,6 +135,98 @@ async def _record_skill_feedback_signal(user_id: str, body: FeedbackSubmit) -> N
         logger.warning("Skill feedback signal insert failed for user %s: %s", user_id[:8], exc)
 
 
+async def _apply_global_feedback_to_ioo(
+    *,
+    body: FeedbackSubmit,
+    user_id: str,
+    feedback_id: Any,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    """Turn feedback into immediate graph learning when it references a card/node."""
+    category = body.category or "Other"
+    context = metadata.get("feedback_context") if isinstance(metadata.get("feedback_context"), dict) else {}
+    screen_spec_id = context.get("screen_spec_id") or metadata.get("screen_spec_id")
+    node_id = context.get("node_id") or metadata.get("node_id")
+    learned: dict[str, Any] = {"applied": False}
+
+    if screen_spec_id:
+        try:
+            row = await fetchrow(
+                "SELECT ioo_node_id, spec FROM screen_specs WHERE id = $1::uuid",
+                str(screen_spec_id),
+            )
+            if row:
+                if not node_id and row["ioo_node_id"]:
+                    node_id = str(row["ioo_node_id"])
+                await execute(
+                    """
+                    UPDATE screen_specs
+                    SET global_rating = GREATEST(-1.0, COALESCE(global_rating, 0) - 0.15),
+                        impression_count = COALESCE(impression_count, 0) + 1
+                    WHERE id = $1::uuid
+                    """,
+                    str(screen_spec_id),
+                )
+                learned["screen_spec_id"] = str(screen_spec_id)
+        except Exception as exc:
+            logger.warning("Feedback screen correction skipped: %s", exc)
+
+    bad_signal = category in {"Bad Card/Node", "Malfunction", "Bug", "Confusing"}
+    if node_id and bad_signal:
+        try:
+            await execute(
+                """
+                UPDATE ioo_nodes
+                SET engagement_score = GREATEST(0.0, COALESCE(engagement_score, 0.5) - 0.08),
+                    fulfilment_score = GREATEST(0.0, COALESCE(fulfilment_score, 0.5) - 0.06),
+                    updated_at = NOW()
+                WHERE id = $1::uuid
+                """,
+                str(node_id),
+            )
+            await execute(
+                """
+                INSERT INTO ioo_graph_events (event_type, user_id, node_id, payload)
+                VALUES ('feedback_correction', $1::uuid, $2::uuid, $3::jsonb)
+                """,
+                str(user_id),
+                str(node_id),
+                json.dumps({
+                    "feedback_id": str(feedback_id) if feedback_id else None,
+                    "category": category,
+                    "message": body.message,
+                    "route": body.route,
+                    "context": context,
+                    "effect": "downranked_node_pending_review",
+                }),
+            )
+            learned.update({"applied": True, "node_id": str(node_id), "effect": "downranked_node_pending_review"})
+        except Exception as exc:
+            logger.warning("Feedback IOO correction skipped: %s", exc)
+    elif bad_signal:
+        try:
+            await execute(
+                """
+                INSERT INTO ioo_graph_events (event_type, user_id, payload)
+                VALUES ('feedback_correction_unlinked', $1::uuid, $2::jsonb)
+                """,
+                str(user_id),
+                json.dumps({
+                    "feedback_id": str(feedback_id) if feedback_id else None,
+                    "category": category,
+                    "message": body.message,
+                    "route": body.route,
+                    "context": context,
+                    "effect": "stored_for_review_no_node_link",
+                }),
+            )
+            learned.update({"applied": True, "effect": "stored_for_review_no_node_link"})
+        except Exception as exc:
+            logger.warning("Unlinked feedback correction event skipped: %s", exc)
+
+    return learned
+
+
 async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> FeedbackResponse:
     message = (body.message or "").strip()
     if len(message) < 3:
@@ -189,6 +281,12 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
         json.dumps(metadata),
     )
     feedback_id = feedback["id"] if feedback else None
+    graph_learning = await _apply_global_feedback_to_ioo(
+        body=body,
+        user_id=user_id,
+        feedback_id=feedback_id,
+        metadata=metadata,
+    )
 
     contributor = await _get_or_create_feedback_contributor(user_uuid)
     contribution = None
@@ -216,6 +314,7 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
                 "feedback_id": str(feedback_id) if feedback_id else None,
                 "screenshot_url": screenshot_url,
                 "screenshot_key": screenshot_key,
+                "graph_learning": graph_learning,
             }),
         )
     except Exception as err:
@@ -253,10 +352,16 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
         logger.warning(f"Feedback CP award failed (non-fatal): {err}")
 
     cp_row = await fetchrow("SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1", user_uuid)
+    response_message = "Feedback submitted +10 CP"
+    if graph_learning.get("effect") == "downranked_node_pending_review":
+        response_message = "Feedback submitted +10 CP. Aura downranked this node and queued it for review."
+    elif graph_learning.get("effect") == "stored_for_review_no_node_link":
+        response_message = "Feedback submitted +10 CP. Aura stored this for review and will use it to improve the graph."
+
     return FeedbackResponse(
         ok=True,
         fulfilment_delta=0.0,
-        message="Feedback submitted +10 CP",
+        message=response_message,
         cp_earned=GLOBAL_FEEDBACK_CP,
         cp_balance=int(cp_row["cp_balance"] or 0) if cp_row else None,
         total_dao_cp=int(cp_row["total_cp_earned"] or 0) if cp_row else None,
