@@ -1144,15 +1144,30 @@ async def _build_screen_response_from_spec(user_id: str, tier: str, daily_limit:
 
 
 async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> Optional[ScreenResponse]:
-    """Turn a stored live event into a feed card when the user's city has events."""
+    """Turn a stored live event into a feed card when the user's city has events.
+
+    If the city pipeline is empty, do one best-effort sync inline so real future
+    events can appear directly in the feed instead of waiting for a separate
+    cron/admin sync. This stays read-only toward event platforms and only stores
+    public event metadata.
+    """
     try:
         from ora.agents.event_agent import EventAgent
 
-        events = await EventAgent().get_recommended_events(user_id=str(user_id), days_ahead=14, limit=8)
+        agent = EventAgent()
+        city = await _user_city(user_id)
+        events = await agent.get_recommended_events(user_id=str(user_id), days_ahead=14, limit=8)
         events = [ev for ev in events if ev.get("url")]
+        if not events and city:
+            try:
+                await agent.sync_city(city, force=False)
+            except Exception as sync_err:
+                logger.debug("Live event feed sync skipped for %s/%s: %s", str(user_id)[:8], city, sync_err)
+            events = await agent.get_events_for_city(city=city, days_ahead=14, limit=8)
+            events = [ev for ev in events if ev.get("url")]
         if not events:
             return None
-        event = random.choice(events[: min(5, len(events))])
+        event = events[0] if len(events) <= 2 else random.choice(events[: min(5, len(events))])
         item = {
             "domain": "Aventi",
             "tag": "live_event",

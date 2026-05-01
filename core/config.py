@@ -74,6 +74,7 @@ class Settings(BaseSettings):
     GOOGLE_PLACES_API_KEY: str = ""  # Optional — enables real venue search
     SERPAPI_KEY: str = ""            # Google Events via SerpAPI (set in Railway env vars)
     EVENTBRITE_TOKEN: str = ""       # Eventbrite public API token (set in Railway env vars)
+    TICKETMASTER_API_KEY: str = ""   # Ticketmaster Discovery API (optional)
 
     # Feedback screenshots — local dev fallback or S3/R2-compatible object storage
     FEEDBACK_SCREENSHOT_STORAGE_BACKEND: str = "local"  # local | s3
@@ -147,6 +148,10 @@ class Settings(BaseSettings):
     @property
     def has_eventbrite(self) -> bool:
         return bool(self.EVENTBRITE_TOKEN)
+
+    @property
+    def has_ticketmaster(self) -> bool:
+        return bool(self.TICKETMASTER_API_KEY)
 
     @property
     def is_production(self) -> bool:

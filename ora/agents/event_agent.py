@@ -12,7 +12,9 @@ Architecture: conveyor belt
 Sources (in priority order):
   1. SerpAPI Google Events — richest data; gated on SERPAPI_KEY env var
   2. Eventbrite public API — gated on EVENTBRITE_TOKEN env var
-  3. Meetup.com HTML scraper — no auth, best-effort
+  3. Ticketmaster Discovery API — gated on TICKETMASTER_API_KEY env var
+  4. Meetup.com HTML scraper — no auth, best-effort
+  5. Generic public JSON-LD scrapers — best-effort for platforms exposing schema.org Event data
 
 Redis caching:
   • Cache key  : events:city:<normalized_city>
@@ -26,6 +28,7 @@ Note: Set EVENTBRITE_TOKEN in Railway env vars to enable Eventbrite fetching.
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import logging
 import os
@@ -46,6 +49,14 @@ REDIS_TTL_SECONDS = 12 * 3600          # 12 hours
 FETCH_HORIZON_DAYS = 14                # pull up to 14 days ahead from sources
 SERVE_WINDOW_DAYS = 7                  # recommendation endpoint shows next 7 days
 MAX_SERVE_WINDOW_DAYS = 14             # hard cap on days_ahead param
+
+EVENT_PLATFORM_SCRAPE_TARGETS: Dict[str, str] = {
+    # Public event search pages that commonly expose schema.org Event JSON-LD.
+    # These are best-effort and intentionally read-only; API adapters remain
+    # preferred whenever a platform offers one and credentials are configured.
+    "eventbrite_page": "https://www.eventbrite.com/d/{city_slug}/events/",
+    "meetup_page": "https://www.meetup.com/find/?location={city_query}&source=EVENTS",
+}
 
 # Category heuristics: keyword → canonical category
 CATEGORY_KEYWORDS: Dict[str, List[str]] = {
@@ -143,6 +154,303 @@ def _dedup_events(events: List[Dict]) -> List[Dict]:
         result.append(ev)
     return result
 
+
+
+def _city_slug(city: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", city.lower()).strip("-")
+
+
+def _fetch_url(url: str, timeout: int = 12) -> str:
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def _parse_event_datetime(raw: Any) -> Optional[datetime]:
+    if not raw:
+        return None
+    if isinstance(raw, datetime):
+        return raw.astimezone(timezone.utc) if raw.tzinfo else raw.replace(tzinfo=timezone.utc)
+    text = str(raw).strip()
+    if not text:
+        return None
+    text = text.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(text)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except ValueError:
+        pass
+    for fmt in ("%Y-%m-%d", "%a, %b %d, %Y", "%b %d, %Y", "%A, %B %d, %Y"):
+        try:
+            dt = datetime.strptime(text, fmt)
+            return dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _first_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return html.unescape(re.sub(r"<[^>]+>", " ", value)).strip()
+    if isinstance(value, list):
+        for item in value:
+            text = _first_text(item)
+            if text:
+                return text
+        return ""
+    if isinstance(value, dict):
+        for key in ("text", "name", "url", "content"):
+            text = _first_text(value.get(key))
+            if text:
+                return text
+    return str(value).strip()
+
+
+def _jsonld_nodes(value: Any) -> List[Dict[str, Any]]:
+    nodes: List[Dict[str, Any]] = []
+    if isinstance(value, list):
+        for item in value:
+            nodes.extend(_jsonld_nodes(item))
+    elif isinstance(value, dict):
+        nodes.append(value)
+        for key in ("@graph", "itemListElement", "events"):
+            if key in value:
+                nodes.extend(_jsonld_nodes(value.get(key)))
+        item = value.get("item")
+        if isinstance(item, dict):
+            nodes.extend(_jsonld_nodes(item))
+    return nodes
+
+
+def _is_jsonld_event(item: Dict[str, Any]) -> bool:
+    raw_type = item.get("@type") or item.get("type")
+    types = raw_type if isinstance(raw_type, list) else [raw_type]
+    return any(str(t).lower().endswith("event") for t in types if t)
+
+
+def _location_parts(location: Any) -> Tuple[str, str, Optional[float], Optional[float]]:
+    if isinstance(location, list):
+        location = location[0] if location else {}
+    if isinstance(location, str):
+        return "", location, None, None
+    if not isinstance(location, dict):
+        return "", "", None, None
+    venue = _first_text(location.get("name"))
+    address_obj = location.get("address") or {}
+    if isinstance(address_obj, str):
+        address = address_obj
+    elif isinstance(address_obj, dict):
+        address = ", ".join(
+            part for part in [
+                _first_text(address_obj.get("streetAddress")),
+                _first_text(address_obj.get("addressLocality")),
+                _first_text(address_obj.get("addressRegion")),
+                _first_text(address_obj.get("postalCode")),
+                _first_text(address_obj.get("addressCountry")),
+            ] if part
+        )
+    else:
+        address = ""
+    geo = location.get("geo") or {}
+    lat = geo.get("latitude") if isinstance(geo, dict) else None
+    lng = geo.get("longitude") if isinstance(geo, dict) else None
+    try:
+        lat = float(lat) if lat not in (None, "") else None
+        lng = float(lng) if lng not in (None, "") else None
+    except (TypeError, ValueError):
+        lat = lng = None
+    return venue, address, lat, lng
+
+
+def _offer_price(offers: Any) -> str:
+    offers_list = offers if isinstance(offers, list) else [offers]
+    prices = []
+    for offer in offers_list:
+        if not isinstance(offer, dict):
+            continue
+        price = offer.get("price")
+        currency = offer.get("priceCurrency") or "$"
+        if price in (None, ""):
+            continue
+        if str(price) in {"0", "0.0", "0.00"}:
+            return "free"
+        prices.append(f"{currency}{price}" if str(currency) != "$" else f"${price}")
+    return "–".join(prices[:2]) if prices else "unknown"
+
+
+def _image_url(image: Any) -> str:
+    if isinstance(image, list):
+        return _image_url(image[0]) if image else ""
+    if isinstance(image, dict):
+        return _first_text(image.get("url") or image.get("contentUrl"))
+    return _first_text(image)
+
+
+def _event_from_jsonld(item: Dict[str, Any], city: str, source: str, page_url: str) -> Optional[Dict]:
+    title = _first_text(item.get("name"))
+    starts_at = _parse_event_datetime(item.get("startDate") or item.get("start_date"))
+    if not title or not starts_at or starts_at < datetime.now(timezone.utc):
+        return None
+    ends_at = _parse_event_datetime(item.get("endDate") or item.get("end_date"))
+    description = _first_text(item.get("description"))[:2000]
+    venue, address, lat, lng = _location_parts(item.get("location"))
+    event_url = _first_text(item.get("url")) or page_url
+    raw_id = item.get("identifier") or item.get("@id") or event_url or f"{title}{starts_at.isoformat()}"
+    if isinstance(raw_id, dict):
+        raw_id = raw_id.get("value") or raw_id.get("@id") or json.dumps(raw_id, sort_keys=True)
+    external_id = _make_external_id(source, hashlib.md5(str(raw_id).encode()).hexdigest()[:16])
+    category = _infer_category(title, description)
+    return {
+        "external_id": external_id,
+        "title": title,
+        "description": description,
+        "category": category,
+        "venue_name": venue,
+        "address": address,
+        "city": city,
+        "latitude": lat,
+        "longitude": lng,
+        "starts_at": starts_at,
+        "ends_at": ends_at,
+        "url": event_url,
+        "image_url": _image_url(item.get("image")),
+        "price_range": _offer_price(item.get("offers")),
+        "source": source,
+        "relevance_tags": _infer_tags(title, description, category),
+    }
+
+
+def _extract_jsonld_events(html_text: str, city: str, source: str, page_url: str) -> List[Dict]:
+    parsed: List[Dict] = []
+    scripts = re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html_text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    for script in scripts:
+        try:
+            data = json.loads(html.unescape(script.strip()))
+        except json.JSONDecodeError:
+            continue
+        for node in _jsonld_nodes(data):
+            if not _is_jsonld_event(node):
+                continue
+            event = _event_from_jsonld(node, city, source, page_url)
+            if event:
+                parsed.append(event)
+    return _dedup_events(parsed)
+
+
+def _scrape_jsonld_event_platform(city: str, source: str, url_template: str) -> List[Dict]:
+    try:
+        url = url_template.format(
+            city_slug=_city_slug(city),
+            city_query=urllib.parse.quote(city),
+        )
+        html_text = _fetch_url(url)
+        events = _extract_jsonld_events(html_text, city, source, url)
+        logger.info(f"{source}: extracted {len(events)} JSON-LD future events for {city}")
+        return events
+    except Exception as e:
+        logger.warning(f"{source} scrape failed for {city}: {e}")
+        return []
+
+
+# ── Source: Ticketmaster Discovery API ───────────────────────────────────────
+
+def _fetch_ticketmaster_events(city: str, api_key: str) -> List[Dict]:
+    """Fetch public Ticketmaster events when TICKETMASTER_API_KEY is configured."""
+    if not api_key:
+        return []
+    try:
+        now_utc = datetime.now(timezone.utc)
+        horizon = now_utc + timedelta(days=FETCH_HORIZON_DAYS)
+        params = {
+            "apikey": api_key,
+            "city": city,
+            "countryCode": "CA",
+            "startDateTime": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "endDateTime": horizon.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "sort": "date,asc",
+            "size": "50",
+        }
+        url = "https://app.ticketmaster.com/discovery/v2/events.json?" + urllib.parse.urlencode(params)
+        data = json.loads(_fetch_url(url))
+        raw_events = ((data.get("_embedded") or {}).get("events") or [])
+        parsed: List[Dict] = []
+        for ev in raw_events:
+            starts_raw = ((ev.get("dates") or {}).get("start") or {}).get("dateTime")
+            starts_at = _parse_event_datetime(starts_raw)
+            if not starts_at or starts_at < now_utc:
+                continue
+            title = _first_text(ev.get("name"))
+            description = _first_text(ev.get("info") or ev.get("pleaseNote"))
+            venues = ((ev.get("_embedded") or {}).get("venues") or [])
+            venue = venues[0] if venues else {}
+            address_obj = venue.get("address") or {}
+            city_obj = venue.get("city") or {}
+            state_obj = venue.get("state") or {}
+            address = ", ".join(
+                part for part in [
+                    _first_text(address_obj.get("line1")),
+                    _first_text(city_obj.get("name")),
+                    _first_text(state_obj.get("stateCode") or state_obj.get("name")),
+                ] if part
+            )
+            loc = venue.get("location") or {}
+            try:
+                lat = float(loc.get("latitude")) if loc.get("latitude") else None
+                lng = float(loc.get("longitude")) if loc.get("longitude") else None
+            except (TypeError, ValueError):
+                lat = lng = None
+            price_ranges = ev.get("priceRanges") or []
+            price_range = "unknown"
+            if price_ranges:
+                pr = price_ranges[0]
+                currency = pr.get("currency") or "$"
+                min_p = pr.get("min")
+                max_p = pr.get("max")
+                price_range = f"{currency}{min_p}–{currency}{max_p}" if min_p and max_p else "paid"
+            images = ev.get("images") or []
+            image = images[0].get("url", "") if images else ""
+            category = _infer_category(title, description)
+            parsed.append({
+                "external_id": _make_external_id("ticketmaster", ev.get("id") or hashlib.md5(title.encode()).hexdigest()[:12]),
+                "title": title,
+                "description": description[:2000],
+                "category": category,
+                "venue_name": _first_text(venue.get("name")),
+                "address": address,
+                "city": city,
+                "latitude": lat,
+                "longitude": lng,
+                "starts_at": starts_at,
+                "ends_at": None,
+                "url": ev.get("url", ""),
+                "image_url": image,
+                "price_range": price_range,
+                "source": "ticketmaster",
+                "relevance_tags": _infer_tags(title, description, category),
+            })
+        logger.info(f"Ticketmaster: fetched {len(parsed)} future events for {city}")
+        return parsed
+    except Exception as e:
+        logger.warning(f"Ticketmaster fetch failed for {city}: {e}")
+        return []
 
 # ── Source 1: SerpAPI Google Events ──────────────────────────────────────────
 
@@ -605,6 +913,7 @@ class EventAgent:
         self.openai = openai_client
         self._serpapi_key = getattr(settings, "SERPAPI_KEY", "") or os.getenv("SERPAPI_KEY", "")
         self._eb_token = getattr(settings, "EVENTBRITE_TOKEN", "") or os.getenv("EVENTBRITE_TOKEN", "")
+        self._ticketmaster_key = getattr(settings, "TICKETMASTER_API_KEY", "") or os.getenv("TICKETMASTER_API_KEY", "")
 
     async def sync_city(self, city: str, force: bool = False) -> Dict[str, Any]:
         """
@@ -653,10 +962,28 @@ class EventAgent:
         all_events.extend(eb_events)
         source_counts["eventbrite"] = len(eb_events)
 
-        # Source 3: Meetup scrape
+        # Source 3: Ticketmaster Discovery API
+        if self._ticketmaster_key:
+            tm_events = _fetch_ticketmaster_events(city, self._ticketmaster_key)
+            all_events.extend(tm_events)
+            source_counts["ticketmaster"] = len(tm_events)
+        else:
+            source_counts["ticketmaster"] = 0
+
+        # Source 4: legacy Meetup JSON-LD scrape
         meetup_events = _scrape_meetup_events(city)
         all_events.extend(meetup_events)
         source_counts["meetup_scrape"] = len(meetup_events)
+
+        # Source 5+: generic public JSON-LD platform scrapers
+        for source, url_template in EVENT_PLATFORM_SCRAPE_TARGETS.items():
+            if source == "meetup_page":
+                # The legacy Meetup parser above has richer handling; keep this
+                # target documented but avoid double-fetching by default.
+                continue
+            platform_events = _scrape_jsonld_event_platform(city, source, url_template)
+            all_events.extend(platform_events)
+            source_counts[source] = len(platform_events)
 
         # Filter to fetch horizon window
         horizon = datetime.now(timezone.utc) + timedelta(days=FETCH_HORIZON_DAYS)
