@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T17:46:09.539891+00:00",
-  "exported_at": "2026-05-01T17:46:09.539891+00:00",
-  "collected_at": "2026-05-01T17:46:09.539891+00:00",
+  "timestamp": "2026-05-01T17:49:05.627206+00:00",
+  "exported_at": "2026-05-01T17:49:05.627206+00:00",
+  "collected_at": "2026-05-01T17:49:05.627206+00:00",
   "identity": {
-    "total_lessons": 1255,
+    "total_lessons": 1256,
     "lessons": [
+      {
+        "id": "b20d2671-7b4f-4a7c-bf86-2c6aa861b131",
+        "lesson": "{\"proposal_id\": \"b20d2671-7b4f-4a7c-bf86-2c6aa861b131\", \"card_type\": \"action_prompt_card\", \"hypothesis\": \"Implementing an action prompt card will increase user engagement by 25%\", \"description\": \"This card will display personalized action prompts based on user preferences and past interactions, encouraging them to complete tasks or explore new features. By integrating quick access buttons for high-rated activities alongside engaging visuals, users are more likely to interact with the content rather than exit the session.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T17:47:07.571133+00:00\", \"expires_at\": \"2026-05-03T17:47:07.571133+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-01 17:47:07.571133"
+      },
       {
         "id": "3391be1d-177c-4a1d-985d-6570734eccd3",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -8892,7 +8899,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "8ee68696a3efcced"
+    "lessons_hash": "4074228cd06a2f5a"
   },
   "platform_stats": {
     "total_users": 20,
