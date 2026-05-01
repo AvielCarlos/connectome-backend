@@ -31,7 +31,7 @@ from core.config import settings
 from api.middleware import get_current_user_id
 from ora.brain import get_brain
 from ora.user_model import get_daily_screen_count, increment_daily_screen_count
-from core.database import fetchrow, execute
+from core.database import fetch, fetchrow, execute
 from core.geo import get_location_for_ip, geo_to_context_hints
 from uuid import UUID
 
@@ -1004,7 +1004,36 @@ async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> O
         return None
 
 
-async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None) -> Optional[ScreenResponse]:
+async def _user_city(user_id: str) -> Optional[str]:
+    """Return the user's explicit/live city when available. IP geo is only fallback elsewhere."""
+    try:
+        row = await fetchrow(
+            """
+            SELECT COALESCE(NULLIF(u.city, ''), NULLIF(s.location_city, '')) AS city
+            FROM users u
+            LEFT JOIN ioo_user_state s ON s.user_id = u.id
+            WHERE u.id = $1
+            """,
+            str(user_id),
+        )
+        return str(row["city"]).strip() if row and row.get("city") else None
+    except Exception:
+        return None
+
+
+def _city_rank(item: dict[str, Any], preferred_city: Optional[str]) -> int:
+    if not preferred_city:
+        return 0
+    item_city = str(item.get("city") or "").lower()
+    city = preferred_city.lower()
+    if item_city and (city in item_city or item_city in city):
+        return 0
+    if item_city:
+        return 2
+    return 1
+
+
+async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None, preferred_city: Optional[str] = None) -> Optional[ScreenResponse]:
     """Diversify the main feed with concrete learn/attend/book actions."""
     # Prefer true live event data for the first Aventi slot, then fall back to
     # curated verified URLs so the feed is never only generic Eviva cards.
@@ -1017,6 +1046,8 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     candidates = [item for item in _CURATED_REAL_ACTIONS if not domain_filter or item.get('domain') == domain_filter or (domain_filter == 'iVive' and item.get('domain') == 'Rest')]
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
+    if preferred_city:
+        candidates = sorted(candidates, key=lambda item: _city_rank(item, preferred_city))
     start = int(digest[:8], 16) % len(candidates)
     idx = (start + slot_index) % len(candidates)
     item = dict(candidates[idx])
@@ -1339,12 +1370,14 @@ async def get_next_screen(
     except Exception:
         pass
 
+    preferred_city = await _user_city(user_id)
+
     # ── Smart feed routing ─────────────────────────────────────────────────
     # Product principle: the feed must feel like a living path. Always give a
     # meaningful share of cards to real actions (live events, videos, classes,
     # adventures) so users are not trapped in generic Eviva/IOO opportunity loops.
     if random.random() < 0.45:
-        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain)
+        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city)
         if real_action is not None:
             return real_action
 
@@ -1457,6 +1490,8 @@ async def get_screen_batch(
     except Exception:
         pass
 
+    preferred_city = await _user_city(user_id)
+
     # Check if user has active goals (once, shared across batch)
     # Fetch screens sequentially to respect rate limits and user model updates
     for _ in range(count):
@@ -1468,7 +1503,7 @@ async def get_screen_batch(
             # prevents repeated "Eviva Opportunities" cards from occupying the
             # whole swipe queue.
             if slot_index in (0, 2, 4):
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city)
                 if real_action is not None:
                     results.append(real_action)
                     continue
@@ -1481,7 +1516,7 @@ async def get_screen_batch(
                     continue
 
             if random.random() < 0.35:
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city)
                 if real_action is not None:
                     results.append(real_action)
                     continue
