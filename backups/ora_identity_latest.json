@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T03:36:18.305096+00:00",
-  "exported_at": "2026-05-01T03:36:18.305096+00:00",
-  "collected_at": "2026-05-01T03:36:18.305096+00:00",
+  "timestamp": "2026-05-01T03:39:13.651828+00:00",
+  "exported_at": "2026-05-01T03:39:13.651828+00:00",
+  "collected_at": "2026-05-01T03:39:13.651828+00:00",
   "identity": {
-    "total_lessons": 1168,
+    "total_lessons": 1169,
     "lessons": [
+      {
+        "id": "5f22f169-176f-48c9-84b5-53d0a8191127",
+        "lesson": "{\"proposal_id\": \"5f22f169-176f-48c9-84b5-53d0a8191127\", \"card_type\": \"contextual_motivation_card\", \"hypothesis\": \"Introducing contextual motivation cards will increase user engagement by 20%.\", \"description\": \"These cards will present personalized motivational messages and related achievements based on user activity and preferences at strategic moments, such as after completing a task or hitting a milestone. By reinforcing positive behaviors and highlighting user strengths, these cards aim to enhance the user's sense of purpose and drive.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T03:37:16.621308+00:00\", \"expires_at\": \"2026-05-03T03:37:16.621308+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-01 03:37:16.621308"
+      },
       {
         "id": "e0893a4e-1c35-4155-9051-2b655292859e",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -8283,7 +8290,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "6f3603b1b77f584f"
+    "lessons_hash": "997eb8952429d8dc"
   },
   "platform_stats": {
     "total_users": 19,
