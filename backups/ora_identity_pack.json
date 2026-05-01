@@ -1,11 +1,25 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T17:43:02.971776+00:00",
-  "exported_at": "2026-05-01T17:43:02.971776+00:00",
-  "collected_at": "2026-05-01T17:43:02.971776+00:00",
+  "timestamp": "2026-05-01T17:45:53.798986+00:00",
+  "exported_at": "2026-05-01T17:45:53.798986+00:00",
+  "collected_at": "2026-05-01T17:45:53.798986+00:00",
   "identity": {
-    "total_lessons": 1244,
+    "total_lessons": 1246,
     "lessons": [
+      {
+        "id": "308bf2ce-5eae-4204-b7ca-28cf4fbe0b8f",
+        "lesson": "{\"proposal_id\": \"308bf2ce-5eae-4204-b7ca-28cf4fbe0b8f\", \"card_type\": \"personalized_goal_setting\", \"hypothesis\": \"Users who interact with personalized goal-setting cards will experience a 25% increase in fulfilment score.\", \"description\": \"This card type prompts users to set specific, achievable goals based on their past behaviour and preferences. It provides tailored suggestions and progress tracking features, allowing users to visualize their progress towards these goals. The focus on personal milestones fosters a sense of ownership and commitment, leading to increased engagement.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T17:43:56.565498+00:00\", \"expires_at\": \"2026-05-03T17:43:56.565498+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-01 17:43:56.565498"
+      },
+      {
+        "id": "fc0d74ba-579d-4b54-ba60-06499b55a8e6",
+        "lesson": "{\"proposal_id\": \"fc0d74ba-579d-4b54-ba60-06499b55a8e6\", \"card_type\": \"interactive_guided_tutorial\", \"hypothesis\": \"Implementing an interactive guided tutorial card could increase user fulfilment by 20%.\", \"description\": \"This card type provides a step-by-step tutorial that uses interactive elements to engage users while they learn how to navigate and utilize app features effectively. Users can ask questions, receive prompts, and complete mini-tasks within the card, which encourages retention and a deeper understanding of the app's capabilities.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T17:43:03.638666+00:00\", \"expires_at\": \"2026-05-03T17:43:03.638666+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-01 17:43:03.638666"
+      },
       {
         "id": "ec423eba-222f-4a88-887e-0f00a46b4f43",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -3998,7 +4012,7 @@
       },
       {
         "id": "1564a875-4158-4353-bb3d-9f5939e553d4",
-        "lesson": "{\"proposal_id\": \"1564a875-4158-4353-bb3d-9f5939e553d4\", \"card_type\": \"interactive_feedback_card\", \"hypothesis\": \"Implementing an interactive feedback card will reduce skip exit points by 30%.\", \"description\": \"This card allows users to provide real-time feedback on the content they just viewed through quick polls or emoji reactions. By engaging users in this manner, we cater to their need for expression and improve overall content relevance, which should lead to fewer skip actions.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-04-29T17:41:33.346419+00:00\", \"expires_at\": \"2026-05-01T17:41:33.346419+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"1564a875-4158-4353-bb3d-9f5939e553d4\", \"card_type\": \"interactive_feedback_card\", \"hypothesis\": \"Implementing an interactive feedback card will reduce skip exit points by 30%.\", \"description\": \"This card allows users to provide real-time feedback on the content they just viewed through quick polls or emoji reactions. By engaging users in this manner, we cater to their need for expression and improve overall content relevance, which should lead to fewer skip actions.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"killed\", \"created_at\": \"2026-04-29T17:41:33.346419+00:00\", \"expires_at\": \"2026-05-01T17:41:33.346419+00:00\", \"result\": {\"observed_improvement\": 0.134, \"threshold\": 0.2, \"promoted\": false, \"evaluated_at\": \"2026-05-01T17:43:03.667426+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-04-29 17:41:33.346419"
@@ -8815,7 +8829,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "c307c810e86400fb"
+    "lessons_hash": "9d6cbbd13964bc9d"
   },
   "platform_stats": {
     "total_users": 20,
