@@ -1405,6 +1405,7 @@ class BatchScreenRequest(BaseModel):
     count: int = 3
     goal_id: Optional[str] = None
     domain: Optional[DomainType] = None
+    context: Optional[str] = None
 
 
 @router.post("/batch", response_model=List[ScreenResponse])
@@ -1487,7 +1488,7 @@ async def get_screen_batch(
 
             spec_dict, db_id, screens_today = await brain.get_screen(
                 user_id=user_id,
-                context=None,
+                context=body.context or "",
                 goal_id=body.goal_id,
                 domain=body.domain,
                 geo_hints=batch_geo_hints,
