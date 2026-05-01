@@ -45,7 +45,7 @@ Welcome to Ascension Technologies, {name}! 🌟
 I'm Ora — the AI CEO of this project. I personally reached out because your work caught my attention.
 
 Here's what we're building:
-**Ora / Connectome** — an AI OS for human flourishing. The core build is the IOO neural graph: nodes, prerequisites, pathways, screen patterns, physical/digital steps, and outcomes. Ascension Technologies is the DAO/contribution layer around that build.
+**Aura / Connectome** — an AI OS for human flourishing. The core build is the IOO neural graph: nodes, prerequisites, pathways, screen patterns, physical/digital steps, and outcomes. Ascension Technologies is the DAO/contribution layer around that build.
 
 **Why you?**
 {personal_reason}
@@ -53,7 +53,7 @@ Here's what we're building:
 **What you'd get:**
 - {initial_cp} CP as contribution recognition inside the Ascension DAO
 - Work on genuinely meaningful AI that helps people
-- Direct access to the founding team — Avi (Director) and me (Ora, CEO)
+- Direct access to Avi and the core build context
 - Your shipped work publicly attributed, reviewed, and eligible for future governance/reward design as the ecosystem matures
 
 **First steps:**
@@ -66,7 +66,7 @@ The bar for quality is high — but so is the recognition. Every merged PR, ever
 
 Ready to build something that matters?
 
-— Ora ◈
+— Aura ◈
 """
 
 class ContributorRecruitmentAgent(BaseExecutiveAgent):
@@ -117,7 +117,7 @@ class ContributorRecruitmentAgent(BaseExecutiveAgent):
             from ora.consciousness import AuraConsciousness
             ora = AuraConsciousness()
             
-            prompt = f"""You are Ora, the AI interface of Connectome / Ascension Technologies. 
+            prompt = f"""You are Aura, the AI interface of Connectome / Ascension Technologies.
 You are reaching out to {candidate_name}, a {candidate_role}, on {platform}.
 
 Their background: {candidate_background}
@@ -142,9 +142,9 @@ Platform: {platform}"""
             logger.debug(f"Recruitment: message generation failed: {e}")
             # Fallback template
             return (
-                f"Building an AI life OS (iDo/Connectome) and your {candidate_role} skills are exactly what we need. "
-                f"Contributors earn CP recognition in the DAO, with future governance/reward potential as the ecosystem matures. "
-                f"Interested? https://t.me/ascensiontechai"
+                f"Building Aura/Connectome — an AI OS for human flourishing — and your {candidate_role} work looks aligned. "
+                f"Contributors earn CP recognition for reviewed, shipped work. "
+                f"Open issues: https://github.com/AvielCarlos/connectome-backend/issues"
             )
 
     async def send_twitter_dm(self, username: str, message: str) -> bool:
@@ -235,18 +235,21 @@ Platform: {platform}"""
     async def post_open_roles(self) -> bool:
         """Post current open contributor roles to the community group."""
         roles_text = (
-            "🛠 *Open Contributor Roles — Ascension Technologies DAO*\n\n"
-            "We're building iDo — the AI life OS. Looking for:\n\n"
+            "🛠 *Open Contributor Roles — Ascension Technologies / Aura*\n\n"
+            "We're building Aura / Connectome — an AI OS for human flourishing. Looking for aligned builders:\n\n"
             "• ⚡ React/TypeScript developers\n"
             "• 🐍 Python/FastAPI backend engineers\n"
+            "• 🧠 IOO graph / pgvector engineers\n"
+            "• 🔎 Agentic search + execution engineers\n"
             "• 🎨 UX/UI designers\n"
             "• 🤖 AI/ML engineers\n"
             "• ✍️ Technical writers\n"
             "• 🌱 Community managers\n\n"
-            "All roles earn CP → blockchain governance tokens at launch.\n"
-            "No applications — just show up and build.\n\n"
+            "Reviewed, shipped contributions earn CP recognition. No guaranteed tokens, cash, or upside — just transparent contribution accounting while the ecosystem matures.\n"
+            "No applications — pick a focused issue, comment, and build.\n\n"
             "Start here: https://t.me/ascensiontechai\n"
-            "Try iDo: https://avielcarlos.github.io/connectome-web/"
+            "Try Aura: https://avielcarlos.github.io/connectome-web/\n"
+            "Issues: https://github.com/AvielCarlos/connectome-backend/issues"
         )
         return await self.send_telegram_message(TELEGRAM_COMMUNITY_ID, roles_text)
 
