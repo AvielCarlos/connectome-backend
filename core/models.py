@@ -141,12 +141,12 @@ class FeedbackSubmit(BaseModel):
     time_on_screen_ms: Optional[int] = None
     exit_point: Optional[str] = None
     completed: bool = False
+    metadata: Optional[Dict[str, Any]] = None
     # Global in-app feedback fields
     category: Optional[Literal["Bug", "Malfunction", "Bad Card/Node", "Confusing", "Idea", "Design", "Praise", "Other"]] = None
     message: Optional[str] = None
     route: Optional[str] = None
     screenshot_data_url: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
 
 
 class FeedbackResponse(BaseModel):

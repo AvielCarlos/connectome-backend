@@ -6,6 +6,7 @@ Includes experiment signal collection and implicit behaviour signals.
 
 import logging
 import json
+from datetime import datetime
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -95,6 +96,43 @@ async def _get_or_create_feedback_contributor(user_uuid: UUID) -> Any:
         email,
         user_uuid,
     )
+
+
+async def _record_skill_feedback_signal(user_id: str, body: FeedbackSubmit) -> None:
+    metadata = body.metadata or {}
+    if not isinstance(metadata, dict):
+        return
+    if metadata.get("learning_signal") != "skill_or_fit_mismatch":
+        return
+
+    domain = str(metadata.get("offered_domain") or "general").strip() or "general"
+    skill_key = domain.lower()
+    payload = {
+        "last_signal": "skip",
+        "last_screen_spec_id": body.screen_spec_id,
+        "last_exit_point": body.exit_point,
+        "last_rating": body.rating,
+        "offered_type": metadata.get("offered_type"),
+        "offered_difficulty": metadata.get("offered_difficulty"),
+        "interpretation": metadata.get("interpretation"),
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+    try:
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, skill_levels, state_json, last_updated)
+            VALUES ($1, jsonb_build_object($2::text, $3::jsonb), jsonb_build_object('last_skill_feedback', $3::jsonb), NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+              skill_levels = COALESCE(ioo_user_state.skill_levels, '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb),
+              state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || jsonb_build_object('last_skill_feedback', $3::jsonb),
+              last_updated = NOW()
+            """,
+            user_id,
+            skill_key,
+            json.dumps(payload),
+        )
+    except Exception as exc:
+        logger.warning("Skill feedback signal insert failed for user %s: %s", user_id[:8], exc)
 
 
 async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> FeedbackResponse:
@@ -305,6 +343,7 @@ async def submit_feedback(
     # - do_later       -> save/schedule/resurface as a live opportunity
     # - do_now         -> trigger IOO Execution Protocol and record outcome
     await _record_ioo_outcome_if_applicable(user_id, body.screen_spec_id, body.rating)
+    await _record_skill_feedback_signal(user_id, body)
 
     # Build a human-readable message based on the insight
     signal = insight.get("signal_type", "neutral")

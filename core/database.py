@@ -1906,6 +1906,7 @@ async def run_migrations():
                 location_country TEXT,
                 fitness_level INT DEFAULT 5 CHECK (fitness_level BETWEEN 0 AND 10),
                 known_skills TEXT[] DEFAULT '{}',
+                skill_levels JSONB DEFAULT '{}'::jsonb,
                 has_partner BOOLEAN,
                 has_car BOOLEAN,
                 free_time_weekday_hours NUMERIC(4,1),
@@ -1918,6 +1919,9 @@ async def run_migrations():
         """)
         await conn.execute("""
             ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding vector(1536)
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS skill_levels JSONB DEFAULT '{}'::jsonb
         """)
         await conn.execute("""
             ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding_updated_at TIMESTAMPTZ
