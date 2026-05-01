@@ -48,13 +48,13 @@ class CheckoutRequest(BaseModel):
 
 
 class CreditsCheckoutRequest(BaseModel):
-    quantity: int = 5  # 5 extra path slots per pack
+    quantity: int = 3  # 3 extra open paths per pack
     success_url: str = "https://avielcarlos.github.io/connectome-web/app/goals?credits=granted"
     cancel_url: str = "https://avielcarlos.github.io/connectome-web/app/goals"
 
 
-# Credits grant per purchase quantity
-CREDITS_PER_PACK = 5
+# Credits grant per purchase — 3 extra open paths for $9 one-time
+CREDITS_PER_PACK = 3
 TIER_PATH_LIMITS = {"free": 4, "explorer": 12, "sovereign": 999}
 
 
@@ -248,7 +248,7 @@ async def create_credits_checkout(
 ):
     """
     Create a Stripe Checkout session for purchasing path credits (one-time).
-    5 credits = 5 extra open paths, $9 one-time.
+    3 credits = 3 extra open paths, $9 one-time.
     Set STRIPE_PRICE_PATH_CREDITS in Railway after creating the product in Stripe.
     """
     stripe = get_stripe_client()
