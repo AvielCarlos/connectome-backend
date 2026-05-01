@@ -95,6 +95,7 @@ def _ioo_pattern_components(node: dict, pattern: str) -> list[dict]:
         {"type": "pattern_badge", "text": pattern.replace("_", " ").upper(), "color": "#00d4aa"},
         {"type": "headline", "text": title},
         {"type": "body", "text": desc},
+        _path_progression_component(kind="ioo_node", domain=node.get("domain"), current_stage="choose_path"),
     ]
 
     context = []
@@ -202,6 +203,12 @@ def _ioo_node_to_screen_dict(node: dict) -> dict:
             "node_type": node.get("type"),
             "screen_pattern": pattern,
             "pattern_version": "adaptive_v1",
+            "path_progression": _path_progression_metadata(
+                kind="ioo_node",
+                domain=node.get("domain"),
+                current_stage="choose_path",
+                source_node_id=str(node["id"]),
+            ),
             "domain": node.get("domain"),
             "tags": node.get("tags") or [],
         },
@@ -270,6 +277,93 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
 
     return db_id
 
+
+# ---------------------------------------------------------------------------
+# Path Feed progression graph — user-facing path mechanics
+# ---------------------------------------------------------------------------
+
+PATH_PROGRESSION_STAGES: list[dict[str, str]] = [
+    {
+        "id": "discover",
+        "label": "Discover",
+        "user_role": "Notice what feels alive or useful.",
+        "aura_role": "Search the possibility graph and surface a candidate.",
+    },
+    {
+        "id": "choose_domain",
+        "label": "Focus",
+        "user_role": "Choose iVive, Aventi, Eviva, or stay open.",
+        "aura_role": "Filter and rebalance the feed around that domain.",
+    },
+    {
+        "id": "choose_path",
+        "label": "Choose path",
+        "user_role": "Pick the route that feels worth testing.",
+        "aura_role": "Compare options, prerequisites, reviews, timing, and fit.",
+    },
+    {
+        "id": "confirm_micro_node",
+        "label": "Confirm micro-node",
+        "user_role": "Confirm the real action, time, budget, location, and energy.",
+        "aura_role": "Collapse the card into a doable real-world step.",
+    },
+    {
+        "id": "schedule_book_start",
+        "label": "Commit",
+        "user_role": "Schedule, book, invite, open, or start.",
+        "aura_role": "Create calendar scaffolding, links, reminders, and fallback options.",
+    },
+    {
+        "id": "complete_evidence",
+        "label": "Do + prove",
+        "user_role": "Do the thing and capture evidence or reflection.",
+        "aura_role": "Update state, completion confidence, and graph weights.",
+    },
+    {
+        "id": "learn_reroute",
+        "label": "Learn / reroute",
+        "user_role": "Rate whether it helped and what changed.",
+        "aura_role": "Re-rank similar nodes and unlock the next pathway.",
+    },
+]
+
+
+def _path_progression_metadata(
+    *,
+    kind: str,
+    domain: Optional[str],
+    current_stage: str = "confirm_micro_node",
+    source_node_id: Optional[str] = None,
+) -> dict[str, Any]:
+    """Describe how this feed card participates in the Path Feed progression graph."""
+    stage_ids = [stage["id"] for stage in PATH_PROGRESSION_STAGES]
+    current_index = stage_ids.index(current_stage) if current_stage in stage_ids else 3
+    stages: list[dict[str, Any]] = []
+    for index, stage in enumerate(PATH_PROGRESSION_STAGES):
+        status = "complete" if index < current_index else "active" if index == current_index else "upcoming"
+        stages.append({**stage, "status": status})
+    next_stage = PATH_PROGRESSION_STAGES[min(current_index + 1, len(PATH_PROGRESSION_STAGES) - 1)]["id"]
+    return {
+        "graph": "path_feed_progression_v1",
+        "kind": kind,
+        "domain": "iVive" if domain == "Rest" else domain,
+        "current_stage": current_stage,
+        "next_stage": next_stage,
+        "source_node_id": source_node_id,
+        "stages": stages,
+        "principle": "The feed is a neural graph for building and progressing life paths, not a passive content stream.",
+    }
+
+
+def _path_progression_component(*, kind: str, domain: Optional[str], current_stage: str = "confirm_micro_node") -> dict[str, Any]:
+    progression = _path_progression_metadata(kind=kind, domain=domain, current_stage=current_stage)
+    return {
+        "type": "path_progression",
+        "text": "Path progression",
+        "current_stage": progression["current_stage"],
+        "next_stage": progression["next_stage"],
+        "items": progression["stages"],
+    }
 
 # ---------------------------------------------------------------------------
 # Real-world/actionable feed cards
@@ -387,6 +481,7 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
         {"type": "category_badge", "text": f"{domain.upper()} · {item.get('kind', 'Real action')}", "color": "#f59e0b" if domain == "Aventi" else "#10b981"},
         {"type": "headline", "text": title},
         {"type": "body", "text": item.get("body") or item.get("description") or "A real option you can open, verify, and act on."},
+        _path_progression_component(kind="real_world_action", domain=domain, current_stage="confirm_micro_node"),
         {"type": "context_strip", "items": [{"label": "Reality", "value": "Verified URL"}, {"label": "Mode", "value": item.get("kind", "Action")}, {"label": "Domain", "value": domain}]},
     ]
     if item.get("venue") or item.get("starts_at") or item.get("price"):
@@ -416,6 +511,7 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "agent": "RealWorldActionAgent",
             "source": source,
             "domain": domain,
+            "path_progression": _path_progression_metadata(kind="real_world_action", domain=domain, current_stage="confirm_micro_node"),
             "tags": [item.get("tag") or "real_action", "diversity_seed"],
             "url": url,
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -600,6 +696,7 @@ async def _static_fallback_card(
             {"type": "category_badge", "text": item["domain"].upper(), "color": "#00d4aa"},
             {"type": "headline", "text": item["title"]},
             {"type": "body", "text": item["body"]},
+            _path_progression_component(kind="fallback_action", domain=item["domain"], current_stage="confirm_micro_node"),
             {"type": "section_header", "text": "What this is"},
             {"type": "body_text", "text": item["why"]},
             {"type": "section_header", "text": "Needs"},
@@ -618,7 +715,8 @@ async def _static_fallback_card(
             "metadata": {
             "agent": "StaticFallbackAgent",
             "source": "static_fallback",
-            "domain": item["domain"],
+            "domain": "iVive" if item["domain"] == "Rest" else item["domain"],
+            "path_progression": _path_progression_metadata(kind="fallback_action", domain=item["domain"], current_stage="confirm_micro_node"),
             "tags": [item["tag"], "mvp_stability"],
             "fallback_reason": reason,
             "ioo_execution_status": "pending_user_response",
