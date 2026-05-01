@@ -479,12 +479,56 @@ async def list_goals(
     return [_build_goal_out(r) for r in rows]
 
 
+@router.get("/path-status")
+async def get_path_status(user_id: str = Depends(get_current_user_id)):
+    """Return the user's active path count and limit."""
+    active_count = await fetchrow(
+        "SELECT COUNT(*) AS cnt FROM goals WHERE user_id = $1 AND status = 'active'",
+        str(user_id),
+    )
+    user_row = await fetchrow(
+        "SELECT path_limit FROM users WHERE id = $1",
+        str(user_id),
+    )
+    limit = (user_row["path_limit"] if user_row else None) or 4
+    count = int(active_count["cnt"]) if active_count else 0
+    return {
+        "active_paths": count,
+        "path_limit": limit,
+        "paths_remaining": max(0, limit - count),
+        "at_limit": count >= limit,
+        "is_subscribed": limit > 4,
+    }
+
+
 @router.post("/", response_model=GoalOut, status_code=201)
 async def create_goal(
     body: GoalCreate,
     user_id: str = Depends(get_current_user_id),
 ):
     """Create a new goal. Automatically generates AI-powered steps via Ora."""
+    # Enforce path limit gate
+    active_count = await fetchrow(
+        "SELECT COUNT(*) AS cnt FROM goals WHERE user_id = $1 AND status = 'active'",
+        str(user_id),
+    )
+    user_row = await fetchrow(
+        "SELECT path_limit FROM users WHERE id = $1",
+        str(user_id),
+    )
+    path_limit = (user_row["path_limit"] if user_row else None) or 4
+    active = int(active_count["cnt"]) if active_count else 0
+    if active >= path_limit:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "path_limit_reached",
+                "active_paths": active,
+                "path_limit": path_limit,
+                "message": "You have reached your open path limit. Archive a path or subscribe to unlock more.",
+            },
+        )
+
     # Generate steps (AI or smart mock)
     if body.steps:
         steps = [s.model_dump() for s in body.steps]
