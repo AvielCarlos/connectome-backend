@@ -1,11 +1,46 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T05:54:13.541444+00:00",
-  "exported_at": "2026-05-01T05:54:13.541444+00:00",
-  "collected_at": "2026-05-01T05:54:13.541444+00:00",
+  "timestamp": "2026-05-01T06:54:16.380652+00:00",
+  "exported_at": "2026-05-01T06:54:16.380652+00:00",
+  "collected_at": "2026-05-01T06:54:16.380652+00:00",
   "identity": {
-    "total_lessons": 1199,
+    "total_lessons": 1204,
     "lessons": [
+      {
+        "id": "244162b4-21ea-40be-a0a6-7dc487f83fb0",
+        "lesson": "When possible, external apps and websites should be used in the background and translated into embedded IOO nodes, cards, sheets, or actions. Avoid pushing users across app boundaries unless absolutely necessary.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-04-30",
+        "created_at": "2026-05-01 06:00:48.20733"
+      },
+      {
+        "id": "1d9a53ca-82d0-4f52-aac7-034021ec0655",
+        "lesson": "The Now and Later feeds are two views of the same Path Graph: Now is the executable edge based on current time, energy, location, resources, and constraints; Later is the opportunity horizon for future events, adventures, routines, goals, and longer path maps.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-04-30",
+        "created_at": "2026-05-01 06:00:48.058309"
+      },
+      {
+        "id": "38b12022-df4e-4d08-b538-9e3352b86e4a",
+        "lesson": "The IOO/Path Graph should be a three-dimensional neural graph with macro-to-micro scale, cross-domain contribution dynamics, and unlock/state-transition edges. iVive, Aventi, and Eviva are reciprocal domains that feed and unlock one another, not isolated categories.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-04-30",
+        "created_at": "2026-05-01 06:00:47.890385"
+      },
+      {
+        "id": "df444012-ef79-43ea-9cc9-316c42cb858a",
+        "lesson": "Connectome/Aura should function as a meta-app or AIOS: recommendations and next nodes should appear contextually across Goals, Aura chat, Profile, domain surfaces, mini-apps, partner/internal apps, and not only inside the feed.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-04-30",
+        "created_at": "2026-05-01 06:00:47.73215"
+      },
+      {
+        "id": "3a06e7cb-b3db-4b29-adad-ab73ca163119",
+        "lesson": "Aura is the primary user-facing intelligence/personality brand. Connectome should remain visible but de-emphasized as the underlying orchestration OS/architecture; legacy ora code/API/storage can remain for compatibility until an intentional migration.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-04-30",
+        "created_at": "2026-05-01 06:00:47.561465"
+      },
       {
         "id": "2c2474b3-debc-4980-8449-2a456341715b",
         "lesson": "{\"proposal_id\": \"2c2474b3-debc-4980-8449-2a456341715b\", \"card_type\": \"dynamic_feedback_card\", \"hypothesis\": \"Implementing a dynamic feedback card that prompts users to share their feelings about the task at hand can increase user fulfilment by 25%.\", \"description\": \"The dynamic feedback card will appear after specific user interactions, allowing users to rate their experience in real-time using emojis or short phrases. This immediate feedback will help users feel more engaged and heard, while providing valuable insights into user preferences for further content and features.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T04:52:13.378989+00:00\", \"expires_at\": \"2026-05-03T04:52:13.378989+00:00\", \"result\": null}",
@@ -8500,7 +8535,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "7542006494e38a29"
+    "lessons_hash": "d86e6ce65b48778f"
   },
   "platform_stats": {
     "total_users": 20,
