@@ -597,6 +597,71 @@ _CURATED_REAL_ACTIONS: list[dict[str, Any]] = [
         "why": "The product should be honest: local intelligence has real API/search/refresh costs, but shared city economics can make it cheaper over time.",
     },
     {
+        "key": "vancouver_city_unlock",
+        "domain": "Aventi",
+        "city": "Vancouver, BC",
+        "tag": "city_unlock_pricing",
+        "kind": "City unlock",
+        "title": "Unlock the Vancouver opportunity graph",
+        "body": "Aura can extend the local graph into Vancouver with a shared Victoria+Vancouver operating budget around $1,000/month: better event/source refreshes, more local developer channels, and richer real-world cards.",
+        "image": "https://images.unsplash.com/photo-1560814304-4f05b62af116?w=1200&auto=format&fit=crop",
+        "url": "ido://city-unlock/vancouver-bc",
+        "button": "See Vancouver unlock economics →",
+        "needs": ["Vancouver coverage", "$1,000/month two-city budget", "local members and builders sharing cost"],
+        "steps": [
+            "Run Victoria and Vancouver as the first BC corridor.",
+            "Spend more on local opportunity refreshes and developer/community acquisition.",
+            "Reduce per-user city pricing as more locals join the shared graph.",
+        ],
+        "why": "Vancouver adds density: more events, services, developers, AI builders, and early technical contributors for the BC pilot.",
+    },
+    {
+        "key": "victoria_developer_contributor_path",
+        "domain": "Eviva",
+        "city": "Victoria, BC",
+        "tag": "developer_contributor_recruiting",
+        "kind": "Developer community",
+        "title": "Help build Aura with Victoria developers",
+        "body": "Victoria has real software and AI community channels. Use them to invite programmers into the local opportunity graph, CP issues, and AI life-OS build.",
+        "image": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1200&auto=format&fit=crop",
+        "url": "https://members.viatec.ca/tech-events",
+        "source_url": "https://members.viatec.ca/tech-events",
+        "provider_url": "https://www.meetup.com/openhack-victoria/",
+        "booking_url": "https://www.meetup.com/openhack-victoria/",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Victoria+BC+software+developer+meetup",
+        "button": "Open Victoria tech channels →",
+        "needs": ["developer-friendly pitch", "CP-ready issues", "local demo path"],
+        "steps": [
+            "Open VIATEC/OpenHack and identify a relevant event or organizer channel.",
+            "Invite builders to test Aura locally and contribute real Victoria nodes/integrations.",
+            "Point them to clear GitHub issues where successful PRs earn CP.",
+        ],
+        "why": "The best early users in a city may also become contributors, curators, and evangelists.",
+    },
+    {
+        "key": "vancouver_developer_contributor_path",
+        "domain": "Eviva",
+        "city": "Vancouver, BC",
+        "tag": "developer_contributor_recruiting",
+        "kind": "Developer community",
+        "title": "Recruit Vancouver AI builders into the Aura pilot",
+        "body": "Vancouver has dense AI, LLM, startup, and developer communities. Market the pilot to builders who can use Aura and improve the graph.",
+        "image": "https://images.unsplash.com/photo-1552664730-d307ca884978?w=1200&auto=format&fit=crop",
+        "url": "https://www.meetup.com/vancouver-llm-ai-meetup/",
+        "source_url": "https://vancouvercommunity.org/tech-startup/",
+        "provider_url": "https://infervan.com",
+        "booking_url": "https://www.eventbrite.ca/d/canada--vancouver/tech-meetup/",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Vancouver+BC+AI+developer+meetup",
+        "button": "Open Vancouver builder channels →",
+        "needs": ["AI-builder positioning", "demo link", "contributor issue board"],
+        "steps": [
+            "Start with LLM/AI, TechVancouver, Infer, and Eventbrite tech meetups.",
+            "Pitch Aura as the local AI life OS and opportunity graph for BC.",
+            "Convert interested builders into users, node curators, and CP contributors.",
+        ],
+        "why": "Vancouver can supply the density of technical contributors needed to make the two-city pilot compound faster.",
+    },
+    {
         "key": "vancouver_live_events",
         "domain": "Aventi",
         "tag": "live_events",
@@ -831,30 +896,61 @@ async def create_user_opportunity(
     return await _build_screen_response_from_spec(user_id, tier, daily_limit, spec)
 
 
+CITY_UNLOCK_MODELS: dict[str, dict[str, Any]] = {
+    "victoria": {
+        "city": "Victoria, BC",
+        "estimated_monthly_cost": 425,
+        "budget_cap": 500,
+        "focus": ["events", "recreation/classes", "volunteering", "makers/services", "local developer channels"],
+    },
+    "vancouver": {
+        "city": "Vancouver, BC",
+        "estimated_monthly_cost": 575,
+        "budget_cap": 650,
+        "focus": ["events", "AI/developer meetups", "startup/community channels", "services/products", "bookings"],
+    },
+}
+
+
 @router.get("/city-unlock")
-async def get_city_unlock(city: str = "Victoria, BC") -> dict[str, Any]:
-    """Transparent city-unlock economics for the local opportunity graph MVP."""
-    estimated_monthly_cost = 500
+async def get_city_unlock(city: str = "Victoria + Vancouver, BC") -> dict[str, Any]:
+    """Transparent city-unlock economics for the two-city local opportunity graph MVP."""
+    city_key = city.lower()
+    if "vancouver" in city_key and "victoria" not in city_key:
+        selected = [CITY_UNLOCK_MODELS["vancouver"]]
+    elif "victoria" in city_key and "vancouver" not in city_key:
+        selected = [CITY_UNLOCK_MODELS["victoria"]]
+    else:
+        selected = [CITY_UNLOCK_MODELS["victoria"], CITY_UNLOCK_MODELS["vancouver"]]
+    estimated_monthly_cost = sum(int(c["estimated_monthly_cost"]) for c in selected)
     target_margin = 1.15
-    example_members = [25, 50, 100, 250]
+    example_members = [50, 100, 250, 500]
     return {
-        "city": city,
+        "city": " + ".join(c["city"] for c in selected),
         "currency": "CAD",
         "estimated_monthly_cost": estimated_monthly_cost,
-        "budget_cap": 500,
-        "coverage": ["events", "classes", "services", "products", "volunteering", "bookings", "user-created nodes"],
+        "budget_cap": max(1000, sum(int(c["budget_cap"]) for c in selected)) if len(selected) > 1 else selected[0]["budget_cap"],
+        "cities": selected,
+        "coverage": ["events", "classes", "services", "products", "volunteering", "bookings", "developer/community channels", "user-created nodes"],
         "operating_model": [
             "index opportunities, not the whole web",
-            "prefer official/provider/event/booking pages",
-            "cache and refresh selectively",
-            "use targeted search/API calls inside monthly quotas",
+            "prefer official/provider/event/booking/community pages",
+            "cache and refresh selectively inside a hard monthly budget",
+            "allocate part of the budget to developer/programmer acquisition in Victoria and Vancouver",
             "let users and Aura create missing opportunity nodes together",
+            "reward verified local nodes and shipped code with CP",
         ],
+        "budget_split": {
+            "opportunity_refresh_and_search": 600,
+            "developer_programmer_marketing": 250,
+            "local_community_experiments": 100,
+            "buffer_monitoring_overages": 50,
+        } if len(selected) > 1 else None,
         "shared_price_examples": [
             {"local_members": n, "estimated_price_per_user": round((estimated_monthly_cost * target_margin) / n, 2)}
             for n in example_members
         ],
-        "message": "Unlocking a city has real source/search/refresh costs. Your monthly price can go down as more people in the same city share the local graph cost.",
+        "message": "Unlocking a city corridor has real source/search/refresh and community-acquisition costs. The per-user price can go down as more Victoria and Vancouver locals share the graph cost.",
     }
 
 
