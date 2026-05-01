@@ -54,6 +54,16 @@ def _normalize_vector(values: List[float]) -> List[float]:
     return [v / norm for v in values]
 
 
+def macro_micro_grade(score: float | int | None) -> str:
+    """Map 0.0 micro → 1.0 macro onto A → Z for compact internal shorthand."""
+    try:
+        value = float(score if score is not None else 0.5)
+    except Exception:
+        value = 0.5
+    value = max(0.0, min(value, 1.0))
+    return chr(ord("A") + round(value * 25))
+
+
 def _node_embedding_text(node: dict) -> str:
     tags = node.get("tags") or []
     if isinstance(tags, str):
@@ -71,6 +81,8 @@ def _node_embedding_text(node: dict) -> str:
             f"node_type: {node.get('type') or node.get('node_type') or ''}",
             f"step_type: {node.get('step_type') or ''}",
             f"physical_context: {node.get('physical_context') or ''}",
+            f"requires_location: {node.get('requires_location') or node.get('location') or node.get('city') or ''}",
+            f"location_city: {node.get('location_city') or node.get('city') or ''}",
             f"best_time: {node.get('best_time') or ''}",
             f"goal_category: {node.get('goal_category') or ''}",
         ]
@@ -108,6 +120,8 @@ def _screen_spec_embedding_text(spec: dict, agent_type: str = "", domain: str | 
             f"deep_dive: {json.dumps(deep_dive, default=str)[:2000] if deep_dive else ''}",
             f"agent: {agent_type or metadata.get('agent') or ''}",
             f"domain: {domain or metadata.get('domain') or spec.get('domain') or ''}",
+            f"city: {metadata.get('city') or metadata.get('location_city') or spec.get('city') or ''}",
+            f"location_signal: {metadata.get('location_signal') or ''}",
             f"layout: {spec.get('layout') or ''}",
             f"type: {spec.get('type') or ''}",
             f"tags: {', '.join(str(t) for t in tags)}",
@@ -307,6 +321,14 @@ class IOOGraphAgent:
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS estimated_duration_days INTEGER")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS difficulty_level INTEGER DEFAULT 5")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS node_scale TEXT DEFAULT 'meso'")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_score NUMERIC(6,4) DEFAULT 0.5")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_grade TEXT")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_depth INTEGER DEFAULT 50")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS primary_macro_domain TEXT")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS contributes_to_domains TEXT[] DEFAULT '{}'")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS unlocks_domains TEXT[] DEFAULT '{}'")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS dimensional_axes JSONB DEFAULT '{}'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS variant_of_node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS variant_key TEXT")
         await execute(
@@ -445,7 +467,13 @@ class IOOGraphAgent:
         if await fetchval("SELECT COUNT(*) FROM ioo_nodes WHERE is_active = TRUE AND embedding IS NULL"):
             await self.embed_all_nodes()
 
-        goal_emb = await self._embed_text(goal_context or "personal growth real-world experience")
+        user_state = await fetchrow("SELECT location_city, location_country FROM ioo_user_state WHERE user_id = $1", str(user_id))
+        location_context = ""
+        user_city = user_state["location_city"] if user_state else None
+        user_country = user_state["location_country"] if user_state else None
+        if user_city or user_country:
+            location_context = f" near city: {user_city or ''}, country: {user_country or ''}"
+        goal_emb = await self._embed_text((goal_context or "personal growth real-world experience") + location_context)
         query_vec = _embedding_to_pgvector(goal_emb)
 
         completed_rows = await fetch(
@@ -454,6 +482,10 @@ class IOOGraphAgent:
         )
         completed_ids = [str(r["node_id"]) for r in completed_rows]
         capability_sql, capability_params = await self._capability_filter_sql(str(user_id), start_idx=4)
+        location_score_sql = ""
+        if user_city:
+            city_lit = str(user_city).replace("'", "''")
+            location_score_sql = f" + CASE WHEN n.requires_location ILIKE '%{city_lit}%' OR n.physical_context ILIKE '%{city_lit}%' THEN 0.18 WHEN n.requires_location IS NULL THEN 0.04 ELSE -0.18 END"
         preference = preference if preference in ("prefer_digital", "prefer_physical", "mixed") else "mixed"
         preference_score_sql = ""
         if preference == "prefer_digital":
@@ -496,6 +528,7 @@ class IOOGraphAgent:
                 ), 0.5) * 0.25 +
                 (CASE WHEN n.attempt_count > 0 THEN n.success_count::float / n.attempt_count ELSE 0.5 END) * 0.15
                 {preference_score_sql}
+                {location_score_sql}
             ) DESC
             LIMIT ${4 + len(capability_params)}
             """,
@@ -1486,6 +1519,33 @@ class IOOGraphAgent:
         })
         embedding = await self._embed_text(embedding_text)
         embedding_vec = _embedding_to_pgvector(embedding) if embedding else None
+        domain_unlock_defaults = {
+            "iVive": ["Aventi", "Eviva"],
+            "Eviva": ["iVive", "Aventi"],
+            "Aventi": ["iVive", "Eviva"],
+        }
+        contribution_domains = signal.get("contributes_to_domains") or signal.get("contribution_domains") or [domain]
+        if isinstance(contribution_domains, str):
+            contribution_domains = [contribution_domains]
+        contribution_domains = list(dict.fromkeys([str(d) for d in contribution_domains if d] + [domain]))
+        unlocks_domains = signal.get("unlocks_domains") or []
+        if isinstance(unlocks_domains, str):
+            unlocks_domains = [unlocks_domains]
+        inferred_unlocks = domain_unlock_defaults.get(domain, [])
+        unlocks_domains = list(dict.fromkeys([str(d) for d in unlocks_domains if d] + inferred_unlocks))
+        macro_micro_score = float(signal.get("macro_micro_score") or signal.get("scale_score") or 0.2)
+        macro_micro_score = max(0.0, min(macro_micro_score, 1.0))
+        macro_grade = str(signal.get("macro_micro_grade") or macro_micro_grade(macro_micro_score)).upper()[:1]
+        dimensional_axes = {
+            "scale": signal.get("node_scale") or "micro",
+            "macro_micro_score": macro_micro_score,
+            "macro_micro_grade": macro_grade,
+            "macro_depth": int(signal.get("macro_depth") or round(macro_micro_score * 100)),
+            "primary_domain": signal.get("primary_macro_domain") or domain,
+            "contributes_to_domains": contribution_domains,
+            "unlocks_domains": unlocks_domains,
+            "state_transition": signal.get("state_transition") or "possibility_to_action",
+        }
         requirements = {
             "world_signal": True,
             "world_signal_type": signal_type,
@@ -1494,6 +1554,7 @@ class IOOGraphAgent:
             "external_id": signal.get("external_id") or signal.get("id"),
             "starts_at": str(signal.get("starts_at") or ""),
             "raw_location": location,
+            "dimensional_axes": dimensional_axes,
         }
 
         existing = None
@@ -1528,6 +1589,14 @@ class IOOGraphAgent:
                     domain = COALESCE(NULLIF($5, ''), domain),
                     embedding = COALESCE($6::vector, embedding),
                     requirements = COALESCE(requirements, '{}'::jsonb) || $4::jsonb,
+                    node_scale = COALESCE(NULLIF($7, ''), node_scale),
+                    macro_micro_score = COALESCE($8, macro_micro_score),
+                    macro_micro_grade = COALESCE(NULLIF($9, ''), macro_micro_grade),
+                    macro_depth = COALESCE($10, macro_depth),
+                    primary_macro_domain = COALESCE(NULLIF($11, ''), primary_macro_domain, domain),
+                    contributes_to_domains = CASE WHEN array_length($12::text[], 1) IS NULL THEN contributes_to_domains ELSE $12::text[] END,
+                    unlocks_domains = CASE WHEN array_length($13::text[], 1) IS NULL THEN unlocks_domains ELSE $13::text[] END,
+                    dimensional_axes = COALESCE(dimensional_axes, '{}'::jsonb) || $14::jsonb,
                     engagement_score = LEAST(1.0, COALESCE(engagement_score, 0.5) + 0.01),
                     neural_state = 'active',
                     is_active = TRUE,
@@ -1541,6 +1610,14 @@ class IOOGraphAgent:
                 json.dumps(requirements),
                 domain,
                 embedding_vec,
+                str(dimensional_axes["scale"]),
+                float(dimensional_axes["macro_micro_score"]),
+                str(dimensional_axes["macro_micro_grade"]),
+                int(dimensional_axes["macro_depth"]),
+                str(dimensional_axes["primary_domain"]),
+                [str(d) for d in contribution_domains if d],
+                [str(d) for d in unlocks_domains if d],
+                json.dumps(dimensional_axes),
             )
             await self._log_graph_event("world_refresh", node_id=str(row["id"]), payload=requirements)
             return dict(row)
@@ -1550,8 +1627,10 @@ class IOOGraphAgent:
             INSERT INTO ioo_nodes
                 (type, title, description, tags, domain, step_type, goal_category,
                  requires_location, requirements, difficulty_level, generation_source,
-                 growth_angle, neural_state, engagement_score, fulfilment_score, embedding)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,'world_signal',$11,'active',$12,$13,$14::vector)
+                 growth_angle, neural_state, engagement_score, fulfilment_score, embedding,
+                 node_scale, macro_micro_score, macro_micro_grade, macro_depth, primary_macro_domain, contributes_to_domains, unlocks_domains, dimensional_axes)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,'world_signal',$11,'active',$12,$13,$14::vector,
+                    $15,$16,$17,$18,$19,$20,$21,$22::jsonb)
             RETURNING id, title, generation_source, growth_angle
             """,
             node_type,
@@ -1568,6 +1647,14 @@ class IOOGraphAgent:
             max(0.1, min(float(signal.get("relevance_score") or 0.5), 1.0)),
             0.55,
             embedding_vec,
+            str(dimensional_axes["scale"]),
+            float(dimensional_axes["macro_micro_score"]),
+            str(dimensional_axes["macro_micro_grade"]),
+            int(dimensional_axes["macro_depth"]),
+            str(dimensional_axes["primary_domain"]),
+            [str(d) for d in contribution_domains if d],
+            [str(d) for d in unlocks_domains if d],
+            json.dumps(dimensional_axes),
         )
         await self._log_graph_event("world_spawn", node_id=str(row["id"]), payload=requirements)
         return dict(row)

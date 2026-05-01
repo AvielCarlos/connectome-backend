@@ -31,7 +31,7 @@ from core.config import settings
 from api.middleware import get_current_user_id
 from ora.brain import get_brain
 from ora.user_model import get_daily_screen_count, increment_daily_screen_count
-from core.database import fetchrow, execute
+from core.database import fetch, fetchrow, execute
 from core.geo import get_location_for_ip, geo_to_context_hints
 from uuid import UUID
 
@@ -95,6 +95,7 @@ def _ioo_pattern_components(node: dict, pattern: str) -> list[dict]:
         {"type": "pattern_badge", "text": pattern.replace("_", " ").upper(), "color": "#00d4aa"},
         {"type": "headline", "text": title},
         {"type": "body", "text": desc},
+        _path_progression_component(kind="ioo_node", domain=node.get("domain"), current_stage="choose_path"),
     ]
 
     context = []
@@ -202,6 +203,12 @@ def _ioo_node_to_screen_dict(node: dict) -> dict:
             "node_type": node.get("type"),
             "screen_pattern": pattern,
             "pattern_version": "adaptive_v1",
+            "path_progression": _path_progression_metadata(
+                kind="ioo_node",
+                domain=node.get("domain"),
+                current_stage="choose_path",
+                source_node_id=str(node["id"]),
+            ),
             "domain": node.get("domain"),
             "tags": node.get("tags") or [],
         },
@@ -270,6 +277,211 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
 
     return db_id
 
+
+# ---------------------------------------------------------------------------
+# Path Feed progression graph — user-facing path mechanics
+# ---------------------------------------------------------------------------
+
+PATH_PROGRESSION_STAGES: list[dict[str, str]] = [
+    {
+        "id": "discover",
+        "label": "Discover",
+        "user_role": "Notice what feels alive or useful.",
+        "aura_role": "Search the possibility graph and surface a candidate.",
+    },
+    {
+        "id": "choose_domain",
+        "label": "Focus",
+        "user_role": "Choose iVive, Aventi, Eviva, or stay open.",
+        "aura_role": "Filter and rebalance the feed around that domain.",
+    },
+    {
+        "id": "choose_path",
+        "label": "Choose path",
+        "user_role": "Pick the route that feels worth testing.",
+        "aura_role": "Compare options, prerequisites, reviews, timing, and fit.",
+    },
+    {
+        "id": "confirm_micro_node",
+        "label": "Confirm micro-node",
+        "user_role": "Confirm the real action, time, budget, location, and energy.",
+        "aura_role": "Collapse the card into a doable real-world step.",
+    },
+    {
+        "id": "schedule_book_start",
+        "label": "Commit",
+        "user_role": "Schedule, book, invite, open, or start.",
+        "aura_role": "Create calendar scaffolding, links, reminders, and fallback options.",
+    },
+    {
+        "id": "complete_evidence",
+        "label": "Do + prove",
+        "user_role": "Do the thing and capture evidence or reflection.",
+        "aura_role": "Update state, completion confidence, and graph weights.",
+    },
+    {
+        "id": "learn_reroute",
+        "label": "Learn / reroute",
+        "user_role": "Rate whether it helped and what changed.",
+        "aura_role": "Re-rank similar nodes and unlock the next pathway.",
+    },
+]
+
+
+PATH_PROGRESSION_VARIANTS: dict[str, dict[str, Any]] = {
+    "baseline": {
+        "label": "Path progression",
+        "mutation": "baseline",
+        "description": "The standard feed → micro-node → evidence loop.",
+        "stages": PATH_PROGRESSION_STAGES,
+    },
+    "trimmed_decision": {
+        "label": "Fast path",
+        "mutation": "trim",
+        "description": "A shorter path for cards that already have a concrete link or booking action.",
+        "stages": [
+            PATH_PROGRESSION_STAGES[0],
+            PATH_PROGRESSION_STAGES[3],
+            PATH_PROGRESSION_STAGES[4],
+            PATH_PROGRESSION_STAGES[5],
+            PATH_PROGRESSION_STAGES[6],
+        ],
+    },
+    "split_micro_node": {
+        "label": "Mini-app path",
+        "mutation": "split",
+        "description": "Splits the micro-node into clarify → choose → commit for higher-friction opportunities.",
+        "stages": [
+            PATH_PROGRESSION_STAGES[0],
+            PATH_PROGRESSION_STAGES[2],
+            {
+                "id": "clarify_constraints",
+                "label": "Clarify",
+                "user_role": "Confirm budget, location, timing, energy, and social context.",
+                "aura_role": "Ask only the missing questions and hide system scaffolding.",
+            },
+            {
+                "id": "choose_concrete_option",
+                "label": "Choose option",
+                "user_role": "Pick the exact page, provider, event, product, or service.",
+                "aura_role": "Rank concrete options and keep the best links close.",
+            },
+            PATH_PROGRESSION_STAGES[4],
+            PATH_PROGRESSION_STAGES[5],
+            PATH_PROGRESSION_STAGES[6],
+        ],
+    },
+    "grown_social": {
+        "label": "Shared path",
+        "mutation": "grow",
+        "description": "Adds invite/share/follow-up nodes when belonging or contribution is part of the action.",
+        "stages": [
+            *PATH_PROGRESSION_STAGES[:5],
+            {
+                "id": "invite_or_share",
+                "label": "Invite / share",
+                "user_role": "Invite someone, share the opportunity, or make it communal.",
+                "aura_role": "Suggest the right person, message, or group context without being pushy.",
+            },
+            PATH_PROGRESSION_STAGES[5],
+            {
+                "id": "follow_up",
+                "label": "Follow up",
+                "user_role": "Close the loop with a message, reflection, review, or next step.",
+                "aura_role": "Capture outcomes and suggest the next relational/contribution node.",
+            },
+            PATH_PROGRESSION_STAGES[6],
+        ],
+    },
+}
+
+
+def _select_path_progression_variant(*, kind: str, domain: Optional[str], current_stage: str, source_node_id: Optional[str] = None) -> str:
+    """Deterministically A/B test graph morphologies without needing client state."""
+    normalized_domain = "iVive" if domain == "Rest" else (domain or "open")
+    seed = f"{kind}:{normalized_domain}:{current_stage}:{source_node_id or ''}"
+    bucket = int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:8], 16) % 100
+    if normalized_domain == "Eviva" and bucket < 45:
+        return "grown_social"
+    if kind in {"real_world_action", "user_created_opportunity"} and bucket < 45:
+        return "trimmed_decision"
+    if bucket < 72:
+        return "split_micro_node"
+    return "baseline"
+
+
+def _progression_stages_for_variant(variant: str) -> list[dict[str, str]]:
+    return list(PATH_PROGRESSION_VARIANTS.get(variant, PATH_PROGRESSION_VARIANTS["baseline"])["stages"])
+
+
+def _path_progression_metadata(
+    *,
+    kind: str,
+    domain: Optional[str],
+    current_stage: str = "confirm_micro_node",
+    source_node_id: Optional[str] = None,
+    variant: Optional[str] = None,
+) -> dict[str, Any]:
+    """Describe how this feed card participates in a morphable Path Feed graph.
+
+    The graph can grow, split, or trim into testable variants of the same core
+    pathway pattern. User responses can later promote winning variants per
+    domain, card kind, city, user state, or opportunity source.
+    """
+    selected_variant = variant or _select_path_progression_variant(
+        kind=kind, domain=domain, current_stage=current_stage, source_node_id=source_node_id
+    )
+    variant_def = PATH_PROGRESSION_VARIANTS.get(selected_variant, PATH_PROGRESSION_VARIANTS["baseline"])
+    variant_stages = _progression_stages_for_variant(selected_variant)
+    stage_ids = [stage["id"] for stage in variant_stages]
+    if current_stage not in stage_ids:
+        # Map canonical micro-node state to the closest equivalent inside the
+        # currently tested morphology. This keeps cards comparable while letting
+        # graph shapes diverge.
+        if selected_variant == "split_micro_node":
+            current_stage = "choose_concrete_option"
+        elif selected_variant == "trimmed_decision":
+            current_stage = "confirm_micro_node"
+        else:
+            current_stage = stage_ids[min(3, len(stage_ids) - 1)]
+    current_index = stage_ids.index(current_stage) if current_stage in stage_ids else min(3, len(stage_ids) - 1)
+    stages: list[dict[str, Any]] = []
+    for index, stage in enumerate(variant_stages):
+        status = "complete" if index < current_index else "active" if index == current_index else "upcoming"
+        stages.append({**stage, "status": status})
+    next_stage = variant_stages[min(current_index + 1, len(variant_stages) - 1)]["id"]
+    return {
+        "graph": "path_feed_progression_v2_morphable",
+        "base_graph": "path_feed_progression_v1",
+        "ab_test_id": "path_progression_morphology_v1",
+        "variant": selected_variant,
+        "variant_label": variant_def["label"],
+        "mutation": variant_def["mutation"],
+        "variant_description": variant_def["description"],
+        "kind": kind,
+        "domain": "iVive" if domain == "Rest" else domain,
+        "current_stage": current_stage,
+        "next_stage": next_stage,
+        "source_node_id": source_node_id,
+        "stages": stages,
+        "principle": "The feed is a morphable neural graph: pathways can grow, split, trim, and be A/B tested while preserving the same fulfilment loop.",
+        "promote_if": ["higher do-now rate", "more saved nodes become completed", "better post-action rating", "lower skip rate"],
+        "prune_if": ["users skip before commit", "clarification adds friction", "links do not convert to action"],
+    }
+
+
+def _path_progression_component(*, kind: str, domain: Optional[str], current_stage: str = "confirm_micro_node", source_node_id: Optional[str] = None) -> dict[str, Any]:
+    progression = _path_progression_metadata(kind=kind, domain=domain, current_stage=current_stage, source_node_id=source_node_id)
+    return {
+        "type": "path_progression",
+        "text": progression["variant_label"],
+        "current_stage": progression["current_stage"],
+        "next_stage": progression["next_stage"],
+        "variant": progression["variant"],
+        "mutation": progression["mutation"],
+        "ab_test_id": progression["ab_test_id"],
+        "items": progression["stages"],
+    }
 
 # ---------------------------------------------------------------------------
 # Real-world/actionable feed cards
@@ -385,8 +597,74 @@ _CURATED_REAL_ACTIONS: list[dict[str, Any]] = [
         "why": "The product should be honest: local intelligence has real API/search/refresh costs, but shared city economics can make it cheaper over time.",
     },
     {
+        "key": "vancouver_city_unlock",
+        "domain": "Aventi",
+        "city": "Vancouver, BC",
+        "tag": "city_unlock_pricing",
+        "kind": "City unlock",
+        "title": "Unlock the Vancouver opportunity graph",
+        "body": "Aura can extend the local graph into Vancouver with a shared Victoria+Vancouver operating budget around $1,000/month: better event/source refreshes, more local developer channels, and richer real-world cards.",
+        "image": "https://images.unsplash.com/photo-1560814304-4f05b62af116?w=1200&auto=format&fit=crop",
+        "url": "ido://city-unlock/vancouver-bc",
+        "button": "See Vancouver unlock economics →",
+        "needs": ["Vancouver coverage", "$1,000/month two-city budget", "local members and builders sharing cost"],
+        "steps": [
+            "Run Victoria and Vancouver as the first BC corridor.",
+            "Spend more on local opportunity refreshes and developer/community acquisition.",
+            "Reduce per-user city pricing as more locals join the shared graph.",
+        ],
+        "why": "Vancouver adds density: more events, services, developers, AI builders, and early technical contributors for the BC pilot.",
+    },
+    {
+        "key": "victoria_developer_contributor_path",
+        "domain": "Eviva",
+        "city": "Victoria, BC",
+        "tag": "developer_contributor_recruiting",
+        "kind": "Developer community",
+        "title": "Help build Aura with Victoria developers",
+        "body": "Victoria has real software and AI community channels. Use them to invite programmers into the local opportunity graph, CP issues, and AI life-OS build.",
+        "image": "https://images.unsplash.com/photo-1517048676732-d65bc937f952?w=1200&auto=format&fit=crop",
+        "url": "https://members.viatec.ca/tech-events",
+        "source_url": "https://members.viatec.ca/tech-events",
+        "provider_url": "https://www.meetup.com/openhack-victoria/",
+        "booking_url": "https://www.meetup.com/openhack-victoria/",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Victoria+BC+software+developer+meetup",
+        "button": "Open Victoria tech channels →",
+        "needs": ["developer-friendly pitch", "CP-ready issues", "local demo path"],
+        "steps": [
+            "Open VIATEC/OpenHack and identify a relevant event or organizer channel.",
+            "Invite builders to test Aura locally and contribute real Victoria nodes/integrations.",
+            "Point them to clear GitHub issues where successful PRs earn CP.",
+        ],
+        "why": "The best early users in a city may also become contributors, curators, and evangelists.",
+    },
+    {
+        "key": "vancouver_developer_contributor_path",
+        "domain": "Eviva",
+        "city": "Vancouver, BC",
+        "tag": "developer_contributor_recruiting",
+        "kind": "Developer community",
+        "title": "Recruit Vancouver AI builders into the Aura pilot",
+        "body": "Vancouver has dense AI, LLM, startup, and developer communities. Market the pilot to builders who can use Aura and improve the graph.",
+        "image": "https://images.unsplash.com/photo-1552664730-d307ca884978?w=1200&auto=format&fit=crop",
+        "url": "https://www.meetup.com/vancouver-llm-ai-meetup/",
+        "source_url": "https://vancouvercommunity.org/tech-startup/",
+        "provider_url": "https://infervan.com",
+        "booking_url": "https://www.eventbrite.ca/d/canada--vancouver/tech-meetup/",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Vancouver+BC+AI+developer+meetup",
+        "button": "Open Vancouver builder channels →",
+        "needs": ["AI-builder positioning", "demo link", "contributor issue board"],
+        "steps": [
+            "Start with LLM/AI, TechVancouver, Infer, and Eventbrite tech meetups.",
+            "Pitch Aura as the local AI life OS and opportunity graph for BC.",
+            "Convert interested builders into users, node curators, and CP contributors.",
+        ],
+        "why": "Vancouver can supply the density of technical contributors needed to make the two-city pilot compound faster.",
+    },
+    {
         "key": "vancouver_live_events",
         "domain": "Aventi",
+        "city": "Vancouver, BC",
         "tag": "live_events",
         "kind": "Live events",
         "title": "Find a live event in Vancouver this week",
@@ -401,6 +679,140 @@ _CURATED_REAL_ACTIONS: list[dict[str, Any]] = [
             "Pick one real event and RSVP/book or save it for later.",
         ],
         "why": "The feed should expose the real world: gatherings, classes, culture, and local possibilities.",
+    },
+    {
+        "key": "victoria_royal_bc_museum_visit",
+        "domain": "Aventi",
+        "city": "Victoria, BC",
+        "tag": "museum_culture",
+        "kind": "Culture / museum",
+        "title": "Visit the Royal BC Museum",
+        "body": "Turn a vague desire for culture into a concrete Victoria outing with live hours, exhibits, tickets, and a real place to go.",
+        "image": "https://images.unsplash.com/photo-1564399579883-451a5d44ec08?w=1200&auto=format&fit=crop",
+        "url": "https://royalbcmuseum.bc.ca/",
+        "source_url": "https://royalbcmuseum.bc.ca/",
+        "booking_url": "https://royalbcmuseum.bc.ca/visit",
+        "provider_url": "https://royalbcmuseum.bc.ca/",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Royal+BC+Museum+Victoria+BC",
+        "button": "Check museum hours →",
+        "needs": ["open hours", "ticket price", "downtown transport"],
+        "steps": [
+            "Open the museum site and check today’s hours/exhibits.",
+            "Decide whether this is a solo reset, date, family outing, or creative inspiration trip.",
+            "Go, book, or save the node for a specific day.",
+        ],
+        "why": "Dense opportunity graphs need actual institutions, exhibits, costs, and places — not generic ‘do something cultural’ cards.",
+    },
+    {
+        "key": "victoria_crd_parks_walk",
+        "domain": "iVive",
+        "city": "Victoria, BC",
+        "tag": "nature_walk",
+        "kind": "Nature / vitality",
+        "title": "Choose a CRD regional park walk",
+        "body": "Use the CRD parks map to pick a real trail or beach walk that fits your energy, transport, and available time.",
+        "image": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=1200&auto=format&fit=crop",
+        "url": "https://www.crd.bc.ca/parks-recreation-culture/parks-trails/find-park-trail",
+        "source_url": "https://www.crd.bc.ca/parks-recreation-culture/parks-trails/find-park-trail",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=CRD+regional+parks+Victoria+BC",
+        "button": "Open CRD park finder →",
+        "needs": ["weather", "transport", "30–120 minutes"],
+        "steps": [
+            "Open the CRD park finder.",
+            "Choose one nearby trail/beach that matches your energy.",
+            "Go for the walk and tell Aura whether it improved your state.",
+        ],
+        "why": "Aura should route vitality into low-friction real environments users can actually enter.",
+    },
+    {
+        "key": "victoria_public_library_learning_session",
+        "domain": "iVive",
+        "city": "Victoria, BC",
+        "tag": "learning_library",
+        "kind": "Learning / public resource",
+        "title": "Use the Greater Victoria Public Library for a focused learning block",
+        "body": "Pick a branch, event, or digital resource and turn curiosity into a concrete 30–60 minute learning session.",
+        "image": "https://images.unsplash.com/photo-1521587760476-6c12a4b040da?w=1200&auto=format&fit=crop",
+        "url": "https://www.gvpl.ca/",
+        "source_url": "https://www.gvpl.ca/",
+        "provider_url": "https://www.gvpl.ca/locations/",
+        "booking_url": "https://www.gvpl.ca/events/",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Greater+Victoria+Public+Library",
+        "button": "Open library resources →",
+        "needs": ["topic", "branch or online access", "30–60 minutes"],
+        "steps": [
+            "Open GVPL and choose a branch, event, or digital resource.",
+            "Pick one topic you want to learn today.",
+            "Complete one focused block and record what you learned.",
+        ],
+        "why": "Skill and curiosity nodes should connect to real public infrastructure, not only paid courses.",
+    },
+    {
+        "key": "victoria_startup_viatec_event",
+        "domain": "Eviva",
+        "city": "Victoria, BC",
+        "tag": "startup_networking",
+        "kind": "Builder / networking",
+        "title": "Attend or track a VIATEC tech event",
+        "body": "Use VIATEC’s event calendar to find local founder, software, startup, or tech-community entry points.",
+        "image": "https://images.unsplash.com/photo-1515187029135-18ee286d815b?w=1200&auto=format&fit=crop",
+        "url": "https://members.viatec.ca/tech-events",
+        "source_url": "https://members.viatec.ca/tech-events",
+        "booking_url": "https://members.viatec.ca/tech-events",
+        "provider_url": "https://www.viatec.ca/",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=VIATEC+Victoria+BC",
+        "button": "Open VIATEC events →",
+        "needs": ["event fit", "intro message", "calendar slot"],
+        "steps": [
+            "Open the VIATEC tech events page.",
+            "Pick one event or group that fits the Aura/Connectome mission.",
+            "Attend, message an organizer, or save it as a contributor-recruiting path.",
+        ],
+        "why": "Eviva grows when contribution, opportunity, income, and community become real local pathways.",
+    },
+    {
+        "key": "vancouver_science_world_visit",
+        "domain": "Aventi",
+        "city": "Vancouver, BC",
+        "tag": "science_culture",
+        "kind": "Culture / science",
+        "title": "Visit Science World in Vancouver",
+        "body": "A concrete science/culture outing with live exhibits, tickets, and a memorable place for curiosity and play.",
+        "image": "https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?w=1200&auto=format&fit=crop",
+        "url": "https://www.scienceworld.ca/",
+        "source_url": "https://www.scienceworld.ca/",
+        "booking_url": "https://www.scienceworld.ca/visit-us/",
+        "provider_url": "https://www.scienceworld.ca/",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Science+World+Vancouver+BC",
+        "button": "Check Science World →",
+        "needs": ["ticket price", "transit", "2–3 hours"],
+        "steps": [
+            "Open the Science World site and check current exhibits/hours.",
+            "Decide whether it is a solo curiosity trip, date, or friend/family outing.",
+            "Book/go or save it for the Later feed.",
+        ],
+        "why": "The BC corridor graph needs real high-quality experiences across culture, learning, and aliveness.",
+    },
+    {
+        "key": "vancouver_stanley_park_route",
+        "domain": "iVive",
+        "city": "Vancouver, BC",
+        "tag": "nature_walk",
+        "kind": "Nature / movement",
+        "title": "Do a Stanley Park seawall walk or bike route",
+        "body": "Use the park as a real vitality node: movement, ocean, forest, views, and a route you can complete.",
+        "image": "https://images.unsplash.com/photo-1541336032412-2048a678540d?w=1200&auto=format&fit=crop",
+        "url": "https://vancouver.ca/parks-recreation-culture/stanley-park.aspx",
+        "source_url": "https://vancouver.ca/parks-recreation-culture/stanley-park.aspx",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Stanley+Park+Seawall+Vancouver",
+        "button": "Open Stanley Park info →",
+        "needs": ["weather", "transit/parking", "45–180 minutes"],
+        "steps": [
+            "Open the city page/map and pick a route length.",
+            "Walk or bike at a sustainable pace.",
+            "Record whether it boosted energy, mood, or clarity.",
+        ],
+        "why": "Physical environment is part of the graph: parks and routes can be state-transition nodes.",
     },
     {
         "key": "meditation_beginner_youtube",
@@ -485,6 +897,28 @@ def _serialise_dt(value: Any) -> Optional[str]:
     return str(value)
 
 
+def _has_cost_signal(item: dict[str, Any]) -> bool:
+    cost_words = ("$", "price", "cost", "fee", "ticket", "budget", "paid", "booking")
+    values = [item.get("price"), item.get("cost"), item.get("body"), item.get("description"), item.get("why"), *(item.get("needs") or [])]
+    return any(any(word in str(value).lower() for word in cost_words) for value in values if value)
+
+
+def _review_rating_component(item: dict[str, Any]) -> Optional[dict[str, Any]]:
+    if not _has_cost_signal(item):
+        return None
+    rating = item.get("review_rating") or item.get("rating")
+    review_count = item.get("review_count") or item.get("reviews_count")
+    review_url = item.get("review_url") or item.get("provider_url") or item.get("url")
+    return {
+        "type": "review_rating",
+        "rating": float(rating) if rating is not None else None,
+        "review_count": review_count,
+        "source_url": review_url,
+        "label": "Review rating",
+        "note": "Cost-bearing opportunities should be checked against real reviews before booking or buying.",
+    }
+
+
 def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_action") -> dict:
     """Build a server-driven card around a real URL/action the user can take."""
     url = item.get("url") or ""
@@ -495,8 +929,17 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
         {"type": "category_badge", "text": f"{domain.upper()} · {item.get('kind', 'Real action')}", "color": "#f59e0b" if domain == "Aventi" else "#10b981"},
         {"type": "headline", "text": title},
         {"type": "body", "text": item.get("body") or item.get("description") or "A real option you can open, verify, and act on."},
-        {"type": "context_strip", "items": [{"label": "Reality", "value": "Verified URL"}, {"label": "Mode", "value": item.get("kind", "Action")}, {"label": "Domain", "value": domain}]},
+        _path_progression_component(kind="real_world_action", domain=domain, current_stage="confirm_micro_node"),
+        {"type": "context_strip", "items": [
+            {"label": "Reality", "value": "Verified URL"},
+            {"label": "Mode", "value": item.get("kind", "Action")},
+            {"label": "Domain", "value": domain},
+            *([{"label": "City", "value": item.get("city")}] if item.get("city") else []),
+        ]},
     ]
+    review_component = _review_rating_component(item)
+    if review_component:
+        components.append(review_component)
     if item.get("venue") or item.get("starts_at") or item.get("price"):
         components.append({
             "type": "constraint_panel",
@@ -541,7 +984,10 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "source": source,
             "domain": domain,
             "city": item.get("city"),
+            "location_city": item.get("city"),
+            "location_signal": f"city:{item.get('city')}" if item.get("city") else None,
             "opportunity_kind": item.get("kind"),
+            "path_progression": _path_progression_metadata(kind="user_created_opportunity" if source == "user_created_opportunity" else "real_world_action", domain=domain, current_stage="confirm_micro_node"),
             "tags": [item.get("tag") or "real_action", "diversity_seed"],
             "url": url,
             "links": links,
@@ -576,6 +1022,9 @@ class OpportunityCreateRequest(BaseModel):
     provider_url: Optional[str] = None
     map_url: Optional[str] = None
     price: Optional[str] = None
+    review_rating: Optional[float] = None
+    review_count: Optional[int] = None
+    review_url: Optional[str] = None
     venue: Optional[str] = None
 
 
@@ -617,30 +1066,61 @@ async def create_user_opportunity(
     return await _build_screen_response_from_spec(user_id, tier, daily_limit, spec)
 
 
+CITY_UNLOCK_MODELS: dict[str, dict[str, Any]] = {
+    "victoria": {
+        "city": "Victoria, BC",
+        "estimated_monthly_cost": 425,
+        "budget_cap": 500,
+        "focus": ["events", "recreation/classes", "volunteering", "makers/services", "local developer channels"],
+    },
+    "vancouver": {
+        "city": "Vancouver, BC",
+        "estimated_monthly_cost": 575,
+        "budget_cap": 650,
+        "focus": ["events", "AI/developer meetups", "startup/community channels", "services/products", "bookings"],
+    },
+}
+
+
 @router.get("/city-unlock")
-async def get_city_unlock(city: str = "Victoria, BC") -> dict[str, Any]:
-    """Transparent city-unlock economics for the local opportunity graph MVP."""
-    estimated_monthly_cost = 500
+async def get_city_unlock(city: str = "Victoria + Vancouver, BC") -> dict[str, Any]:
+    """Transparent city-unlock economics for the two-city local opportunity graph MVP."""
+    city_key = city.lower()
+    if "vancouver" in city_key and "victoria" not in city_key:
+        selected = [CITY_UNLOCK_MODELS["vancouver"]]
+    elif "victoria" in city_key and "vancouver" not in city_key:
+        selected = [CITY_UNLOCK_MODELS["victoria"]]
+    else:
+        selected = [CITY_UNLOCK_MODELS["victoria"], CITY_UNLOCK_MODELS["vancouver"]]
+    estimated_monthly_cost = sum(int(c["estimated_monthly_cost"]) for c in selected)
     target_margin = 1.15
-    example_members = [25, 50, 100, 250]
+    example_members = [50, 100, 250, 500]
     return {
-        "city": city,
+        "city": " + ".join(c["city"] for c in selected),
         "currency": "CAD",
         "estimated_monthly_cost": estimated_monthly_cost,
-        "budget_cap": 500,
-        "coverage": ["events", "classes", "services", "products", "volunteering", "bookings", "user-created nodes"],
+        "budget_cap": max(1000, sum(int(c["budget_cap"]) for c in selected)) if len(selected) > 1 else selected[0]["budget_cap"],
+        "cities": selected,
+        "coverage": ["events", "classes", "services", "products", "volunteering", "bookings", "developer/community channels", "user-created nodes"],
         "operating_model": [
             "index opportunities, not the whole web",
-            "prefer official/provider/event/booking pages",
-            "cache and refresh selectively",
-            "use targeted search/API calls inside monthly quotas",
+            "prefer official/provider/event/booking/community pages",
+            "cache and refresh selectively inside a hard monthly budget",
+            "allocate part of the budget to developer/programmer acquisition in Victoria and Vancouver",
             "let users and Aura create missing opportunity nodes together",
+            "reward verified local nodes and shipped code with CP",
         ],
+        "budget_split": {
+            "opportunity_refresh_and_search": 600,
+            "developer_programmer_marketing": 250,
+            "local_community_experiments": 100,
+            "buffer_monitoring_overages": 50,
+        } if len(selected) > 1 else None,
         "shared_price_examples": [
             {"local_members": n, "estimated_price_per_user": round((estimated_monthly_cost * target_margin) / n, 2)}
             for n in example_members
         ],
-        "message": "Unlocking a city has real source/search/refresh costs. Your monthly price can go down as more people in the same city share the local graph cost.",
+        "message": "Unlocking a city corridor has real source/search/refresh and community-acquisition costs. The per-user price can go down as more Victoria and Vancouver locals share the graph cost.",
     }
 
 
@@ -694,7 +1174,39 @@ async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> O
         return None
 
 
-async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None) -> Optional[ScreenResponse]:
+async def _user_city(user_id: str) -> Optional[str]:
+    """Return the user's explicit/live city when available. IP geo is only fallback elsewhere."""
+    try:
+        row = await fetchrow(
+            """
+            SELECT COALESCE(NULLIF(u.city, ''), NULLIF(s.location_city, '')) AS city
+            FROM users u
+            LEFT JOIN ioo_user_state s ON s.user_id = u.id
+            WHERE u.id = $1
+            """,
+            str(user_id),
+        )
+        return str(row["city"]).strip() if row and row.get("city") else None
+    except Exception:
+        return None
+
+
+def _city_rank(item: dict[str, Any], preferred_city: Optional[str]) -> int:
+    if not preferred_city:
+        return 0
+    item_city = str(item.get("city") or "").lower()
+    city = preferred_city.lower()
+    if item_city and (city in item_city or item_city in city):
+        return 0
+    if item_city:
+        # Wrong-city physical opportunities should come after local and
+        # location-neutral options. Vancouver should not outrank Victoria for a
+        # Victoria user just because it appears earlier in the curated list.
+        return 4
+    return 1
+
+
+async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None, preferred_city: Optional[str] = None) -> Optional[ScreenResponse]:
     """Diversify the main feed with concrete learn/attend/book actions."""
     # Prefer true live event data for the first Aventi slot, then fall back to
     # curated verified URLs so the feed is never only generic Eviva cards.
@@ -703,12 +1215,18 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
         if live is not None:
             return live
 
-    digest = hashlib.sha256(f"{user_id}:{datetime.now(timezone.utc).date()}".encode("utf-8")).hexdigest()
+    current_count = await get_daily_screen_count(user_id)
+    rotation_bucket = datetime.now(timezone.utc).strftime("%Y-%m-%d:%H")
+    digest = hashlib.sha256(f"{user_id}:{rotation_bucket}:{current_count}".encode("utf-8")).hexdigest()
     candidates = [item for item in _CURATED_REAL_ACTIONS if not domain_filter or item.get('domain') == domain_filter or (domain_filter == 'iVive' and item.get('domain') == 'Rest')]
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
+    if preferred_city:
+        local_or_neutral = [item for item in candidates if _city_rank(item, preferred_city) <= 1]
+        candidates = local_or_neutral or candidates
+        candidates = sorted(candidates, key=lambda item: (_city_rank(item, preferred_city), item.get("key", "")))
     start = int(digest[:8], 16) % len(candidates)
-    idx = (start + slot_index) % len(candidates)
+    idx = (start + slot_index + current_count) % len(candidates)
     item = dict(candidates[idx])
     if domain_filter == 'iVive' and item.get('domain') == 'Rest':
         item['domain'] = 'iVive'
@@ -807,6 +1325,7 @@ async def _static_fallback_card(
             {"type": "category_badge", "text": item["domain"].upper(), "color": "#00d4aa"},
             {"type": "headline", "text": item["title"]},
             {"type": "body", "text": item["body"]},
+            _path_progression_component(kind="fallback_action", domain=item["domain"], current_stage="confirm_micro_node"),
             {"type": "section_header", "text": "What this is"},
             {"type": "body_text", "text": item["why"]},
             {"type": "section_header", "text": "Needs"},
@@ -825,7 +1344,8 @@ async def _static_fallback_card(
             "metadata": {
             "agent": "StaticFallbackAgent",
             "source": "static_fallback",
-            "domain": item["domain"],
+            "domain": "iVive" if item["domain"] == "Rest" else item["domain"],
+            "path_progression": _path_progression_metadata(kind="fallback_action", domain=item["domain"], current_stage="confirm_micro_node"),
             "tags": [item["tag"], "mvp_stability"],
             "fallback_reason": reason,
             "ioo_execution_status": "pending_user_response",
@@ -1027,12 +1547,14 @@ async def get_next_screen(
     except Exception:
         pass
 
+    preferred_city = await _user_city(user_id)
+
     # ── Smart feed routing ─────────────────────────────────────────────────
     # Product principle: the feed must feel like a living path. Always give a
     # meaningful share of cards to real actions (live events, videos, classes,
     # adventures) so users are not trapped in generic Eviva/IOO opportunity loops.
     if random.random() < 0.45:
-        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain)
+        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city)
         if real_action is not None:
             return real_action
 
@@ -1093,6 +1615,7 @@ class BatchScreenRequest(BaseModel):
     count: int = 3
     goal_id: Optional[str] = None
     domain: Optional[DomainType] = None
+    context: Optional[str] = None
 
 
 @router.post("/batch", response_model=List[ScreenResponse])
@@ -1144,6 +1667,8 @@ async def get_screen_batch(
     except Exception:
         pass
 
+    preferred_city = await _user_city(user_id)
+
     # Check if user has active goals (once, shared across batch)
     # Fetch screens sequentially to respect rate limits and user model updates
     for _ in range(count):
@@ -1155,7 +1680,7 @@ async def get_screen_batch(
             # prevents repeated "Eviva Opportunities" cards from occupying the
             # whole swipe queue.
             if slot_index in (0, 2, 4):
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city)
                 if real_action is not None:
                     results.append(real_action)
                     continue
@@ -1168,14 +1693,14 @@ async def get_screen_batch(
                     continue
 
             if random.random() < 0.35:
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city)
                 if real_action is not None:
                     results.append(real_action)
                     continue
 
             spec_dict, db_id, screens_today = await brain.get_screen(
                 user_id=user_id,
-                context=None,
+                context=body.context or "",
                 goal_id=body.goal_id,
                 domain=body.domain,
                 geo_hints=batch_geo_hints,

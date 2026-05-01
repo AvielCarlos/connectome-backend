@@ -229,6 +229,27 @@ async def update_profile(
         profile["goals_text"] = body.goals_text
     if body.location is not None:
         profile["location"] = body.location
+    if getattr(body, "value_weights", None) is not None:
+        cleaned_values = {
+            str(key): max(1, min(10, int(value)))
+            for key, value in body.value_weights.items()
+            if value is not None
+        }
+        profile["value_weights"] = cleaned_values
+        try:
+            await execute(
+                """
+                INSERT INTO ioo_user_state (user_id, state_json, last_updated)
+                VALUES ($1, $2::jsonb, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || EXCLUDED.state_json,
+                    last_updated = NOW()
+                """,
+                UUID(user_id),
+                json.dumps({"value_weights": cleaned_values, "value_weights_source": "manual_profile_update"}),
+            )
+        except Exception as e:
+            logger.warning(f"Could not mirror profile value weights into IOO state: {e}")
 
     updated = await fetchrow(
         """

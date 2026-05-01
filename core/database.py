@@ -1763,6 +1763,14 @@ async def run_migrations():
         # engagement/fulfilment, prunes weak paths, and can split/merge nodes as
         # the possibility map learns.
         for ddl in [
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS node_scale TEXT DEFAULT 'meso'",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_score NUMERIC(6,4) DEFAULT 0.5",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_micro_grade TEXT",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS macro_depth INTEGER DEFAULT 50",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS primary_macro_domain TEXT",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS contributes_to_domains TEXT[] DEFAULT '{}'",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS unlocks_domains TEXT[] DEFAULT '{}'",
+            "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS dimensional_axes JSONB DEFAULT '{}'",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS neural_state TEXT DEFAULT 'active'",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS generation_source TEXT DEFAULT 'seed'",
             "ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS growth_angle TEXT",
@@ -1787,6 +1795,22 @@ async def run_migrations():
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ioo_nodes_growth_angle
             ON ioo_nodes(growth_angle)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_scale_depth
+            ON ioo_nodes(node_scale, macro_depth)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_macro_micro_score
+            ON ioo_nodes(macro_micro_score)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_macro_micro_grade
+            ON ioo_nodes(macro_micro_grade)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_nodes_primary_macro_domain
+            ON ioo_nodes(primary_macro_domain)
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ioo_nodes_variant_of
@@ -1882,6 +1906,7 @@ async def run_migrations():
                 location_country TEXT,
                 fitness_level INT DEFAULT 5 CHECK (fitness_level BETWEEN 0 AND 10),
                 known_skills TEXT[] DEFAULT '{}',
+                skill_levels JSONB DEFAULT '{}'::jsonb,
                 has_partner BOOLEAN,
                 has_car BOOLEAN,
                 free_time_weekday_hours NUMERIC(4,1),
@@ -1894,6 +1919,9 @@ async def run_migrations():
         """)
         await conn.execute("""
             ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding vector(1536)
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS skill_levels JSONB DEFAULT '{}'::jsonb
         """)
         await conn.execute("""
             ALTER TABLE ioo_user_state ADD COLUMN IF NOT EXISTS embedding_updated_at TIMESTAMPTZ

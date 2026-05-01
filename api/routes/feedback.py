@@ -6,6 +6,7 @@ Includes experiment signal collection and implicit behaviour signals.
 
 import logging
 import json
+from datetime import datetime
 from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,6 +24,19 @@ router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 GLOBAL_FEEDBACK_CP = 10
 GLOBAL_FEEDBACK_CATEGORIES = {"Bug", "Malfunction", "Bad Card/Node", "Confusing", "Idea", "Design", "Praise", "Other"}
+
+VALUE_SIGNAL_ALIASES = {
+    "enlightenment": ["enlightenment", "awakening", "wisdom", "consciousness", "spiritual", "truth"],
+    "peace": ["peace", "calm", "rest", "sleep", "regulate", "nervous", "ease"],
+    "pleasure": ["pleasure", "joy", "fun", "play", "sensual", "enjoy"],
+    "love": ["love", "relationship", "connection", "friend", "family", "romance", "belonging"],
+    "vitality": ["vitality", "health", "fitness", "energy", "body", "yoga", "walk", "nutrition"],
+    "freedom": ["freedom", "travel", "choice", "time", "sovereignty", "independence"],
+    "mastery": ["mastery", "skill", "learn", "practice", "craft", "study", "training"],
+    "contribution": ["contribution", "service", "volunteer", "community", "dao", "build", "help"],
+    "abundance": ["abundance", "money", "income", "career", "business", "wealth", "work"],
+    "adventure": ["adventure", "event", "explore", "discovery", "novelty", "museum", "park", "experience"],
+}
 
 
 async def _ensure_global_feedback_schema() -> None:
@@ -97,6 +111,218 @@ async def _get_or_create_feedback_contributor(user_uuid: UUID) -> Any:
     )
 
 
+def _infer_value_signals_from_spec(spec: dict) -> list[str]:
+    meta = spec.get("metadata", {}) if isinstance(spec, dict) else {}
+    components = spec.get("components", []) if isinstance(spec, dict) else []
+    chunks = [str(meta.get("domain") or ""), str(spec.get("type") or "")]
+    chunks.extend(str(tag) for tag in (meta.get("tags") or []))
+    for comp in components[:12]:
+        if isinstance(comp, dict):
+            chunks.extend(str(comp.get(k) or "") for k in ("text", "label", "title", "body"))
+            for item in comp.get("items") or []:
+                if isinstance(item, dict):
+                    chunks.extend(str(item.get(k) or "") for k in ("label", "title", "body", "text"))
+                else:
+                    chunks.append(str(item))
+    text = " ".join(chunks).lower()
+    signals = [value for value, aliases in VALUE_SIGNAL_ALIASES.items() if any(alias in text for alias in aliases)]
+    domain = str(meta.get("domain") or "").lower()
+    if domain == "ivive":
+        signals.extend(["vitality", "peace", "mastery"])
+    elif domain == "eviva":
+        signals.extend(["contribution", "abundance", "love"])
+    elif domain == "aventi":
+        signals.extend(["adventure", "pleasure", "freedom"])
+    return list(dict.fromkeys(signals))[:5]
+
+
+async def _record_value_feedback_signal(user_id: str, body: FeedbackSubmit) -> None:
+    """Let explicit value weights evolve gently from swipes, saves, choices, and completions."""
+    if not body.screen_spec_id or not body.rating:
+        return
+    try:
+        row = await fetchrow(
+            "SELECT spec FROM screen_specs WHERE id = $1::uuid",
+            UUID(body.screen_spec_id) if len(body.screen_spec_id) == 36 else None,
+        )
+        if not row:
+            return
+        spec = row["spec"]
+        if isinstance(spec, str):
+            spec = json.loads(spec)
+        signals = _infer_value_signals_from_spec(spec if isinstance(spec, dict) else {})
+        if not signals:
+            return
+        rating = int(body.rating or 0)
+        if rating >= 4 or body.completed:
+            delta = 0.25
+        elif rating <= 2 or body.exit_point == "skip":
+            delta = -0.18
+        else:
+            delta = 0.0
+        if delta == 0:
+            return
+        state_row = await fetchrow("SELECT state_json FROM ioo_user_state WHERE user_id = $1::uuid", user_id)
+        state_json = state_row["state_json"] if state_row and state_row["state_json"] else {}
+        if isinstance(state_json, str):
+            state_json = json.loads(state_json)
+        learned = dict(state_json.get("value_weights_learned") or {}) if isinstance(state_json, dict) else {}
+        for value in signals:
+            learned[value] = max(1.0, min(10.0, float(learned.get(value, 5.0)) + delta))
+        payload = {
+            "signals": signals,
+            "rating": rating,
+            "exit_point": body.exit_point,
+            "completed": body.completed,
+            "delta": delta,
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, state_json, last_updated)
+            VALUES ($1, jsonb_build_object('value_learning_last', $2::jsonb, 'value_weights_learned', $3::jsonb), NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+              state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb)
+                || jsonb_build_object('value_learning_last', $2::jsonb, 'value_weights_learned', $3::jsonb),
+              last_updated = NOW()
+            """,
+            user_id,
+            json.dumps(payload),
+            json.dumps(learned),
+        )
+    except Exception as exc:
+        logger.warning("Value feedback signal insert failed for user %s: %s", user_id[:8], exc)
+
+
+async def _record_skill_feedback_signal(user_id: str, body: FeedbackSubmit) -> None:
+    metadata = body.metadata or {}
+    if not isinstance(metadata, dict):
+        return
+    if metadata.get("learning_signal") != "skill_or_fit_mismatch":
+        return
+
+    domain = str(metadata.get("offered_domain") or "general").strip() or "general"
+    skill_key = domain.lower()
+    payload = {
+        "last_signal": "skip",
+        "last_screen_spec_id": body.screen_spec_id,
+        "last_exit_point": body.exit_point,
+        "last_rating": body.rating,
+        "offered_type": metadata.get("offered_type"),
+        "offered_difficulty": metadata.get("offered_difficulty"),
+        "interpretation": metadata.get("interpretation"),
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+    try:
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, skill_levels, state_json, last_updated)
+            VALUES ($1, jsonb_build_object($2::text, $3::jsonb), jsonb_build_object('last_skill_feedback', $3::jsonb), NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+              skill_levels = COALESCE(ioo_user_state.skill_levels, '{}'::jsonb) || jsonb_build_object($2::text, $3::jsonb),
+              state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || jsonb_build_object('last_skill_feedback', $3::jsonb),
+              last_updated = NOW()
+            """,
+            user_id,
+            skill_key,
+            json.dumps(payload),
+        )
+    except Exception as exc:
+        logger.warning("Skill feedback signal insert failed for user %s: %s", user_id[:8], exc)
+
+
+async def _apply_global_feedback_to_ioo(
+    *,
+    body: FeedbackSubmit,
+    user_id: str,
+    feedback_id: Any,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    """Turn feedback into immediate graph learning when it references a card/node."""
+    category = body.category or "Other"
+    context = metadata.get("feedback_context") if isinstance(metadata.get("feedback_context"), dict) else {}
+    screen_spec_id = context.get("screen_spec_id") or metadata.get("screen_spec_id")
+    node_id = context.get("node_id") or metadata.get("node_id")
+    learned: dict[str, Any] = {"applied": False}
+
+    if screen_spec_id:
+        try:
+            row = await fetchrow(
+                "SELECT ioo_node_id, spec FROM screen_specs WHERE id = $1::uuid",
+                str(screen_spec_id),
+            )
+            if row:
+                if not node_id and row["ioo_node_id"]:
+                    node_id = str(row["ioo_node_id"])
+                await execute(
+                    """
+                    UPDATE screen_specs
+                    SET global_rating = GREATEST(-1.0, COALESCE(global_rating, 0) - 0.15),
+                        impression_count = COALESCE(impression_count, 0) + 1
+                    WHERE id = $1::uuid
+                    """,
+                    str(screen_spec_id),
+                )
+                learned["screen_spec_id"] = str(screen_spec_id)
+        except Exception as exc:
+            logger.warning("Feedback screen correction skipped: %s", exc)
+
+    bad_signal = category in {"Bad Card/Node", "Malfunction", "Bug", "Confusing"}
+    if node_id and bad_signal:
+        try:
+            await execute(
+                """
+                UPDATE ioo_nodes
+                SET engagement_score = GREATEST(0.0, COALESCE(engagement_score, 0.5) - 0.08),
+                    fulfilment_score = GREATEST(0.0, COALESCE(fulfilment_score, 0.5) - 0.06),
+                    updated_at = NOW()
+                WHERE id = $1::uuid
+                """,
+                str(node_id),
+            )
+            await execute(
+                """
+                INSERT INTO ioo_graph_events (event_type, user_id, node_id, payload)
+                VALUES ('feedback_correction', $1::uuid, $2::uuid, $3::jsonb)
+                """,
+                str(user_id),
+                str(node_id),
+                json.dumps({
+                    "feedback_id": str(feedback_id) if feedback_id else None,
+                    "category": category,
+                    "message": body.message,
+                    "route": body.route,
+                    "context": context,
+                    "effect": "downranked_node_pending_review",
+                }),
+            )
+            learned.update({"applied": True, "node_id": str(node_id), "effect": "downranked_node_pending_review"})
+        except Exception as exc:
+            logger.warning("Feedback IOO correction skipped: %s", exc)
+    elif bad_signal:
+        try:
+            await execute(
+                """
+                INSERT INTO ioo_graph_events (event_type, user_id, payload)
+                VALUES ('feedback_correction_unlinked', $1::uuid, $2::jsonb)
+                """,
+                str(user_id),
+                json.dumps({
+                    "feedback_id": str(feedback_id) if feedback_id else None,
+                    "category": category,
+                    "message": body.message,
+                    "route": body.route,
+                    "context": context,
+                    "effect": "stored_for_review_no_node_link",
+                }),
+            )
+            learned.update({"applied": True, "effect": "stored_for_review_no_node_link"})
+        except Exception as exc:
+            logger.warning("Unlinked feedback correction event skipped: %s", exc)
+
+    return learned
+
+
 async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> FeedbackResponse:
     message = (body.message or "").strip()
     if len(message) < 3:
@@ -151,6 +377,12 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
         json.dumps(metadata),
     )
     feedback_id = feedback["id"] if feedback else None
+    graph_learning = await _apply_global_feedback_to_ioo(
+        body=body,
+        user_id=user_id,
+        feedback_id=feedback_id,
+        metadata=metadata,
+    )
 
     contributor = await _get_or_create_feedback_contributor(user_uuid)
     contribution = None
@@ -178,6 +410,7 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
                 "feedback_id": str(feedback_id) if feedback_id else None,
                 "screenshot_url": screenshot_url,
                 "screenshot_key": screenshot_key,
+                "graph_learning": graph_learning,
             }),
         )
     except Exception as err:
@@ -215,10 +448,16 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
         logger.warning(f"Feedback CP award failed (non-fatal): {err}")
 
     cp_row = await fetchrow("SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1", user_uuid)
+    response_message = "Feedback submitted +10 CP"
+    if graph_learning.get("effect") == "downranked_node_pending_review":
+        response_message = "Feedback submitted +10 CP. Aura downranked this node and queued it for review."
+    elif graph_learning.get("effect") == "stored_for_review_no_node_link":
+        response_message = "Feedback submitted +10 CP. Aura stored this for review and will use it to improve the graph."
+
     return FeedbackResponse(
         ok=True,
         fulfilment_delta=0.0,
-        message="Feedback submitted +10 CP",
+        message=response_message,
         cp_earned=GLOBAL_FEEDBACK_CP,
         cp_balance=int(cp_row["cp_balance"] or 0) if cp_row else None,
         total_dao_cp=int(cp_row["total_cp_earned"] or 0) if cp_row else None,
@@ -305,6 +544,8 @@ async def submit_feedback(
     # - do_later       -> save/schedule/resurface as a live opportunity
     # - do_now         -> trigger IOO Execution Protocol and record outcome
     await _record_ioo_outcome_if_applicable(user_id, body.screen_spec_id, body.rating)
+    await _record_skill_feedback_signal(user_id, body)
+    await _record_value_feedback_signal(user_id, body)
 
     # Build a human-readable message based on the insight
     signal = insight.get("signal_type", "neutral")

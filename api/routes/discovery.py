@@ -37,6 +37,7 @@ ONBOARDING_VARIANTS = {
             {"question_id": "top_domain_current_state", "field_name": "top_domain_current_state", "kind": "current", "question": "Tell me what you're actually doing day-to-day in [top domain]. What's working? What's stuck?"},
             {"question_id": "three_month_activation", "field_name": "three_month_activation", "kind": "aspiration", "question": "And what would feel most exciting to activate in the next 3 months? Across any domain."},
             {"question_id": "weekly_capacity", "field_name": "weekly_capacity", "kind": "capacity", "question": "How much time can you realistically dedicate each week?"},
+            {"question_id": "top_values", "field_name": "value_weights", "kind": "values", "render_hint": "value_sliders", "question": "Last: rate your top-level values from 1–10. These are not fixed labels — Aura will learn and adapt them as you swipe, choose, and complete actions."},
             {"question_id": "onboarding_constraints", "field_name": "constraints", "kind": "constraint", "question": "Anything holding you back right now — financial, time, location, health?"},
         ],
     },
@@ -50,6 +51,7 @@ ONBOARDING_VARIANTS = {
             {"question_id": "eviva_snapshot", "field_name": "eviva_current_state", "kind": "current", "question": "Now Eviva — your connection to the world. Work, relationships, contribution. What's flowing? What's missing?"},
             {"question_id": "aventi_snapshot", "field_name": "aventi_current_state", "kind": "current", "question": "And Aventi — the fun, aliveness side. Adventures, experiences, spontaneity. When did you last feel truly alive?"},
             {"question_id": "biggest_difference", "field_name": "biggest_difference", "kind": "aspiration", "question": "Based on everything, what's the ONE thing that would make the biggest difference in how your life feels?"},
+            {"question_id": "top_values", "field_name": "value_weights", "kind": "values", "render_hint": "value_sliders", "question": "Rate your top-level values from 1–10. Aura will treat these as starting weights, then learn from what you swipe, select, and achieve."},
             {"question_id": "onboarding_constraints", "field_name": "constraints", "kind": "constraint", "question": "What's your biggest constraint right now — time, money, location, or something else?"},
         ],
     },
@@ -63,6 +65,7 @@ ONBOARDING_VARIANTS = {
             {"question_id": "domain_gap", "field_name": "domain_gap", "kind": "mixed", "question": "What's the gap between that vision and your life today? Which domain feels furthest from where you want to be?"},
             {"question_id": "already_tried", "field_name": "already_tried", "kind": "current", "question": "What have you already tried in that area? What worked? What didn't?"},
             {"question_id": "weekly_capacity", "field_name": "weekly_capacity", "kind": "capacity", "question": "How many hours per week could you actually dedicate to making this shift?"},
+            {"question_id": "top_values", "field_name": "value_weights", "kind": "values", "render_hint": "value_sliders", "question": "Rate your top-level values from 1–10. Start with your honest priorities; Aura will update them as your real choices reveal what matters."},
             {"question_id": "onboarding_constraints", "field_name": "constraints", "kind": "constraint", "question": "Any hard constraints — health, money, location, relationships — that I need to account for?"},
         ],
     },
@@ -76,12 +79,31 @@ ONBOARDING_VARIANTS = {
             {"question_id": "lowest_score_cause", "field_name": "lowest_score_cause", "kind": "mixed", "question": "Your lowest score — what's actually causing that? And what would a 9 or 10 look like?"},
             {"question_id": "highest_score_pattern", "field_name": "highest_score_pattern", "kind": "current", "question": "Your highest score — what's working there that we could apply to the weaker areas?"},
             {"question_id": "change_capacity", "field_name": "change_capacity", "kind": "capacity", "question": "What's your capacity for change right now — time, energy, money?"},
+            {"question_id": "top_values", "field_name": "value_weights", "kind": "values", "render_hint": "value_sliders", "question": "Now rate your top-level values from 1–10. This gives Aura a starting compass; your swipes, choices, and achievements will keep refining it."},
             {"question_id": "onboarding_constraints", "field_name": "constraints", "kind": "constraint", "question": "Any constraints or context I should know about?"},
         ],
     },
 }
 
 ONBOARDING_QUESTIONS = ONBOARDING_VARIANTS["A"]["questions"]
+
+TOP_LEVEL_VALUES = [
+    "enlightenment", "peace", "pleasure", "love", "vitality",
+    "freedom", "mastery", "contribution", "abundance", "adventure",
+]
+
+VALUE_ALIASES = {
+    "enlightenment": ["enlightenment", "awakening", "truth", "wisdom", "consciousness", "spiritual"],
+    "peace": ["peace", "calm", "ease", "serenity", "safety", "regulation"],
+    "pleasure": ["pleasure", "joy", "fun", "sensual", "enjoyment", "play"],
+    "love": ["love", "relationship", "connection", "family", "friendship", "romance", "belonging"],
+    "vitality": ["vitality", "energy", "health", "fitness", "body", "sleep", "nutrition"],
+    "freedom": ["freedom", "sovereignty", "time", "travel", "choice", "independence"],
+    "mastery": ["mastery", "skill", "learning", "craft", "practice", "discipline"],
+    "contribution": ["contribution", "service", "impact", "community", "volunteer", "dao", "help"],
+    "abundance": ["abundance", "money", "wealth", "income", "career", "business", "resources"],
+    "adventure": ["adventure", "novelty", "discovery", "explore", "event", "travel", "experience"],
+}
 
 DOMAIN_ALIASES = {
     "ivive": ["ivive", "self", "health", "fitness", "vitality", "energy", "nutrition", "sleep", "strong", "mental", "therapy", "emotional", "stress", "spiritual", "purpose", "meaning", "inner", "creative", "creativity", "finance", "budget", "saving", "skill", "learning", "habit", "ritual", "body", "mind", "soul"],
@@ -103,6 +125,22 @@ def _extract_selected_domains(answer: str) -> list[str]:
 def _infer_domain(text: str) -> str:
     selected = _extract_selected_domains(text)
     return selected[0] if selected else "Whole Life"
+
+
+def _parse_value_weights(text: str) -> dict[str, int]:
+    """Parse slider-style onboarding text like 'peace: 8/10'."""
+    import re
+    weights: dict[str, int] = {}
+    lowered = text.lower()
+    for value in TOP_LEVEL_VALUES:
+        aliases = [value, *VALUE_ALIASES.get(value, [])]
+        for alias in aliases:
+            pattern = rf"{re.escape(alias)}\s*[:=\-]?\s*(10|[1-9])(?:\s*/\s*10)?"
+            match = re.search(pattern, lowered)
+            if match:
+                weights[value] = max(1, min(10, int(match.group(1))))
+                break
+    return weights
 
 
 def _render_question(question: dict, answers: list[str]) -> str:
@@ -389,6 +427,7 @@ async def _store_onboarding_answers(user_id: str, answers: list[str], variant_id
 
     current_state = {q["field_name"]: answer_map.get(q["field_name"], "") for q in questions if q.get("kind") in {"current", "mixed"}}
     aspirations = {q["field_name"]: answer_map.get(q["field_name"], "") for q in questions if q.get("kind") in {"aspiration", "mixed"}}
+    value_weights = _parse_value_weights(answer_map.get("value_weights", ""))
     row = await fetchrow("SELECT profile FROM users WHERE id = $1", uid)
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
@@ -400,6 +439,8 @@ async def _store_onboarding_answers(user_id: str, answers: list[str], variant_id
     profile["onboarding_intake"] = answer_map
     profile["onboarding_current_state"] = current_state
     profile["onboarding_aspirations"] = aspirations
+    if value_weights:
+        profile["value_weights"] = value_weights
     if answer_map.get("name"):
         profile["display_name"] = answer_map["name"]
 
@@ -419,6 +460,22 @@ async def _store_onboarding_answers(user_id: str, answers: list[str], variant_id
         variant_id,
         uid,
     )
+
+    if value_weights:
+        try:
+            await execute(
+                """
+                INSERT INTO ioo_user_state (user_id, state_json, last_updated)
+                VALUES ($1, $2::jsonb, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || EXCLUDED.state_json,
+                    last_updated = NOW()
+                """,
+                uid,
+                json.dumps({"value_weights": value_weights, "value_weights_source": "onboarding_explicit_1_10"}),
+            )
+        except Exception as e:
+            logger.warning(f"Could not store onboarding value weights: {e}")
 
     await _seed_onboarding_ioo_nodes(uid, variant_id, answer_map, questions)
 
