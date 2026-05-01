@@ -1194,14 +1194,21 @@ async def _user_city(user_id: str) -> Optional[str]:
     try:
         row = await fetchrow(
             """
-            SELECT COALESCE(NULLIF(u.city, ''), NULLIF(s.location_city, '')) AS city
+            SELECT COALESCE(NULLIF(u.city, ''), NULLIF(s.location_city, '')) AS city,
+                   NULLIF(s.location_country, '') AS country
             FROM users u
             LEFT JOIN ioo_user_state s ON s.user_id = u.id
             WHERE u.id = $1
             """,
             str(user_id),
         )
-        return str(row["city"]).strip() if row and row.get("city") else None
+        if not row or not row.get("city"):
+            return None
+        city = str(row["city"]).strip()
+        country = str(row.get("country") or "").strip()
+        if country and country.lower() not in city.lower():
+            return f"{city}, {country}"
+        return city
     except Exception:
         return None
 
