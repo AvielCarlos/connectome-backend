@@ -250,6 +250,37 @@ async def update_profile(
             )
         except Exception as e:
             logger.warning(f"Could not mirror profile value weights into IOO state: {e}")
+    if getattr(body, "travel_mode_enabled", None) is not None:
+        from api.tier_guard import get_user_tier
+        tier = await get_user_tier(user_id)
+        if body.travel_mode_enabled and tier not in ("explorer", "sovereign", "premium"):
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "error": "premium_required",
+                    "feature": "travel_mode",
+                    "tier_required": "explorer",
+                    "message": "Travel mode is available for Explorer and Sovereign members.",
+                },
+            )
+        profile["travel_mode_enabled"] = bool(body.travel_mode_enabled)
+        try:
+            await execute(
+                """
+                INSERT INTO ioo_user_state (user_id, state_json, last_updated)
+                VALUES ($1, $2::jsonb, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || EXCLUDED.state_json,
+                    last_updated = NOW()
+                """,
+                UUID(user_id),
+                json.dumps({
+                    "travel_mode_enabled": bool(body.travel_mode_enabled),
+                    "travel_mode_source": "profile",
+                }),
+            )
+        except Exception as e:
+            logger.warning(f"Could not mirror travel mode into IOO state: {e}")
 
     updated = await fetchrow(
         """
