@@ -487,19 +487,25 @@ async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> O
         return None
 
 
-async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0) -> Optional[ScreenResponse]:
+async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None) -> Optional[ScreenResponse]:
     """Diversify the main feed with concrete learn/attend/book actions."""
     # Prefer true live event data for the first Aventi slot, then fall back to
     # curated verified URLs so the feed is never only generic Eviva cards.
-    if slot_index % 5 == 0:
+    if slot_index % 5 == 0 and (domain_filter in (None, '', 'Aventi')):
         live = await _try_live_event_action(user_id, tier, daily_limit)
         if live is not None:
             return live
 
     digest = hashlib.sha256(f"{user_id}:{datetime.now(timezone.utc).date()}".encode("utf-8")).hexdigest()
-    start = int(digest[:8], 16) % len(_CURATED_REAL_ACTIONS)
-    idx = (start + slot_index) % len(_CURATED_REAL_ACTIONS)
-    item = _CURATED_REAL_ACTIONS[idx]
+    candidates = [item for item in _CURATED_REAL_ACTIONS if not domain_filter or item.get('domain') == domain_filter or (domain_filter == 'iVive' and item.get('domain') == 'Rest')]
+    if not candidates:
+        candidates = _CURATED_REAL_ACTIONS
+    start = int(digest[:8], 16) % len(candidates)
+    idx = (start + slot_index) % len(candidates)
+    item = dict(candidates[idx])
+    if domain_filter == 'iVive' and item.get('domain') == 'Rest':
+        item['domain'] = 'iVive'
+        item['tag'] = item.get('tag') or 'recovery'
     return await _build_screen_response_from_spec(user_id, tier, daily_limit, _real_action_spec(item))
 
 
@@ -819,12 +825,12 @@ async def get_next_screen(
     # meaningful share of cards to real actions (live events, videos, classes,
     # adventures) so users are not trapped in generic Eviva/IOO opportunity loops.
     if random.random() < 0.45:
-        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count)
+        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain)
         if real_action is not None:
             return real_action
 
     # IOO remains the intelligence layer, but not the whole feed.
-    if random.random() < 0.55:
+    if not body.domain and random.random() < 0.55:
         ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
         if ioo_response is not None:
             return ioo_response
@@ -942,20 +948,20 @@ async def get_screen_batch(
             # prevents repeated "Eviva Opportunities" cards from occupying the
             # whole swipe queue.
             if slot_index in (0, 2, 4):
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain)
                 if real_action is not None:
                     results.append(real_action)
                     continue
 
             # No goals gate: anyone can discover IOO nodes regardless of whether they have active goals.
-            if random.random() < 0.50:
+            if not body.domain and random.random() < 0.50:
                 ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
                 if ioo_resp is not None:
                     results.append(ioo_resp)
                     continue
 
             if random.random() < 0.35:
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain)
                 if real_action is not None:
                     results.append(real_action)
                     continue
