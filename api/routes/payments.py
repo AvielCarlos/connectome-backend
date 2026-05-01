@@ -47,6 +47,17 @@ class CheckoutRequest(BaseModel):
     cancel_url: str = "https://connectome.app/upgrade"
 
 
+class CreditsCheckoutRequest(BaseModel):
+    quantity: int = 5  # 5 extra path slots per pack
+    success_url: str = "https://avielcarlos.github.io/connectome-web/app/goals?credits=granted"
+    cancel_url: str = "https://avielcarlos.github.io/connectome-web/app/goals"
+
+
+# Credits grant per purchase quantity
+CREDITS_PER_PACK = 5
+TIER_PATH_LIMITS = {"free": 4, "explorer": 12, "sovereign": 999}
+
+
 class PortalRequest(BaseModel):
     return_url: str = "https://connectome.app/account"
 
@@ -230,6 +241,60 @@ async def create_checkout_session(
         raise HTTPException(status_code=502, detail=f"Payment error: {e}")
 
 
+@router.post("/api/payments/credits/checkout")
+async def create_credits_checkout(
+    body: CreditsCheckoutRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Create a Stripe Checkout session for purchasing path credits (one-time).
+    5 credits = 5 extra open paths, $9 one-time.
+    Set STRIPE_PRICE_PATH_CREDITS in Railway after creating the product in Stripe.
+    """
+    stripe = get_stripe_client()
+    if not stripe.configured:
+        raise HTTPException(status_code=503, detail="Payment processing not configured.")
+
+    import os
+    price_id = os.getenv("STRIPE_PRICE_PATH_CREDITS", "")
+    if not price_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Path credits product not configured. Set STRIPE_PRICE_PATH_CREDITS in Railway.",
+        )
+
+    user_row = await fetchrow("SELECT email FROM users WHERE id = $1", str(user_id))
+    if not user_row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    sub = await _ensure_subscription_row(user_id)
+    customer_id = sub.get("stripe_customer_id")
+
+    try:
+        if not customer_id:
+            customer = await stripe.create_customer(email=user_row["email"], user_id=user_id)
+            customer_id = customer["id"]
+            await execute(
+                "UPDATE subscriptions SET stripe_customer_id = $2 WHERE user_id = $1",
+                str(user_id), customer_id,
+            )
+
+        session = await stripe.create_checkout_session(
+            customer_id=customer_id,
+            price_id=price_id,
+            success_url=body.success_url + "?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url=body.cancel_url,
+            mode="payment",
+            metadata={"product_type": "path_credits", "credits": str(CREDITS_PER_PACK), "user_id": user_id},
+        )
+
+        logger.info(f"Credits checkout created: user={user_id[:8]} credits={CREDITS_PER_PACK}")
+        return {"checkout_url": session["url"], "session_id": session["id"], "credits": CREDITS_PER_PACK}
+
+    except StripeError as e:
+        raise HTTPException(status_code=502, detail=f"Payment error: {e}")
+
+
 @router.post("/api/payments/portal")
 async def create_billing_portal(
     body: PortalRequest,
@@ -329,6 +394,8 @@ async def stripe_webhook(request: Request):
             await _handle_payment_failed(data)
 
         elif event_type == "checkout.session.completed":
+            # Grant path credits on one-time purchase
+            await _handle_credits_purchase(data)
             # Track one-time service purchases via checkout sessions
             await _maybe_record_service_conversion(data, event_type)
 
@@ -468,6 +535,8 @@ async def _handle_subscription_upsert(sub: dict) -> None:
         user_id,
         tier,
     )
+    # Sync path_limit with the new tier
+    await _apply_tier_path_limit(str(user_id), tier)
 
     logger.info(
         f"Subscription updated: user={str(user_id)[:8]} tier={tier} status={db_status}"
@@ -536,6 +605,46 @@ async def _handle_payment_failed(invoice: dict) -> None:
     logger.warning(
         f"Payment failed: user={str(row['user_id'])[:8]} subscription={sub_id}"
     )
+
+
+async def _handle_credits_purchase(data: dict) -> None:
+    """Grant path credits to user after a successful one-time checkout."""
+    try:
+        metadata = data.get("metadata") or {}
+        if metadata.get("product_type") != "path_credits":
+            return
+        user_id = metadata.get("user_id")
+        credits = int(metadata.get("credits", CREDITS_PER_PACK))
+        if not user_id:
+            # Fall back to customer lookup
+            customer_id = data.get("customer")
+            if customer_id:
+                row = await fetchrow(
+                    "SELECT user_id FROM subscriptions WHERE stripe_customer_id = $1", customer_id
+                )
+                user_id = str(row["user_id"]) if row else None
+        if not user_id:
+            logger.warning("Credits purchase: could not resolve user_id")
+            return
+        await execute(
+            "UPDATE users SET path_credits = path_credits + $2 WHERE id = $1",
+            user_id, credits,
+        )
+        logger.info(f"Granted {credits} path credits to user {user_id[:8]}")
+    except Exception as e:
+        logger.error(f"Credits grant failed: {e}")
+
+
+async def _apply_tier_path_limit(user_id: str, tier: str) -> None:
+    """Update users.path_limit when subscription tier changes."""
+    try:
+        limit = TIER_PATH_LIMITS.get(tier, 4)
+        await execute(
+            "UPDATE users SET path_limit = $2 WHERE id = $1",
+            user_id, limit,
+        )
+    except Exception as e:
+        logger.error(f"path_limit update failed for user {user_id}: {e}")
 
 
 def _price_id_to_tier(price_id: str) -> str:
