@@ -277,6 +277,114 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
 
 _CURATED_REAL_ACTIONS: list[dict[str, Any]] = [
     {
+        "key": "victoria_events_calendar",
+        "domain": "Aventi",
+        "city": "Victoria, BC",
+        "tag": "victoria_live_events",
+        "kind": "Victoria event source",
+        "title": "Find a real Victoria event this week",
+        "body": "Open Destination Greater Victoria’s live events calendar, choose something with a real page, and turn it into a Path node.",
+        "image": "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=1200&auto=format&fit=crop",
+        "url": "https://www.tourismvictoria.com/events-calendar",
+        "source_url": "https://www.tourismvictoria.com/events-calendar",
+        "booking_url": "https://www.tourismvictoria.com/events-calendar",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=events+Victoria+BC",
+        "button": "Browse Victoria events →",
+        "needs": ["date window", "transport plan", "ticket/free RSVP"],
+        "steps": [
+            "Open the Victoria events calendar.",
+            "Pick one event with a page, date, location, and cost you can verify.",
+            "Book/RSVP, invite someone, or ask Aura to save it as a new opportunity node.",
+        ],
+        "why": "This is the Victoria-first opportunity layer: real local events with pages, not generic activity ideas.",
+    },
+    {
+        "key": "victoria_recreation_programs",
+        "domain": "iVive",
+        "city": "Victoria, BC",
+        "tag": "victoria_recreation",
+        "kind": "Local class / booking",
+        "title": "Book a Victoria recreation class or drop-in",
+        "body": "City recreation pages expose classes, pool/fitness options, drop-ins, registration windows, prices, and facility details.",
+        "image": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=1200&auto=format&fit=crop",
+        "url": "https://www.victoria.ca/parks-recreation/recreation",
+        "source_url": "https://www.victoria.ca/parks-recreation/recreation",
+        "booking_url": "https://www.victoria.ca/parks-recreation/recreation",
+        "provider_url": "https://www.victoria.ca/parks-recreation/recreation/crystal-pool-fitness-centre",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Crystal+Pool+Fitness+Centre+Victoria+BC",
+        "button": "Open recreation options →",
+        "needs": ["schedule match", "registration/account", "class or drop-in fee"],
+        "steps": [
+            "Open the recreation page and check current registration/drop-in schedules.",
+            "Choose one class, swim, workout, court booking, or community program.",
+            "Register, add it to your calendar, or save it for Aura to resurface.",
+        ],
+        "why": "Aura should translate vitality goals into local bookable actions with real provider links.",
+    },
+    {
+        "key": "victoria_volunteer_opportunities",
+        "domain": "Eviva",
+        "city": "Victoria, BC",
+        "tag": "victoria_volunteer",
+        "kind": "Community service",
+        "title": "Find a meaningful Victoria volunteer role",
+        "body": "Volunteer Victoria has real listings and advising so users can create contribution paths from actual local opportunities.",
+        "image": "https://images.unsplash.com/photo-1559027615-cd4628902d4a?w=1200&auto=format&fit=crop",
+        "url": "https://victoria.volunteerattract.com/Listings.php?ListType=Volunteer_Positions&MenuItemID=20",
+        "source_url": "https://volunteervictoria.bc.ca",
+        "booking_url": "https://victoria.volunteerattract.com/Listings.php?ListType=Volunteer_Positions&MenuItemID=20",
+        "provider_url": "https://volunteervictoria.bc.ca",
+        "button": "Browse volunteer roles →",
+        "needs": ["cause fit", "time commitment", "application/contact step"],
+        "steps": [
+            "Open the listings and filter by cause, schedule, or organization.",
+            "Pick one role that genuinely fits your life right now.",
+            "Apply/contact them, or create a goal for Aura to help you follow through.",
+        ],
+        "why": "Eviva should route people into contribution, belonging, and purpose through real community openings.",
+    },
+    {
+        "key": "victoria_makers_services",
+        "domain": "Aventi",
+        "city": "Victoria, BC",
+        "tag": "victoria_local_makers",
+        "kind": "Products / services / workshops",
+        "title": "Discover Victoria makers, workshops, and local products",
+        "body": "Use local maker and market pages as opportunity sources for gifts, workshops, services, and creative experiences.",
+        "image": "https://images.unsplash.com/photo-1511988617509-a57c8a288659?w=1200&auto=format&fit=crop",
+        "url": "https://www.tourismvictoria.com/blog/makers-markets",
+        "source_url": "https://www.tourismvictoria.com/blog/makers-markets",
+        "provider_url": "https://www.tourismvictoria.com/things-to-do/shopping/public-markets/victoria-market-collective",
+        "map_url": "https://www.google.com/maps/search/?api=1&query=Victoria+BC+makers+markets+workshops",
+        "button": "Open maker guide →",
+        "needs": ["interest", "budget", "shop/workshop availability"],
+        "steps": [
+            "Open the maker guide and choose one shop, workshop, service, or product category.",
+            "Follow through to the provider page when available.",
+            "Ask Aura to turn the specific product/service/workshop into a saved opportunity node.",
+        ],
+        "why": "Opportunity indexing includes products and services when they unlock real experiences, not only events.",
+    },
+    {
+        "key": "victoria_city_unlock",
+        "domain": "Aventi",
+        "city": "Victoria, BC",
+        "tag": "city_unlock_pricing",
+        "kind": "City unlock",
+        "title": "Unlock the Victoria opportunity graph",
+        "body": "Aura can start Victoria around a $500/month operating budget by indexing opportunities, not the whole web: live sources, targeted search, cached refreshes, and user-created nodes.",
+        "image": "https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?w=1200&auto=format&fit=crop",
+        "url": "ido://city-unlock/victoria-bc",
+        "button": "See city unlock economics →",
+        "needs": ["Victoria coverage", "$500/month budget cap", "local members sharing cost"],
+        "steps": [
+            "Start with Victoria, BC and a hard monthly spend ceiling.",
+            "Show users the estimated city cost and current member count.",
+            "Reduce the per-user price as more locals join and the fixed city graph cost is shared.",
+        ],
+        "why": "The product should be honest: local intelligence has real API/search/refresh costs, but shared city economics can make it cheaper over time.",
+    },
+    {
         "key": "vancouver_live_events",
         "domain": "Aventi",
         "tag": "live_events",
@@ -399,6 +507,22 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             ],
         })
         components[-1]["items"] = [x for x in components[-1]["items"] if x]
+    links = [
+        {"label": "Main page", "url": item.get("url"), "kind": "page"},
+        {"label": "Source", "url": item.get("source_url"), "kind": "source"},
+        {"label": "Book / register", "url": item.get("booking_url"), "kind": "booking"},
+        {"label": "Provider", "url": item.get("provider_url"), "kind": "provider"},
+        {"label": "Map", "url": item.get("map_url"), "kind": "map"},
+        {"label": "Reviews", "url": item.get("review_url"), "kind": "reviews"},
+    ]
+    links = [dict(t) for t in {link["url"]: link for link in links if link.get("url")}.values()]
+    if links:
+        components.append({
+            "type": "opportunity_links",
+            "title": "Useful links",
+            "items": links[:5],
+            "note": "Aura keeps the page links close so users can verify, book, buy, register, navigate, or review before acting.",
+        })
     components += [
         {"type": "section_header", "text": "Why this belongs here"},
         {"type": "body_text", "text": item.get("why") or "Aura is turning the feed into a path of concrete possibilities, not repeated generic cards."},
@@ -416,8 +540,11 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "agent": "RealWorldActionAgent",
             "source": source,
             "domain": domain,
+            "city": item.get("city"),
+            "opportunity_kind": item.get("kind"),
             "tags": [item.get("tag") or "real_action", "diversity_seed"],
             "url": url,
+            "links": links,
             "generated_at": datetime.now(timezone.utc).isoformat(),
         },
         "card_data": {
@@ -430,10 +557,90 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
                 "difficulty": "easy" if domain == "iVive" else "medium",
                 "why_it_matters": item.get("why"),
                 "steps": item.get("steps") or [],
-                "resources": [{"label": item.get("button") or "Open", "url": url}] if url else [],
+                "resources": links or ([{"label": item.get("button") or "Open", "url": url}] if url else []),
                 "stat": "Real URL/action card; user can verify and act.",
             },
         },
+    }
+
+
+class OpportunityCreateRequest(BaseModel):
+    title: str
+    body: Optional[str] = None
+    kind: Optional[str] = "User-created opportunity"
+    domain: Optional[DomainType] = "Aventi"
+    city: Optional[str] = "Victoria, BC"
+    url: Optional[str] = None
+    source_url: Optional[str] = None
+    booking_url: Optional[str] = None
+    provider_url: Optional[str] = None
+    map_url: Optional[str] = None
+    price: Optional[str] = None
+    venue: Optional[str] = None
+
+
+@router.post("/opportunities", response_model=ScreenResponse)
+async def create_user_opportunity(
+    body: OpportunityCreateRequest,
+    user_id: str = Depends(get_current_user_id),
+) -> ScreenResponse:
+    """Create a user/Aura co-created opportunity card and persist it as an IOO screen spec.
+
+    This is intentionally lightweight for the Victoria-first MVP: users can add
+    events, products, services, bookings, providers, or local path nodes with
+    the links needed to verify and act. Later this can graduate into a dedicated
+    opportunity_nodes table with moderation and refresh jobs.
+    """
+    title = (body.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=422, detail="title is required")
+    item = body.dict()
+    item.update({
+        "key": f"user_opportunity_{_uuid_mod.uuid4().hex[:10]}",
+        "tag": "user_created_opportunity",
+        "button": "Open opportunity →" if (body.url or body.booking_url or body.provider_url) else "Save opportunity →",
+        "needs": ["verify details", "choose timing", "commit or save"],
+        "steps": [
+            "Verify the linked page, provider, date/time, cost, and location where applicable.",
+            "Decide whether this is worth doing, buying, booking, attending, or sharing.",
+            "Save it to your path or act from the strongest link.",
+        ],
+        "why": "This was created with a user, so Aura can learn new local opportunities instead of only consuming indexed sources.",
+        "image": "https://images.unsplash.com/photo-1518005020951-eccb494ad742?w=1200&auto=format&fit=crop",
+    })
+    tier = "free"
+    daily_limit = 10
+    spec = _real_action_spec(item, source="user_created_opportunity")
+    spec["metadata"]["created_by_user_id"] = str(user_id)
+    spec["metadata"]["validation_status"] = "user_submitted"
+    spec["metadata"]["budget_model"] = "victoria_first_500_month_mvp"
+    return await _build_screen_response_from_spec(user_id, tier, daily_limit, spec)
+
+
+@router.get("/city-unlock")
+async def get_city_unlock(city: str = "Victoria, BC") -> dict[str, Any]:
+    """Transparent city-unlock economics for the local opportunity graph MVP."""
+    estimated_monthly_cost = 500
+    target_margin = 1.15
+    example_members = [25, 50, 100, 250]
+    return {
+        "city": city,
+        "currency": "CAD",
+        "estimated_monthly_cost": estimated_monthly_cost,
+        "budget_cap": 500,
+        "coverage": ["events", "classes", "services", "products", "volunteering", "bookings", "user-created nodes"],
+        "operating_model": [
+            "index opportunities, not the whole web",
+            "prefer official/provider/event/booking pages",
+            "cache and refresh selectively",
+            "use targeted search/API calls inside monthly quotas",
+            "let users and Aura create missing opportunity nodes together",
+        ],
+        "shared_price_examples": [
+            {"local_members": n, "estimated_price_per_user": round((estimated_monthly_cost * target_margin) / n, 2)}
+            for n in example_members
+        ],
+        "message": "Unlocking a city has real source/search/refresh costs. Your monthly price can go down as more people in the same city share the local graph cost.",
     }
 
 
