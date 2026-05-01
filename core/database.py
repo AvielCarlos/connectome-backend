@@ -2161,6 +2161,13 @@ async def run_migrations():
             ALTER TABLE contributions ADD COLUMN IF NOT EXISTS months_active INTEGER DEFAULT 0
         """)
 
+        # ---------------------------------------------------------------
+        # IOO Path Limits — free tier = 4 active paths, paid = unlimited
+        # ---------------------------------------------------------------
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS path_limit INTEGER DEFAULT 4
+        """)
+
         logger.info("Database migrations complete")
 
 
