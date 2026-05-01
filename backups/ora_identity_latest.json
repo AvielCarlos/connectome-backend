@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T04:17:42.004931+00:00",
-  "exported_at": "2026-05-01T04:17:42.004931+00:00",
-  "collected_at": "2026-05-01T04:17:42.004931+00:00",
+  "timestamp": "2026-05-01T04:20:38.360904+00:00",
+  "exported_at": "2026-05-01T04:20:38.360904+00:00",
+  "collected_at": "2026-05-01T04:20:38.360904+00:00",
   "identity": {
-    "total_lessons": 1178,
+    "total_lessons": 1179,
     "lessons": [
+      {
+        "id": "1488f523-cb3b-4cc4-a9e0-510bc55bfb0d",
+        "lesson": "{\"proposal_id\": \"1488f523-cb3b-4cc4-a9e0-510bc55bfb0d\", \"card_type\": \"personalized_challenge\", \"hypothesis\": \"Introducing a personalized challenge card will improve user fulfillment by 25%.\", \"description\": \"This card type presents users with a tailored challenge based on their previous interactions and ratings. It encourages them to engage by completing tasks that align with their interests or goals, fostering a sense of achievement and personal growth.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T04:18:41.426347+00:00\", \"expires_at\": \"2026-05-03T04:18:41.426347+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-01 04:18:41.426347"
+      },
       {
         "id": "7eeba893-ebdc-4c34-b637-31a7ba82e099",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -8353,7 +8360,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "3a628b27c7d54e98"
+    "lessons_hash": "5d0881587abbef69"
   },
   "platform_stats": {
     "total_users": 19,
