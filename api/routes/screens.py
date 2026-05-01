@@ -1270,7 +1270,21 @@ def _filter_location_eligible(candidates: list[dict[str, Any]], preferred_city: 
     return eligible or [item for item in candidates if not item.get("city")]
 
 
-async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None, preferred_city: Optional[str] = None) -> Optional[ScreenResponse]:
+async def _user_travel_mode(user_id: str, tier: str) -> bool:
+    """Paid-tier opt-in that allows non-local/travel opportunities in feed."""
+    if tier not in ("explorer", "sovereign", "premium"):
+        return False
+    try:
+        row = await fetchrow("SELECT profile FROM users WHERE id = $1", UUID(user_id))
+        profile = row.get("profile") if row else None
+        if isinstance(profile, str):
+            profile = json.loads(profile) if profile else {}
+        return bool((profile or {}).get("travel_mode_enabled"))
+    except Exception:
+        return False
+
+
+async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None, preferred_city: Optional[str] = None, travel_mode: bool = False) -> Optional[ScreenResponse]:
     """Diversify the main feed with concrete learn/attend/book actions."""
     # Prefer true live event data for the first Aventi slot, then fall back to
     # curated verified URLs so the feed is never only generic Eviva cards.
@@ -1286,7 +1300,8 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
     if preferred_city:
-        candidates = _filter_location_eligible(candidates, preferred_city)
+        if not travel_mode:
+            candidates = _filter_location_eligible(candidates, preferred_city)
         candidates = sorted(candidates, key=lambda item: (_city_rank(item, preferred_city), item.get("key", "")))
     start = int(digest[:8], 16) % len(candidates)
     idx = (start + slot_index + current_count) % len(candidates)
@@ -1611,13 +1626,14 @@ async def get_next_screen(
         pass
 
     preferred_city = await _user_city(user_id)
+    travel_mode = await _user_travel_mode(user_id, tier)
 
     # ── Smart feed routing ─────────────────────────────────────────────────
     # Product principle: the feed must feel like a living path. Always give a
     # meaningful share of cards to real actions (live events, videos, classes,
     # adventures) so users are not trapped in generic Eviva/IOO opportunity loops.
     if random.random() < 0.45:
-        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city)
+        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode)
         if real_action is not None:
             return real_action
 
@@ -1731,6 +1747,7 @@ async def get_screen_batch(
         pass
 
     preferred_city = await _user_city(user_id)
+    travel_mode = await _user_travel_mode(user_id, tier)
 
     # Check if user has active goals (once, shared across batch)
     # Fetch screens sequentially to respect rate limits and user model updates
@@ -1743,7 +1760,7 @@ async def get_screen_batch(
             # prevents repeated "Eviva Opportunities" cards from occupying the
             # whole swipe queue.
             if slot_index in (0, 2, 4):
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode)
                 if real_action is not None:
                     results.append(real_action)
                     continue
@@ -1756,7 +1773,7 @@ async def get_screen_batch(
                     continue
 
             if random.random() < 0.35:
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode)
                 if real_action is not None:
                     results.append(real_action)
                     continue
