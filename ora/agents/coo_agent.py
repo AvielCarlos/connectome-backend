@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 AGENTS = ["cfo", "cgo", "cmo", "cpo", "cto", "coo", "community", "strategy"]
 REPORT_STALE_HOURS = 24
 REPORT_MISSING_ALERT_HOURS = 72
+OPENCLAW_CLI_ENABLED = os.getenv("OPENCLAW_CLI_ENABLED", "").lower() in {"1", "true", "yes"}
 
 
 class COOAgent(BaseExecutiveAgent):
@@ -112,38 +113,46 @@ class COOAgent(BaseExecutiveAgent):
         metrics["api_health"] = await self._check_api_health()
 
         # ── Check cron jobs ───────────────────────────────────────────
-        try:
-            result = subprocess.run(
-                ["openclaw", "cron", "list", "--json"],
-                capture_output=True,
-                text=True,
-                timeout=15,
+        if not OPENCLAW_CLI_ENABLED:
+            metrics["cron_check"] = {"available": False, "error": "OPENCLAW_CLI_ENABLED is not set"}
+            metrics["recommendations"].append(
+                "OpenClaw cron CLI check disabled; use cloud scheduler telemetry for production cron health."
             )
-            if result.returncode == 0 and result.stdout.strip():
-                crons = json.loads(result.stdout)
-                metrics["cron_jobs"] = crons if isinstance(crons, list) else []
-                metrics["cron_check"] = {"available": True, "error": None}
+        else:
+            try:
+                result = subprocess.run(
+                    ["openclaw", "cron", "list", "--json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    crons = json.loads(result.stdout)
+                    metrics["cron_jobs"] = crons if isinstance(crons, list) else []
+                    metrics["cron_check"] = {"available": True, "error": None}
 
-                for cron in metrics["cron_jobs"]:
-                    cron_id = cron.get("id") or cron.get("jobId") or cron.get("name") or "unknown"
-                    state = cron.get("state") or {}
-                    if cron.get("last_error") or state.get("lastRunStatus") == "error" or state.get("lastStatus") == "error":
-                        metrics["erroring_crons"].append(str(cron_id))
-                    last_run = cron.get("last_run_at") or state.get("lastRunAt") or state.get("lastRunAtMs")
-                    if last_run:
-                        try:
-                            if isinstance(last_run, (int, float)):
-                                last_dt = datetime.fromtimestamp(last_run / 1000, tz=timezone.utc)
-                            else:
-                                last_dt = datetime.fromisoformat(str(last_run).replace("Z", "+00:00"))
-                            age_hours = (now - last_dt).total_seconds() / 3600
-                            if age_hours > 48:
-                                metrics["stale_crons"].append(f"{cron_id} ({age_hours:.0f}h since run)")
-                        except Exception:
-                            pass
-        except Exception as e:
-            metrics["cron_check"] = {"available": False, "error": str(e)}
-            logger.debug(f"COO: cron list failed: {e}")
+                    for cron in metrics["cron_jobs"]:
+                        cron_id = cron.get("id") or cron.get("jobId") or cron.get("name") or "unknown"
+                        state = cron.get("state") or {}
+                        if cron.get("last_error") or state.get("lastRunStatus") == "error" or state.get("lastStatus") == "error":
+                            metrics["erroring_crons"].append(str(cron_id))
+                        last_run = cron.get("last_run_at") or state.get("lastRunAt") or state.get("lastRunAtMs")
+                        if last_run:
+                            try:
+                                if isinstance(last_run, (int, float)):
+                                    last_dt = datetime.fromtimestamp(last_run / 1000, tz=timezone.utc)
+                                else:
+                                    last_dt = datetime.fromisoformat(str(last_run).replace("Z", "+00:00"))
+                                age_hours = (now - last_dt).total_seconds() / 3600
+                                if age_hours > 48:
+                                    metrics["stale_crons"].append(f"{cron_id} ({age_hours:.0f}h since run)")
+                            except Exception:
+                                pass
+                else:
+                    metrics["cron_check"] = {"available": False, "error": result.stderr.strip() or "empty cron output"}
+            except Exception as e:
+                metrics["cron_check"] = {"available": False, "error": str(e)}
+                logger.debug(f"COO: cron list failed: {e}")
 
         # ── Check agent reports in Redis and local report files ────────
         for agent_name in AGENTS:

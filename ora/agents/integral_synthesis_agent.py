@@ -22,7 +22,9 @@ from typing import Any, Dict, Iterable, List, Optional
 
 import httpx
 
+from core.config import settings
 from core.database import fetch
+from core.telegram import get_telegram_token
 from ora.agents.agent_memory import AgentInsight, agent_memory_bus
 
 logger = logging.getLogger(__name__)
@@ -190,6 +192,9 @@ class IntegralSynthesisAgent:
         return data
 
     async def read_drive_docs(self, max_docs: int = 12) -> List[Dict[str, str]]:
+        if settings.is_production and os.getenv("GOG_CLI_ENABLED", "").lower() not in {"1", "true", "yes"}:
+            logger.debug("IntegralSynthesisAgent: skipping gog Drive docs in production")
+            return []
         files = await _run_json_command([
             "gog", "drive", "list", "--account", "ora.intelligence.ai@gmail.com", "--client", "ora"
         ])
@@ -350,18 +355,7 @@ class IntegralSynthesisAgent:
     def _get_telegram_token(self) -> str:
         if self._telegram_token is not None:
             return self._telegram_token
-        token = os.environ.get("ORA_TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN") or ""
-        if not token:
-            for path in (
-                "/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt",
-                "/run/secrets/telegram-bot-token.txt",
-            ):
-                try:
-                    token = Path(path).read_text().strip()
-                    if token:
-                        break
-                except Exception:
-                    pass
+        token = get_telegram_token() or ""
         self._telegram_token = token
         return token
 

@@ -15,7 +15,7 @@ from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
 REPO = "AvielCarlos/connectome-backend"
-REWARDS_LOG = "/Users/avielcarlos/.openclaw/workspace/tmp/biz_dev/cp_rewards_log.json"
+REWARDS_LOG = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "biz_dev", "cp_rewards_log.json")
 
 # CP per PR size
 BASE_CP = 25

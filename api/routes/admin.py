@@ -14,11 +14,11 @@ from core.database import fetchrow, fetch
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "connectome-admin-secret")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN") or os.getenv("ADMIN_SECRET", "")
 
 
 def _require_admin(x_admin_token: str = Header(default="")):
-    if x_admin_token != ADMIN_TOKEN:
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
@@ -507,8 +507,8 @@ async def get_growth_metrics(
 async def sustainability_dashboard(x_admin_token: str = Header(default="")):
     """Real-time cost vs. revenue sustainability report."""
     import os
-    _token = os.getenv("ADMIN_SECRET", "connectome-admin-secret")
-    if x_admin_token != _token:
+    _token = os.getenv("ADMIN_SECRET", "")
+    if not _token or x_admin_token != _token:
         raise HTTPException(status_code=403, detail="Admin token required")
 
     # API costs from log (create table if not exists)
@@ -606,8 +606,8 @@ async def sustainability_dashboard(x_admin_token: str = Header(default="")):
 async def admin_dashboard(x_admin_token: str = Header(default="")):
     """Complete admin dashboard — users, revenue, API costs, agents, activity."""
     import os as _os
-    _token = _os.getenv("ADMIN_SECRET", "connectome-admin-secret")
-    if x_admin_token != _token:
+    _token = _os.getenv("ADMIN_SECRET", "")
+    if not _token or x_admin_token != _token:
         raise HTTPException(status_code=403, detail="Admin token required")
 
     # Ensure tables exist

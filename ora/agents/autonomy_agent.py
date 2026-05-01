@@ -1222,17 +1222,12 @@ Rules:
             logger.debug(f"OraAutonomy: could not log lesson: {e}")
 
     async def _get_telegram_token(self) -> Optional[str]:
-        """Load Telegram bot token from env or file."""
+        """Load Telegram bot token from cloud-safe env configuration."""
         if self._telegram_token:
             return self._telegram_token
 
-        token = os.environ.get("ORA_TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
-        if not token:
-            try:
-                with open("/Users/avielcarlos/.openclaw/secrets/telegram-bot-token.txt") as f:
-                    token = f.read().strip()
-            except Exception:
-                pass
+        from core.telegram import get_telegram_token
+        token = get_telegram_token()
 
         if token:
             self._telegram_token = token

@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ora/council", tags=["ora_council"])
 
 ADMIN_EMAILS = {"avi@atdao.org", "nea@atdao.org", "carlosandromeda8@gmail.com"}
-ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "connectome-admin-secret")
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or os.environ.get("ADMIN_SECRET", "")
 optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/users/login", auto_error=False)
 
 
@@ -40,7 +40,7 @@ async def _require_admin(
     token: Optional[str] = Depends(optional_oauth2_scheme),
 ) -> str:
     """Allow admin users by email OR valid X-Admin-Token header for crons."""
-    if x_admin_token and x_admin_token == ADMIN_TOKEN:
+    if ADMIN_TOKEN and x_admin_token and x_admin_token == ADMIN_TOKEN:
         return "admin-token"
     user_id = _decode_optional_token(token)
     if user_id:

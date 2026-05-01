@@ -15,21 +15,33 @@ from core.database import fetchrow, fetch, execute
 
 logger = logging.getLogger(__name__)
 
-API_URL = "https://connectome-api-production.up.railway.app"
+API_URL = os.getenv("CONNECTOME_API_BASE", "https://connectome-api-production.up.railway.app")
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+APP_ENV = os.getenv("APP_ENV", "development").lower()
 
 
 class ExperimentGeneratorAgent:
 
     async def _get_token(self) -> str:
         """Get API token for Ora calls."""
-        token_file = "/Users/avielcarlos/.openclaw/workspace/tmp/connectome_jwt.txt"
+        env_token = os.getenv("ORA_JWT_TOKEN") or os.getenv("CONNECTOME_WORKER_JWT")
+        if env_token:
+            return env_token
+        token_file = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "connectome_jwt.txt")
         if os.path.exists(token_file):
             return open(token_file).read().strip()
+        if APP_ENV == "production":
+            logger.warning("ExperimentGeneratorAgent: worker JWT missing; skipping prod login fallback")
+            return ""
+        test_email = os.getenv("CONNECTOME_TEST_EMAIL")
+        test_password = os.getenv("CONNECTOME_TEST_PASSWORD")
+        if not test_email or not test_password:
+            logger.warning("ExperimentGeneratorAgent: no worker JWT or CONNECTOME_TEST_EMAIL/PASSWORD configured")
+            return ""
         async with httpx.AsyncClient() as client:
             r = await client.post(f"{API_URL}/api/users/login",
-                json={"email": "test@test.com", "password": "test1234"})
-            return r.json()["access_token"]
+                json={"email": test_email, "password": test_password})
+            return r.json().get("access_token", "")
 
     async def _ask_aura(self, prompt: str) -> str:
         """Ask Ora to generate content via the chat API."""

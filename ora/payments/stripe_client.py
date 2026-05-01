@@ -23,6 +23,8 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from core.config import settings
+
 logger = logging.getLogger(__name__)
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
@@ -207,6 +209,8 @@ class StripeClient:
         """
         secret = webhook_secret or STRIPE_WEBHOOK_SECRET
         if not secret:
+            if settings.is_production:
+                raise StripeWebhookError("Stripe webhook secret not configured")
             logger.warning("Stripe webhook secret not configured — skipping verification")
             import json
             return json.loads(payload)

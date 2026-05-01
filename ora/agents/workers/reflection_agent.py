@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-REFLECTION_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/ora_reflection"
+REFLECTION_DIR = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "ora_reflection")
 
 
 class ReflectionAgent(BaseWorkerAgent):

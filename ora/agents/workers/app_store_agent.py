@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-METRICS_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/biz_dev/app_metrics.json"
+METRICS_FILE = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "biz_dev", "app_metrics.json")
 REPO = "AvielCarlos/connectome-backend"
 
 

@@ -16,12 +16,14 @@ import httpx
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-QA_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/qa"
+QA_DIR = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "qa")
+QA_BASE_URL = os.getenv("CONNECTOME_API_BASE", "https://connectome-api-production.up.railway.app")
+QA_TEST_EMAIL = os.getenv("CONNECTOME_TEST_EMAIL")
+QA_TEST_PASSWORD = os.getenv("CONNECTOME_TEST_PASSWORD")
 
 ENDPOINTS = [
     {"method": "GET",  "path": "/health",              "expect_key": None,           "name": "health"},
-    {"method": "POST", "path": "/api/users/login",     "expect_key": "access_token", "name": "login",
-     "body": {"email": "test@test.com", "password": "test1234"}},
+    {"method": "POST", "path": "/api/users/login",     "expect_key": "access_token", "name": "login"},
     {"method": "POST", "path": "/api/screens/next",    "expect_key": "title",        "name": "screens_next"},
     {"method": "GET",  "path": "/api/dao/tasks",       "expect_key": None,           "name": "dao_tasks"},
     {"method": "GET",  "path": "/api/services/catalog","expect_key": None,           "name": "services_catalog"},
@@ -48,14 +50,17 @@ class QAAgent(BaseWorkerAgent):
         results = []
         failures = []
 
-        async with httpx.AsyncClient(timeout=30, base_url="https://connectome-api-production.up.railway.app") as client:
+        async with httpx.AsyncClient(timeout=30, base_url=QA_BASE_URL) as client:
             for ep in ENDPOINTS:
+                if ep["name"] == "login" and (not QA_TEST_EMAIL or not QA_TEST_PASSWORD):
+                    results.append({"name": ep["name"], "status": "skipped", "reason": "CONNECTOME_TEST_EMAIL/PASSWORD not configured"})
+                    continue
                 t0 = time.perf_counter()
                 try:
                     if ep["method"] == "GET":
                         resp = await client.get(ep["path"], headers=headers)
                     else:
-                        body = ep.get("body", {})
+                        body = ep.get("body") or {"email": QA_TEST_EMAIL, "password": QA_TEST_PASSWORD}
                         resp = await client.post(ep["path"], json=body, headers=headers)
 
                     elapsed_ms = round((time.perf_counter() - t0) * 1000)

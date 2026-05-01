@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from core.database import fetchrow, fetch, execute
+from core.config import settings
 from api.middleware import get_current_user_id
 
 logger = logging.getLogger(__name__)
@@ -391,7 +392,11 @@ async def stripe_webhook(request: Request):
     sig_header = request.headers.get("stripe-signature", "")
 
     # Verify webhook signature
-    if STRIPE_WEBHOOK_SECRET:
+    if not STRIPE_WEBHOOK_SECRET:
+        if settings.is_production:
+            raise HTTPException(status_code=503, detail="Stripe webhook secret not configured")
+        logger.warning("Services webhook: STRIPE_WEBHOOK_SECRET missing — accepting only because APP_ENV is not production")
+    else:
         try:
             _verify_stripe_signature(payload_bytes, sig_header, STRIPE_WEBHOOK_SECRET)
         except Exception as exc:
@@ -664,14 +669,30 @@ async def _email_result(email: str, service_id: str, order_id: str, result: str)
     )
 
     try:
-        import subprocess
-        # Use himalaya or system mail as best-effort delivery
-        subprocess.run(
-            ["himalaya", "send", "--subject", subject, "--to", email, "--body", body],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        import smtplib
+        from email.message import EmailMessage
+
+        smtp_host = os.getenv("SMTP_HOST", "")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_user = os.getenv("SMTP_USERNAME", "")
+        smtp_password = os.getenv("SMTP_PASSWORD", "")
+        from_email = os.getenv("SMTP_FROM_EMAIL") or smtp_user
+
+        if not smtp_host or not from_email:
+            logger.warning("Services: SMTP not configured; skipping customer email delivery")
+            return
+
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = from_email
+        msg["To"] = email
+        msg.set_content(body)
+
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as smtp:
+            smtp.starttls()
+            if smtp_user and smtp_password:
+                smtp.login(smtp_user, smtp_password)
+            smtp.send_message(msg)
         logger.info(f"Services: result email sent to {email} for order {order_id}")
     except Exception as exc:
         logger.warning(f"Services: email delivery failed for {email}: {exc}")

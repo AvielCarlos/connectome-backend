@@ -17,9 +17,10 @@ from ora.agents.base_executive_agent import BaseExecutiveAgent
 
 logger = logging.getLogger(__name__)
 
-TWITTER_LOG = "/tmp/ora_outreach/twitter_log.json"
-OUTREACH_LOG = "/tmp/services/outreach_log.json"
-API_BASE = "https://connectome-api-production.up.railway.app"
+RUNTIME_DIR = os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome")
+TWITTER_LOG = os.path.join(RUNTIME_DIR, "ora_outreach", "twitter_log.json")
+OUTREACH_LOG = os.path.join(RUNTIME_DIR, "services", "outreach_log.json")
+API_BASE = os.getenv("CONNECTOME_API_BASE", "https://connectome-api-production.up.railway.app")
 
 
 class CMOAgent(BaseExecutiveAgent):

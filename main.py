@@ -111,6 +111,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown tasks."""
     logger.info("🧠 Connectome starting up...")
+    settings.validate_production_safety()
 
     # Run DB migrations
     await run_migrations()

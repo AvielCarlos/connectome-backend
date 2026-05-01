@@ -15,7 +15,7 @@ from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
 REPO = "AvielCarlos/connectome-backend"
-BOUNTY_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/biz_dev/bounties.json"
+BOUNTY_FILE = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "biz_dev", "bounties.json")
 
 # CP reward tiers by complexity
 CP_TIERS = {

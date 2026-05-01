@@ -110,6 +110,13 @@ class Settings(BaseSettings):
 
     # Admin emails (comma-separated) — these users get admin privileges
     ADMIN_EMAILS: str = "carlosandromeda8@gmail.com"
+    ADMIN_TOKEN: str = ""
+    ADMIN_SECRET: str = ""
+
+    # Webhooks / background worker auth
+    GITHUB_WEBHOOK_SECRET: str = ""
+    ORA_JWT_TOKEN: str = ""
+    CONNECTOME_WORKER_JWT: str = ""
 
     @property
     def admin_email_list(self) -> list:
@@ -139,7 +146,41 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.APP_ENV == "production"
+        return self.APP_ENV.lower() == "production"
+
+    def validate_production_safety(self) -> None:
+        """Fail fast on unsafe production configuration.
+
+        Localhost/dev defaults are useful for development, but production should
+        only boot with explicit environment-backed values for secrets and
+        infrastructure URLs.
+        """
+        if not self.is_production:
+            return
+
+        errors = []
+        if self.SECRET_KEY == "dev-secret-key-change-in-production-32chars!!" or len(self.SECRET_KEY) < 32:
+            errors.append("SECRET_KEY must be a non-default value of at least 32 characters")
+        if "localhost" in self.DATABASE_URL or "127.0.0.1" in self.DATABASE_URL:
+            errors.append("DATABASE_URL must not point at localhost in production")
+        if "localhost" in self.REDIS_URL or "127.0.0.1" in self.REDIS_URL:
+            errors.append("REDIS_URL must not point at localhost in production")
+        if any(origin == "*" for origin in self.CORS_ORIGINS):
+            errors.append("CORS_ORIGINS must not contain '*' in production")
+        admin_secret = self.ADMIN_TOKEN or self.ADMIN_SECRET
+        if not admin_secret or admin_secret == "connectome-admin-secret" or len(admin_secret) < 32:
+            errors.append("ADMIN_TOKEN or ADMIN_SECRET must be configured with a non-default value of at least 32 characters")
+        if not self.GITHUB_WEBHOOK_SECRET:
+            errors.append("GITHUB_WEBHOOK_SECRET must be configured in production")
+        if self.STRIPE_SECRET_KEY and not self.STRIPE_WEBHOOK_SECRET:
+            errors.append("STRIPE_WEBHOOK_SECRET must be configured when STRIPE_SECRET_KEY is set in production")
+        if not (self.ORA_JWT_TOKEN or self.CONNECTOME_WORKER_JWT):
+            errors.append("ORA_JWT_TOKEN or CONNECTOME_WORKER_JWT must be configured for production workers")
+        if self.FEEDBACK_SCREENSHOT_STORAGE_BACKEND.lower().strip() == "local":
+            errors.append("FEEDBACK_SCREENSHOT_STORAGE_BACKEND must not be 'local' in production")
+
+        if errors:
+            raise RuntimeError("Unsafe production configuration: " + "; ".join(errors))
 
     @property
     def has_openai(self) -> bool:
@@ -156,4 +197,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

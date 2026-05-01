@@ -13,8 +13,8 @@ from datetime import datetime, timezone
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-DRAFTS_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/biz_dev/partnership_drafts"
-PROSPECTS_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/biz_dev/partnership_prospects.json"
+DRAFTS_DIR = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "biz_dev", "partnership_drafts")
+PROSPECTS_FILE = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "biz_dev", "partnership_prospects.json")
 
 
 class PartnershipAgent(BaseWorkerAgent):

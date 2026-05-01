@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from .base import BaseWorkerAgent
 
 logger = logging.getLogger(__name__)
-CONTENT_DIR = "/Users/avielcarlos/.openclaw/workspace/tmp/content"
+CONTENT_DIR = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "content")
 
 
 class ContentWriterAgent(BaseWorkerAgent):

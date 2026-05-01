@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/ora/autonomy", tags=["ora_autonomy"])
 
 # Admin emails — users allowed to trigger autonomy runs
 ADMIN_EMAILS = {"avi@atdao.org", "nea@atdao.org", "carlosandromeda8@gmail.com"}
-ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN", "connectome-admin-secret")
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or os.environ.get("ADMIN_SECRET", "")
 
 
 async def _require_admin(
@@ -43,7 +43,7 @@ async def _require_admin(
     401 before this function can accept X-Admin-Token.
     """
     # Token-based auth for automated crons
-    if x_admin_token and x_admin_token == ADMIN_TOKEN:
+    if ADMIN_TOKEN and x_admin_token and x_admin_token == ADMIN_TOKEN:
         return "admin-token"
 
     # Optional email-based auth for logged-in admin users

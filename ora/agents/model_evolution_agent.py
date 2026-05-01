@@ -23,6 +23,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
+from core.telegram import get_telegram_token
+
 logger = logging.getLogger(__name__)
 
 TELEGRAM_CHAT_ID = 5716959016
@@ -712,13 +714,7 @@ class ModelEvolutionAgent:
     async def _get_telegram_token(self) -> Optional[str]:
         if self._telegram_token:
             return self._telegram_token
-        token = os.environ.get("ORA_TELEGRAM_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN")
-        if not token:
-            try:
-                with open("/app/secrets/telegram-bot-token.txt") as f:
-                    token = f.read().strip()
-            except Exception:
-                pass
+        token = get_telegram_token()
         if token:
             self._telegram_token = token
         return token

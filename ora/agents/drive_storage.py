@@ -36,7 +36,7 @@ GOOGLE_UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files?uploadType
 
 _MISSING_GOG_WARNED = False
 
-FOLDER_IDS_FILE = "/Users/avielcarlos/.openclaw/workspace/tmp/drive_folder_ids.json"
+FOLDER_IDS_FILE = os.path.join(os.getenv("CONNECTOME_RUNTIME_DIR", "/tmp/connectome"), "drive_folder_ids.json")
 
 # Fallback hard-coded IDs in case the file is unavailable at runtime
 _HARDCODED_IDS: Dict[str, str] = {

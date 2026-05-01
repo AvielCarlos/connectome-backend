@@ -16,7 +16,7 @@ from ora.agents.agent_memory import AgentInsight, agent_memory_bus
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
 
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", os.getenv("ADMIN_SECRET", "connectome-admin-secret"))
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN") or os.getenv("ADMIN_SECRET", "")
 
 
 class ConflictResolutionRequest(BaseModel):
@@ -26,7 +26,7 @@ class ConflictResolutionRequest(BaseModel):
 
 
 def _require_admin(x_admin_token: str = Header(default="")) -> None:
-    if x_admin_token != ADMIN_TOKEN:
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 

@@ -23,7 +23,7 @@ from ora.payments.growth_billing import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/cgo", tags=["cgo"])
 
-ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", os.getenv("ADMIN_SECRET", "connectome-admin-secret"))
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN") or os.getenv("ADMIN_SECRET", "")
 
 
 class AuraSessionCheckoutRequest(BaseModel):
@@ -37,7 +37,7 @@ class CorporateCheckoutRequest(BaseModel):
 
 
 def _require_admin(x_admin_token: str = Header(default="")) -> None:
-    if x_admin_token != ADMIN_TOKEN:
+    if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Forbidden")
 
 
