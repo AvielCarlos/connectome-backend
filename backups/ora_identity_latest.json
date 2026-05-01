@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-01T22:51:09.513723+00:00",
-  "exported_at": "2026-05-01T22:51:09.513723+00:00",
-  "collected_at": "2026-05-01T22:51:09.513723+00:00",
+  "timestamp": "2026-05-01T22:54:05.528375+00:00",
+  "exported_at": "2026-05-01T22:54:05.528375+00:00",
+  "collected_at": "2026-05-01T22:54:05.528375+00:00",
   "identity": {
-    "total_lessons": 1318,
+    "total_lessons": 1319,
     "lessons": [
+      {
+        "id": "1fe02397-2aa8-4de5-a1cc-7715bf39b7c1",
+        "lesson": "{\"proposal_id\": \"1fe02397-2aa8-4de5-a1cc-7715bf39b7c1\", \"card_type\": \"personalized_action_suggestions\", \"hypothesis\": \"Introducing personalized action suggestions will increase user engagement by 20%.\", \"description\": \"This card type analyzes user behavior and preferences to suggest tailored actions or tasks that align with their interests and goals. By providing contextually relevant and achievable suggestions, users will feel more encouraged to engage with the platform and follow through with their activities.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-01T22:52:07.273857+00:00\", \"expires_at\": \"2026-05-03T22:52:07.273857+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-01 22:52:07.273857"
+      },
       {
         "id": "44ee710b-838e-40d4-9ed0-739fed183ab9",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -9333,7 +9340,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "228c4d9e62ba2e4d"
+    "lessons_hash": "fd441bf208f2ac1a"
   },
   "platform_stats": {
     "total_users": 20,
