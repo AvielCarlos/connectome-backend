@@ -81,6 +81,8 @@ def _node_embedding_text(node: dict) -> str:
             f"node_type: {node.get('type') or node.get('node_type') or ''}",
             f"step_type: {node.get('step_type') or ''}",
             f"physical_context: {node.get('physical_context') or ''}",
+            f"requires_location: {node.get('requires_location') or node.get('location') or node.get('city') or ''}",
+            f"location_city: {node.get('location_city') or node.get('city') or ''}",
             f"best_time: {node.get('best_time') or ''}",
             f"goal_category: {node.get('goal_category') or ''}",
         ]
@@ -118,6 +120,8 @@ def _screen_spec_embedding_text(spec: dict, agent_type: str = "", domain: str | 
             f"deep_dive: {json.dumps(deep_dive, default=str)[:2000] if deep_dive else ''}",
             f"agent: {agent_type or metadata.get('agent') or ''}",
             f"domain: {domain or metadata.get('domain') or spec.get('domain') or ''}",
+            f"city: {metadata.get('city') or metadata.get('location_city') or spec.get('city') or ''}",
+            f"location_signal: {metadata.get('location_signal') or ''}",
             f"layout: {spec.get('layout') or ''}",
             f"type: {spec.get('type') or ''}",
             f"tags: {', '.join(str(t) for t in tags)}",
@@ -463,7 +467,13 @@ class IOOGraphAgent:
         if await fetchval("SELECT COUNT(*) FROM ioo_nodes WHERE is_active = TRUE AND embedding IS NULL"):
             await self.embed_all_nodes()
 
-        goal_emb = await self._embed_text(goal_context or "personal growth real-world experience")
+        user_state = await fetchrow("SELECT location_city, location_country FROM ioo_user_state WHERE user_id = $1", str(user_id))
+        location_context = ""
+        user_city = user_state["location_city"] if user_state else None
+        user_country = user_state["location_country"] if user_state else None
+        if user_city or user_country:
+            location_context = f" near city: {user_city or ''}, country: {user_country or ''}"
+        goal_emb = await self._embed_text((goal_context or "personal growth real-world experience") + location_context)
         query_vec = _embedding_to_pgvector(goal_emb)
 
         completed_rows = await fetch(
@@ -472,6 +482,10 @@ class IOOGraphAgent:
         )
         completed_ids = [str(r["node_id"]) for r in completed_rows]
         capability_sql, capability_params = await self._capability_filter_sql(str(user_id), start_idx=4)
+        location_score_sql = ""
+        if user_city:
+            city_lit = str(user_city).replace("'", "''")
+            location_score_sql = f" + CASE WHEN n.requires_location ILIKE '%{city_lit}%' OR n.physical_context ILIKE '%{city_lit}%' THEN 0.18 WHEN n.requires_location IS NULL THEN 0.04 ELSE -0.18 END"
         preference = preference if preference in ("prefer_digital", "prefer_physical", "mixed") else "mixed"
         preference_score_sql = ""
         if preference == "prefer_digital":
@@ -514,6 +528,7 @@ class IOOGraphAgent:
                 ), 0.5) * 0.25 +
                 (CASE WHEN n.attempt_count > 0 THEN n.success_count::float / n.attempt_count ELSE 0.5 END) * 0.15
                 {preference_score_sql}
+                {location_score_sql}
             ) DESC
             LIMIT ${4 + len(capability_params)}
             """,

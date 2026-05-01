@@ -664,6 +664,7 @@ _CURATED_REAL_ACTIONS: list[dict[str, Any]] = [
     {
         "key": "vancouver_live_events",
         "domain": "Aventi",
+        "city": "Vancouver, BC",
         "tag": "live_events",
         "kind": "Live events",
         "title": "Find a live event in Vancouver this week",
@@ -795,7 +796,12 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
         {"type": "headline", "text": title},
         {"type": "body", "text": item.get("body") or item.get("description") or "A real option you can open, verify, and act on."},
         _path_progression_component(kind="real_world_action", domain=domain, current_stage="confirm_micro_node"),
-        {"type": "context_strip", "items": [{"label": "Reality", "value": "Verified URL"}, {"label": "Mode", "value": item.get("kind", "Action")}, {"label": "Domain", "value": domain}]},
+        {"type": "context_strip", "items": [
+            {"label": "Reality", "value": "Verified URL"},
+            {"label": "Mode", "value": item.get("kind", "Action")},
+            {"label": "Domain", "value": domain},
+            *([{"label": "City", "value": item.get("city")}] if item.get("city") else []),
+        ]},
     ]
     review_component = _review_rating_component(item)
     if review_component:
@@ -844,6 +850,8 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "source": source,
             "domain": domain,
             "city": item.get("city"),
+            "location_city": item.get("city"),
+            "location_signal": f"city:{item.get('city')}" if item.get("city") else None,
             "opportunity_kind": item.get("kind"),
             "path_progression": _path_progression_metadata(kind="user_created_opportunity" if source == "user_created_opportunity" else "real_world_action", domain=domain, current_stage="confirm_micro_node"),
             "tags": [item.get("tag") or "real_action", "diversity_seed"],
@@ -1057,7 +1065,10 @@ def _city_rank(item: dict[str, Any], preferred_city: Optional[str]) -> int:
     if item_city and (city in item_city or item_city in city):
         return 0
     if item_city:
-        return 2
+        # Wrong-city physical opportunities should come after local and
+        # location-neutral options. Vancouver should not outrank Victoria for a
+        # Victoria user just because it appears earlier in the curated list.
+        return 4
     return 1
 
 
@@ -1070,14 +1081,18 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
         if live is not None:
             return live
 
-    digest = hashlib.sha256(f"{user_id}:{datetime.now(timezone.utc).date()}".encode("utf-8")).hexdigest()
+    current_count = await get_daily_screen_count(user_id)
+    rotation_bucket = datetime.now(timezone.utc).strftime("%Y-%m-%d:%H")
+    digest = hashlib.sha256(f"{user_id}:{rotation_bucket}:{current_count}".encode("utf-8")).hexdigest()
     candidates = [item for item in _CURATED_REAL_ACTIONS if not domain_filter or item.get('domain') == domain_filter or (domain_filter == 'iVive' and item.get('domain') == 'Rest')]
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
     if preferred_city:
-        candidates = sorted(candidates, key=lambda item: _city_rank(item, preferred_city))
+        local_or_neutral = [item for item in candidates if _city_rank(item, preferred_city) <= 1]
+        candidates = local_or_neutral or candidates
+        candidates = sorted(candidates, key=lambda item: (_city_rank(item, preferred_city), item.get("key", "")))
     start = int(digest[:8], 16) % len(candidates)
-    idx = (start + slot_index) % len(candidates)
+    idx = (start + slot_index + current_count) % len(candidates)
     item = dict(candidates[idx])
     if domain_filter == 'iVive' and item.get('domain') == 'Rest':
         item['domain'] = 'iVive'
