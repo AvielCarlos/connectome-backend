@@ -14,6 +14,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 from urllib.parse import quote_plus
 
+import httpx
+
 
 @dataclass(frozen=True)
 class CandidateSource:
@@ -133,6 +135,108 @@ def _query_url(provider: str, query: str) -> str:
     return f"https://www.google.com/search?q={encoded}"
 
 
+def _google_places_link(place_id: str | None, fallback_query: str) -> str:
+    if place_id:
+        return f"https://www.google.com/maps/place/?q=place_id:{quote_plus(place_id)}"
+    return _query_url("google_maps", fallback_query)
+
+
+def _live_google_places_candidates(query: str, location: str | None, title: str) -> list[SearchCandidate]:
+    """Return live Google Places candidates when a Places key is configured.
+
+    This is read-only research: it fetches public venue/place metadata and
+    returns links. It never books, purchases, messages, or changes user state.
+    """
+    try:
+        from core.config import settings
+    except Exception:
+        return []
+
+    api_key = getattr(settings, "GOOGLE_PLACES_API_KEY", "") or ""
+    if not api_key:
+        return []
+
+    text_query = query.strip()
+    if location and location.lower() not in text_query.lower():
+        text_query = f"{text_query} {location}".strip()
+    if not text_query:
+        return []
+
+    try:
+        resp = httpx.post(
+            "https://places.googleapis.com/v1/places:searchText",
+            headers={
+                "Content-Type": "application/json",
+                "X-Goog-Api-Key": api_key,
+                "X-Goog-FieldMask": ",".join([
+                    "places.id",
+                    "places.displayName",
+                    "places.formattedAddress",
+                    "places.googleMapsUri",
+                    "places.rating",
+                    "places.userRatingCount",
+                    "places.priceLevel",
+                    "places.websiteUri",
+                    "places.currentOpeningHours.openNow",
+                    "places.primaryTypeDisplayName",
+                ]),
+            },
+            json={"textQuery": text_query, "maxResultCount": 3},
+            timeout=6,
+        )
+        resp.raise_for_status()
+        places = (resp.json() or {}).get("places") or []
+    except Exception:
+        return []
+
+    candidates: list[SearchCandidate] = []
+    for idx, place in enumerate(places[:3], start=1):
+        name = ((place.get("displayName") or {}).get("text") or "").strip()
+        if not name:
+            continue
+        maps_url = place.get("googleMapsUri") or _google_places_link(place.get("id"), f"{name} {location or ''}".strip())
+        website_url = place.get("websiteUri")
+        rating = place.get("rating")
+        rating_count = place.get("userRatingCount")
+        address = place.get("formattedAddress")
+        open_now = ((place.get("currentOpeningHours") or {}).get("openNow"))
+        type_label = ((place.get("primaryTypeDisplayName") or {}).get("text"))
+        trust_bits = []
+        if rating:
+            trust_bits.append(f"rating {rating}")
+        if rating_count:
+            trust_bits.append(f"{rating_count} reviews")
+        if open_now is not None:
+            trust_bits.append("open now" if open_now else "check hours")
+        trust = ", ".join(trust_bits) or "Google Places live result"
+        confidence = 0.82 - ((idx - 1) * 0.04)
+        candidates.append(
+            _candidate(
+                cid=f"google-place-{idx}",
+                title=name,
+                candidate_type="live_place",
+                source_name="Google Places",
+                source_type="live_places_result",
+                source_url=maps_url,
+                confidence=confidence,
+                rationale=f"Live place result for '{title}' with public trust signals: {trust}.",
+                next_label="Open Maps, check fit, hours, reviews, and route before committing",
+                metadata={
+                    "query": text_query,
+                    "address": address,
+                    "rating": rating,
+                    "review_count": rating_count,
+                    "open_now": open_now,
+                    "place_type": type_label,
+                    "website_url": website_url,
+                    "maps_url": maps_url,
+                    "location_used": location,
+                },
+            )
+        )
+    return candidates
+
+
 def _candidate(
     *,
     cid: str,
@@ -182,6 +286,13 @@ def build_search_agent_payload(node: Any, user_context: Any, intent: str = "do_n
 
     candidates: list[SearchCandidate] = []
     confidence_base = 0.66 if location or n["step_type"] == "digital" else 0.54
+
+    live_places_available = False
+    if n["step_type"] in {"physical", "hybrid"}:
+        live_place_candidates = _live_google_places_candidates(base_query, location, title)
+        if live_place_candidates:
+            candidates.extend(live_place_candidates)
+            live_places_available = True
 
     if n["step_type"] in {"physical", "hybrid"}:
         maps_query = base_query if location else f"{title} near me"
@@ -317,22 +428,29 @@ def build_search_agent_payload(node: Any, user_context: Any, intent: str = "do_n
     sorted_candidates = sorted(candidates, key=lambda item: item.confidence, reverse=True)[:5]
     live_integrations = {
         "web_search": "not_configured",
-        "google_places": "not_configured",
+        "google_places": "available" if live_places_available else "not_configured_or_no_results",
         "aventi": "not_configured",
         "eviva": "not_configured",
     }
-    fallback_used = any(status != "available" for status in live_integrations.values())
+    live_results_available = any(
+        candidate.source.type.startswith("live_") for candidate in sorted_candidates
+    )
+    fallback_used = not live_results_available
 
     return {
         "role": "SearchAgent",
-        "status": "fallback_ready" if fallback_used else "candidates_ready",
-        "mode": "query_plan" if fallback_used else "live_search",
+        "status": "candidates_ready" if live_results_available else "fallback_ready",
+        "mode": "live_search" if live_results_available else "query_plan",
         "intent": intent if intent in {"do_now", "do_later"} else "do_now",
         "summary": "Prepared reversible discovery candidates; no booking, purchase, message, or application was performed.",
         "integrations": live_integrations,
         "fallback": {
             "used": fallback_used,
-            "reason": "Live web/Places/Aventi/Eviva provider clients are not wired into this runtime yet; returning provider-ready query links and prep paths instead.",
+            "reason": (
+                "Live Google Places results are included."
+                if live_results_available
+                else "Live providers returned no results or are not configured; returning provider-ready query links and prep paths instead."
+            ),
             "user_safe": True,
         },
         "candidates": [asdict(candidate) for candidate in sorted_candidates],
