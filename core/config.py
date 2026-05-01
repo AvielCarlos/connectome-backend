@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings
 from pydantic import field_validator
 from typing import List
 import json
+import os
 
 
 class Settings(BaseSettings):
@@ -146,7 +147,22 @@ class Settings(BaseSettings):
 
     @property
     def is_production(self) -> bool:
-        return self.APP_ENV.lower() == "production"
+        if self.APP_ENV.lower() == "production":
+            return True
+        # Fail safe: hosted cloud runtimes should be treated as production even
+        # if APP_ENV was accidentally omitted.
+        cloud_indicators = (
+            "RAILWAY_ENVIRONMENT",
+            "RAILWAY_PROJECT_ID",
+            "RAILWAY_SERVICE_ID",
+            "RAILWAY_DEPLOYMENT_ID",
+            "RAILWAY_STATIC_URL",
+            "RENDER",
+            "RENDER_SERVICE_ID",
+            "FLY_APP_NAME",
+            "K_SERVICE",  # Google Cloud Run
+        )
+        return any(os.getenv(key) for key in cloud_indicators)
 
     def validate_production_safety(self) -> None:
         """Fail fast on unsafe production configuration.
