@@ -20,18 +20,24 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from api.middleware import get_current_user_id
 from core.database import fetchrow
 from ora.brain import get_brain
+from ora.agents.drive_agent_v2 import DriveAgentV2
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/drive", tags=["drive"])
 
 
 def _get_drive_agent():
-    """Return DriveAgent from the live Ora brain."""
+    """Return the cloud-safe DriveAgentV2.
+
+    The legacy DriveAgent depends on the local `gog` CLI and Avi's laptop
+    account. Production Drive routes must use OAuth-backed Google API access so
+    Connectome remains cloud-portable and user-scoped.
+    """
     try:
         brain = get_brain()
-        return brain.drive_agent
+        return DriveAgentV2(openai_client=getattr(brain, "_openai", None))
     except Exception as e:
-        logger.warning(f"Drive: could not get brain drive_agent: {e}")
+        logger.warning(f"Drive: could not initialize DriveAgentV2: {e}")
         return None
 
 
@@ -71,7 +77,7 @@ async def sync_drive(
         )
 
     try:
-        summary = await agent.sync(max_files=max_files, owner_user_id=user_id)
+        summary = await agent.sync(user_id=user_id, max_files=max_files)
         return {"ok": True, "sync": summary}
     except Exception as e:
         logger.error(f"Drive sync failed: {e}", exc_info=True)
@@ -96,7 +102,7 @@ async def search_drive(
     try:
         results = await agent.semantic_search(
             query=q,
-            owner_user_id=user_id,
+            user_id=user_id,
             limit=limit,
             min_similarity=min_similarity,
         )
@@ -119,7 +125,7 @@ async def drive_status(
         return {"ok": True, "indexed_documents": 0, "last_sync": None, "status": "agent_unavailable"}
 
     try:
-        stat = await agent.status(owner_user_id=user_id)
+        stat = await agent.status(user_id=user_id)
         return {"ok": True, **stat}
     except Exception as e:
         logger.warning(f"Drive status failed: {e}")

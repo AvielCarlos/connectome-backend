@@ -17,6 +17,7 @@ Run Connectome backend safely in Railway/cloud without depending on Avi's laptop
 - Local `himalaya` email delivery replaced with SMTP env configuration.
 - OpenClaw cron CLI checks are opt-in via `OPENCLAW_CLI_ENABLED`.
 - Legacy `gog` Drive sync is skipped in production unless explicitly enabled via `GOG_CLI_ENABLED`.
+- `/api/drive/*` routes use OAuth-backed `DriveAgentV2` instead of the local `gog` CLI.
 - WebSpawn Railway CLI deploy fallback is dev-only; production requires Railway API IDs.
 - `.env.example`, `render.yaml`, `deploy.sh`, and `requirements.txt` updated.
 
@@ -37,7 +38,7 @@ Mandatory:
   - `FEEDBACK_SCREENSHOT_S3_ENDPOINT_URL`
   - `FEEDBACK_SCREENSHOT_S3_ACCESS_KEY_ID`
   - `FEEDBACK_SCREENSHOT_S3_SECRET_ACCESS_KEY`
-  - `FEEDBACK_SCREENSHOT_PUBLIC_BASE_URL`
+  - `FEEDBACK_SCREENSHOT_PUBLIC_BASE_URL` is optional; omit it for private ephemeral screenshot processing.
 
 If Stripe is enabled:
 
@@ -66,11 +67,9 @@ Recommended integrations:
 
 ## Avi involvement needed
 
-1. Approve generating/setting new production secrets in Railway.
-2. Choose S3/R2 provider for durable screenshot storage, or provide credentials.
-3. Confirm SMTP provider/account for customer delivery email.
-4. Confirm whether Stripe is live now; if yes, set webhook secret before deploy.
-5. Approve deployment after reviewing this branch diff.
+1. Confirm Cloudflare R2 lifecycle rule deletes leftover screenshot objects after 1 day.
+2. Verify Resend DNS for `atdao.org`, then rotate the Resend API key that was pasted in chat.
+3. Choose/provision the cloud host for OpenClaw Gateway so Nea's runtime can move off Avi's Mac.
 
 ## Verification gates
 
@@ -110,6 +109,7 @@ Expected callback status is `422`, not `404`.
 
 ## Remaining non-blocking follow-up
 
-- Replace legacy `DriveAgent`/`gog` flow fully with `DriveAgentV2` and Google API flows.
+- Retire the legacy `DriveAgent` object from `AuraBrain` after discovery/search paths are fully verified against `DriveAgentV2`.
 - Add cloud scheduler telemetry to replace local OpenClaw cron inspection.
+- Move OpenClaw Gateway to a Linux VPS/systemd host and keep the Mac as an optional node for macOS-only tools.
 - Consider making `/health` return non-200 when DB/Redis are degraded, or add a separate strict `/ready` endpoint for Railway.
