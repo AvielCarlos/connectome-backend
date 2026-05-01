@@ -762,6 +762,28 @@ def _serialise_dt(value: Any) -> Optional[str]:
     return str(value)
 
 
+def _has_cost_signal(item: dict[str, Any]) -> bool:
+    cost_words = ("$", "price", "cost", "fee", "ticket", "budget", "paid", "booking")
+    values = [item.get("price"), item.get("cost"), item.get("body"), item.get("description"), item.get("why"), *(item.get("needs") or [])]
+    return any(any(word in str(value).lower() for word in cost_words) for value in values if value)
+
+
+def _review_rating_component(item: dict[str, Any]) -> Optional[dict[str, Any]]:
+    if not _has_cost_signal(item):
+        return None
+    rating = item.get("review_rating") or item.get("rating")
+    review_count = item.get("review_count") or item.get("reviews_count")
+    review_url = item.get("review_url") or item.get("provider_url") or item.get("url")
+    return {
+        "type": "review_rating",
+        "rating": float(rating) if rating is not None else None,
+        "review_count": review_count,
+        "source_url": review_url,
+        "label": "Review rating",
+        "note": "Cost-bearing opportunities should be checked against real reviews before booking or buying.",
+    }
+
+
 def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_action") -> dict:
     """Build a server-driven card around a real URL/action the user can take."""
     url = item.get("url") or ""
@@ -775,6 +797,9 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
         _path_progression_component(kind="real_world_action", domain=domain, current_stage="confirm_micro_node"),
         {"type": "context_strip", "items": [{"label": "Reality", "value": "Verified URL"}, {"label": "Mode", "value": item.get("kind", "Action")}, {"label": "Domain", "value": domain}]},
     ]
+    review_component = _review_rating_component(item)
+    if review_component:
+        components.append(review_component)
     if item.get("venue") or item.get("starts_at") or item.get("price"):
         components.append({
             "type": "constraint_panel",
@@ -855,6 +880,9 @@ class OpportunityCreateRequest(BaseModel):
     provider_url: Optional[str] = None
     map_url: Optional[str] = None
     price: Optional[str] = None
+    review_rating: Optional[float] = None
+    review_count: Optional[int] = None
+    review_url: Optional[str] = None
     venue: Optional[str] = None
 
 
