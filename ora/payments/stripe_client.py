@@ -141,11 +141,14 @@ class StripeClient:
         success_url: str,
         cancel_url: str,
         trial_days: int = 0,
+        mode: str = "subscription",
+        metadata: Optional[Dict[str, str]] = None,
+        client_reference_id: str = "",
     ) -> Dict[str, Any]:
-        """Create a Stripe Checkout session for subscription."""
+        """Create a Stripe Checkout session for subscription or one-time payment."""
         data: Dict[str, Any] = {
             "customer": customer_id,
-            "mode": "subscription",
+            "mode": mode,
             "line_items[0][price]": price_id,
             "line_items[0][quantity]": "1",
             "success_url": success_url,
@@ -153,6 +156,13 @@ class StripeClient:
             "allow_promotion_codes": "true",
             "billing_address_collection": "auto",
         }
+        if client_reference_id:
+            data["client_reference_id"] = client_reference_id
+        if metadata:
+            for key, value in metadata.items():
+                data[f"metadata[{key}]"] = str(value)
+                if mode == "subscription":
+                    data[f"subscription_data[metadata][{key}]"] = str(value)
         if trial_days > 0:
             data["subscription_data[trial_period_days]"] = str(trial_days)
 

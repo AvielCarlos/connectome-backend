@@ -22,6 +22,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -63,6 +64,14 @@ class PortalRequest(BaseModel):
 
 
 # ─── Helper: ensure subscription row exists ───────────────────────────────────
+
+
+def _with_checkout_session_id(url: str) -> str:
+    """Append Stripe's checkout session placeholder without corrupting existing query params."""
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["session_id"] = "{CHECKOUT_SESSION_ID}"
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query, safe="{}"), parts.fragment))
 
 
 async def _ensure_subscription_row(user_id: str) -> dict:
@@ -221,8 +230,15 @@ async def create_checkout_session(
         session = await stripe.create_checkout_session(
             customer_id=customer_id,
             price_id=price_id,
-            success_url=body.success_url + "?session_id={CHECKOUT_SESSION_ID}",
+            success_url=_with_checkout_session_id(body.success_url),
             cancel_url=body.cancel_url,
+            metadata={
+                "product_type": "subscription",
+                "user_id": str(user_id),
+                "tier": body.tier,
+                "billing": body.billing,
+            },
+            client_reference_id=str(user_id),
         )
 
         logger.info(
@@ -282,10 +298,11 @@ async def create_credits_checkout(
         session = await stripe.create_checkout_session(
             customer_id=customer_id,
             price_id=price_id,
-            success_url=body.success_url + "?session_id={CHECKOUT_SESSION_ID}",
+            success_url=_with_checkout_session_id(body.success_url),
             cancel_url=body.cancel_url,
             mode="payment",
-            metadata={"product_type": "path_credits", "credits": str(CREDITS_PER_PACK), "user_id": user_id},
+            metadata={"product_type": "path_credits", "credits": str(CREDITS_PER_PACK), "user_id": str(user_id)},
+            client_reference_id=str(user_id),
         )
 
         logger.info(f"Credits checkout created: user={user_id[:8]} credits={CREDITS_PER_PACK}")
@@ -394,8 +411,12 @@ async def stripe_webhook(request: Request):
             await _handle_payment_failed(data)
 
         elif event_type == "checkout.session.completed":
-            # Grant path credits on one-time purchase
-            await _handle_credits_purchase(data)
+            if data.get("mode") == "subscription" and data.get("subscription"):
+                sub_data = await stripe.get_subscription(data["subscription"])
+                await _handle_subscription_upsert(sub_data, checkout_session=data)
+            else:
+                # Grant path credits on one-time purchase
+                await _handle_credits_purchase(data)
             # Track one-time service purchases via checkout sessions
             await _maybe_record_service_conversion(data, event_type)
 
@@ -463,7 +484,7 @@ async def _maybe_record_service_conversion(data: dict, event_type: str) -> None:
         logger.warning(f"Could not record service conversion: {e}")
 
 
-async def _handle_subscription_upsert(sub: dict) -> None:
+async def _handle_subscription_upsert(sub: dict, checkout_session: Optional[dict] = None) -> None:
     """Upsert subscription record from a Stripe subscription object."""
     customer_id = sub.get("customer")
     if not customer_id:
@@ -475,10 +496,19 @@ async def _handle_subscription_upsert(sub: dict) -> None:
         customer_id,
     )
     if not row:
-        logger.warning(f"Stripe webhook: no user found for customer {customer_id}")
-        return
-
-    user_id = row["user_id"]
+        session_metadata = (checkout_session or {}).get("metadata") or {}
+        user_id = (checkout_session or {}).get("client_reference_id") or session_metadata.get("user_id")
+        if not user_id:
+            logger.warning(f"Stripe webhook: no user found for customer {customer_id}")
+            return
+        await _ensure_subscription_row(str(user_id))
+        await execute(
+            "UPDATE subscriptions SET stripe_customer_id = $2 WHERE user_id = $1",
+            str(user_id),
+            customer_id,
+        )
+    else:
+        user_id = row["user_id"]
 
     # Determine tier from price ID
     price_id = ""
@@ -486,7 +516,10 @@ async def _handle_subscription_upsert(sub: dict) -> None:
     if items:
         price_id = items[0].get("price", {}).get("id", "")
 
+    session_metadata = (checkout_session or {}).get("metadata") or {}
     tier = _price_id_to_tier(price_id)
+    if tier == "explorer" and session_metadata.get("tier") in ("explorer", "sovereign"):
+        tier = session_metadata["tier"]
     status_str = sub.get("status", "active")
 
     # Map Stripe status to our status
@@ -531,9 +564,16 @@ async def _handle_subscription_upsert(sub: dict) -> None:
 
     # Also update users table for backwards compatibility
     await execute(
-        "UPDATE users SET subscription_tier = $2 WHERE id = $1",
+        """
+        UPDATE users
+        SET subscription_tier = $2,
+            is_premium = $3,
+            premium_since = CASE WHEN $3 THEN COALESCE(premium_since, NOW()) ELSE premium_since END
+        WHERE id = $1
+        """,
         user_id,
         tier,
+        tier in ("explorer", "sovereign") and db_status in ("active", "trialing"),
     )
     # Sync path_limit with the new tier
     await _apply_tier_path_limit(str(user_id), tier)
@@ -574,6 +614,7 @@ async def _handle_subscription_canceled(sub: dict) -> None:
         "UPDATE users SET subscription_tier = 'free', is_premium = FALSE WHERE id = $1",
         user_id,
     )
+    await _apply_tier_path_limit(str(user_id), "free")
 
     logger.info(f"Subscription canceled: user={str(user_id)[:8]} → downgraded to free")
 
