@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from api.middleware import get_current_user_id
 from core.database import execute, fetchrow
 from ora.agents.ioo_execution_agent import build_execution_protocol
-from ora.agents.ioo_graph_agent import get_graph_agent
+from ora.agents.evolution_engine import record_action_evidence, run_background_evolution
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ioo", tags=["ioo-execution"])
@@ -252,12 +252,19 @@ async def complete_execution_run(
     )
 
     # Feed completion back into the living IOO neural graph so successful
-    # experiences reinforce their node/edges and weak paths can later be pruned.
+    # experiences reinforce their node/edges, reward proof, spawn adjacent
+    # possibilities, and trim weak branches conservatively.
+    evolution = {"cp_awarded": 0, "cp_message": "Evidence received."}
     try:
-        await get_graph_agent().record_node_outcome(str(user_id), str(run["node_id"]), success=True)
-        await get_graph_agent().build_user_ioo_vector(str(user_id))
+        evolution = await record_action_evidence(
+            user_id=str(user_id),
+            node_id=str(run["node_id"]),
+            run_id=str(run_id),
+            evidence=completion_payload.get("evidence"),
+            completion_note=completion_payload.get("completion_note"),
+        )
     except Exception as e:
-        logger.warning(f"IOO neural feedback update failed for run {run_id}: {e}")
+        logger.warning(f"IOO evolution update failed for run {run_id}: {e}")
 
     xp_reward = _xp_reward_from_protocol(protocol)
     return {
@@ -265,10 +272,29 @@ async def complete_execution_run(
         "status": updated["status"],
         "completed_at": _to_plain(updated["completed_at"]),
         "xp_reward_hook": {
-            "status": "placeholder",
+            "status": "awarded" if evolution.get("cp_awarded") else "recorded",
             "xp": xp_reward,
-            "cp": 0,
-            "message": "Reward ledger integration pending; frontend can use this hook for completion celebration.",
+            "cp": int(evolution.get("cp_awarded") or 0),
+            "message": evolution.get("cp_message") or "Evidence recorded. Aura is learning from the action.",
         },
+        "evolution": evolution,
         "protocol": _to_plain(updated["protocol"]),
+    }
+
+@router.post("/evolution/run")
+async def run_evolution_cycle(
+    user_id: str = Depends(get_current_user_id),
+):
+    """Run a conservative Evolution Engine v1 maintenance cycle.
+
+    This is intentionally authenticated and small: it refreshes edge weights and
+    prunes only underperforming nodes with enough attempts. Scheduled cloud jobs
+    can call the same underlying function later.
+    """
+    result = await run_background_evolution(max_nodes=25)
+    return {
+        "status": "ok",
+        "engine": "evolution_v1",
+        "result": result,
+        "message": "Aura refreshed edge weights and conservatively trimmed weak branches.",
     }
