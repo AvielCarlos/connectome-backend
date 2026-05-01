@@ -27,6 +27,20 @@ logger = logging.getLogger(__name__)
 TELEGRAM_CHAT_ID = 5716959016
 EXPERIMENT_ID = "primary_landing_v1"
 VARIANTS = ["A", "B", "C", "D"]
+MIN_PROMOTION_SESSIONS = 50
+MIN_REALLOCATION_SESSIONS = 50
+MIN_VARIANT_EXPLORATION_SESSIONS = 20
+PROMOTION_LEAD_MULTIPLIER = 1.20
+EXPLOIT_ALLOCATION = 0.70
+CONTROL_ALLOCATION = 0.15
+EXPLORATION_ALLOCATION = 0.15
+
+VARIANT_DESCRIPTIONS = {
+    "A": "TikTok-style feed",
+    "B": "Morning Brief: Aura greeting + goal status",
+    "C": "Goal Pulse: top goal + coaching",
+    "D": "Discovery Grid: Pinterest-style discovery grid",
+}
 
 ENGAGEMENT_WEIGHTS = {
     "card_swiped": 1,
@@ -35,6 +49,88 @@ ENGAGEMENT_WEIGHTS = {
     "ora_opened": 4,
     # session_duration_ms is divided by 60000 × 2
 }
+
+
+def _top_variant(scores: Dict[str, float], session_counts: Dict[str, int]) -> Optional[str]:
+    """Return the highest-scoring variant that has at least one session."""
+    eligible = [v for v in VARIANTS if session_counts.get(v, 0) > 0]
+    if not eligible:
+        return None
+    return max(eligible, key=lambda v: (scores.get(v, 0.0), session_counts.get(v, 0)))
+
+
+def _allocation_for_leader(
+    leader: str,
+    current_winner: str,
+    session_counts: Optional[Dict[str, int]] = None,
+) -> Dict[str, float]:
+    """
+    Smarter bandit allocation: send most fresh traffic to the leader family,
+    keep some control traffic, and reserve one wildcard slot for exploration.
+    """
+    allocation = {v: 0.0 for v in VARIANTS}
+    exploration_candidates = [v for v in VARIANTS if v != leader]
+    if current_winner != leader and current_winner in exploration_candidates:
+        exploration_candidates.remove(current_winner)
+
+    allocation[leader] += EXPLOIT_ALLOCATION
+    exploration_pool = EXPLORATION_ALLOCATION
+    if current_winner != leader:
+        allocation[current_winner] += CONTROL_ALLOCATION
+    else:
+        # The control is already the leader. Keep its share high, but do not
+        # collapse exploration to one arbitrary wildcard.
+        exploration_pool += CONTROL_ALLOCATION
+
+    if exploration_candidates:
+        if session_counts:
+            # Least-sampled variants get first chance inside the exploration pool.
+            exploration_candidates.sort(key=lambda v: (session_counts.get(v, 0), v))
+        split = exploration_pool / len(exploration_candidates)
+        for variant in exploration_candidates:
+            allocation[variant] += split
+    else:
+        allocation[leader] += exploration_pool
+
+    # Round but preserve a sane total for JSON consumers.
+    return {k: round(v, 4) for k, v in allocation.items() if v > 0}
+
+
+def _allocation_ready(scores: Dict[str, float], session_counts: Dict[str, int], leader: Optional[str]) -> bool:
+    """Guardrail: do not reallocate traffic from tiny/uneven samples."""
+    if not leader:
+        return False
+    if session_counts.get(leader, 0) < MIN_REALLOCATION_SESSIONS:
+        return False
+    observed_variants = [v for v in VARIANTS if scores.get(v, 0.0) > 0 or session_counts.get(v, 0) > 0]
+    if len(observed_variants) < 2:
+        return False
+    return all(
+        session_counts.get(v, 0) >= MIN_VARIANT_EXPLORATION_SESSIONS
+        for v in observed_variants
+    )
+
+
+def _variant_generation_briefs(leader: str) -> List[Dict[str, str]]:
+    """Generate safe, non-destructive next-variant briefs inspired by the leader."""
+    description = VARIANT_DESCRIPTIONS.get(leader, f"Variant {leader}")
+    return [
+        {
+            "family": leader,
+            "name": f"{leader}1",
+            "brief": f"Closer to {description}: keep the same interaction model, but make the first action clearer and more emotionally specific.",
+        },
+        {
+            "family": leader,
+            "name": f"{leader}2",
+            "brief": f"Closer to {description}: preserve the winning layout, but personalize the headline/reasoning from the user's current goal context.",
+        },
+        {
+            "family": "wildcard",
+            "name": "W1",
+            "brief": "Novel angle: test one meaning-first experience that explains why this path matters before asking for interaction.",
+        },
+    ]
 
 # Patterns we know how to auto-fix (safe, additive only)
 FIXABLE_ERROR_PATTERNS = [
@@ -130,6 +226,12 @@ class AuraAutonomyAgent:
             "run_at": datetime.now(timezone.utc).isoformat(),
             "ab_winner": None,
             "ab_scores": {},
+            "ab_session_counts": {},
+            "ab_winner_source": None,
+            "ab_top_performer": None,
+            "ab_status": None,
+            "ab_allocation": {},
+            "ab_generated_variants": [],
             "bugs_found": [],
             "bugs_fixed": [],
             "weight_changes": [],
@@ -145,6 +247,12 @@ class AuraAutonomyAgent:
                 ab_result = await self._ab_auto_promote()
                 report["ab_winner"] = ab_result.get("winner")
                 report["ab_scores"] = ab_result.get("scores", {})
+                report["ab_session_counts"] = ab_result.get("session_counts", {})
+                report["ab_winner_source"] = ab_result.get("winner_source")
+                report["ab_top_performer"] = ab_result.get("top_performer")
+                report["ab_status"] = ab_result.get("status")
+                report["ab_allocation"] = ab_result.get("allocation", {})
+                report["ab_generated_variants"] = ab_result.get("generated_variants", [])
                 try:
                     from core.redis_client import get_redis
                     r = await get_redis()
@@ -401,6 +509,9 @@ class AuraAutonomyAgent:
             await r.set("ora:autonomy:last_run", json.dumps({
                 "run_at": report["run_at"],
                 "ab_winner": report["ab_winner"],
+                "ab_top_performer": report.get("ab_top_performer"),
+                "ab_winner_source": report.get("ab_winner_source"),
+                "ab_allocation": report.get("ab_allocation", {}),
                 "weight_changes_count": len(report["weight_changes"]),
                 "bugs_fixed_count": len(report["bugs_fixed"]),
                 "cto_health": report.get("cto_health", {}),
@@ -450,8 +561,9 @@ class AuraAutonomyAgent:
 
     async def _ab_auto_promote(self) -> Dict[str, Any]:
         """
-        Compute engagement scores for each variant and promote a winner
-        if any variant dominates by 20%+ with >50 sessions.
+        Compute engagement scores for each variant and run a smarter bandit loop:
+        promote only after enough data, but shift fresh traffic toward the
+        current top performer while preserving control and wildcard exploration.
         """
         from core.redis_client import get_redis
         r = await get_redis()
@@ -505,35 +617,79 @@ class AuraAutonomyAgent:
             current_winner_raw.decode() if current_winner_raw else None
         )
 
+        official_winner_source = "stored"
         if not current_winner or current_winner not in scores:
-            # Default to A if no winner set
+            # Default/control only — not a proven winner.
             current_winner_score = scores.get("A", 0.0)
             current_winner = "A"
+            official_winner_source = "default_control"
         else:
             current_winner_score = scores.get(current_winner, 0.0)
 
-        # Check if any challenger scores 20%+ higher with >50 sessions
-        new_winner = None
+        top_performer = _top_variant(scores, session_counts)
+        allocation: Dict[str, float] = {}
+        generated_variants: List[Dict[str, str]] = []
+        status = "collecting data — no official winner yet"
+        ready_for_allocation = _allocation_ready(scores, session_counts, top_performer)
+
+        if top_performer:
+            top_score = scores.get(top_performer, 0.0)
+            top_sessions = session_counts.get(top_performer, 0)
+            generated_variants = _variant_generation_briefs(top_performer)
+
+            if top_performer != current_winner and current_winner_score > 0:
+                lead_multiplier = top_score / current_winner_score
+                if ready_for_allocation and lead_multiplier >= PROMOTION_LEAD_MULTIPLIER:
+                    allocation = _allocation_for_leader(top_performer, current_winner, session_counts)
+                    status = (
+                        f"{top_performer} leading by {(lead_multiplier - 1) * 100:.0f}% "
+                        f"with enough sample for guarded traffic reallocation"
+                    )
+                elif lead_multiplier >= PROMOTION_LEAD_MULTIPLIER:
+                    status = (
+                        f"{top_performer} is leading, but traffic stays equal until "
+                        f"leader has ≥{MIN_REALLOCATION_SESSIONS} sessions and observed variants have "
+                        f"≥{MIN_VARIANT_EXPLORATION_SESSIONS} sessions"
+                    )
+            elif top_performer == current_winner and top_sessions > 0:
+                if ready_for_allocation:
+                    allocation = _allocation_for_leader(top_performer, current_winner, session_counts)
+                    status = f"{top_performer} remains the top performer with guarded exploration preserved"
+                else:
+                    status = (
+                        f"{top_performer} is top so far, but traffic stays equal until sample threshold is met"
+                    )
+
+        eligible_challengers = []
         for variant, score in scores.items():
-            if variant == current_winner:
-                continue
             sessions = session_counts.get(variant, 0)
-            if sessions > 50 and current_winner_score > 0 and score >= current_winner_score * 1.20:
-                new_winner = variant
-                logger.info(
-                    f"OraAutonomy A/B: promoting variant {variant} "
-                    f"(score={score:.2f} vs current {current_winner}={current_winner_score:.2f}, "
-                    f"sessions={sessions})"
-                )
-                break
-            elif sessions > 50 and current_winner_score == 0 and score > 0:
-                # No current baseline — promote first variant with data
-                new_winner = variant
-                break
+            if variant == current_winner or sessions <= MIN_PROMOTION_SESSIONS:
+                continue
+            if current_winner_score > 0 and score >= current_winner_score * PROMOTION_LEAD_MULTIPLIER:
+                eligible_challengers.append((variant, score, sessions))
+            elif current_winner_score == 0 and score > 0:
+                eligible_challengers.append((variant, score, sessions))
+
+        new_winner = None
+        if eligible_challengers:
+            new_winner, new_winner_score, new_winner_sessions = max(
+                eligible_challengers,
+                key=lambda item: (item[1], item[2]),
+            )
+            logger.info(
+                f"AuraAutonomy A/B: promoting variant {new_winner} "
+                f"(score={new_winner_score:.2f} vs current {current_winner}={current_winner_score:.2f}, "
+                f"sessions={new_winner_sessions})"
+            )
 
         if new_winner:
             await r.set(f"ab:winner:{EXPERIMENT_ID}", new_winner)
             current_winner = new_winner
+            official_winner_source = "promoted"
+            top_performer = new_winner
+            allocation = _allocation_for_leader(new_winner, new_winner, session_counts)
+            generated_variants = _variant_generation_briefs(new_winner)
+            status = f"{new_winner} promoted after clearing confidence threshold"
 
             # Log decision to ora_lessons
             lesson = (
@@ -542,9 +698,41 @@ class AuraAutonomyAgent:
                 f"(prev winner score: {current_winner_score:.2f}). "
                 f"Variant scores: {json.dumps({k: round(v, 2) for k, v in scores.items()})}"
             )
-            await self._log_lesson(lesson, confidence=0.85, source="OraAutonomyAgent.ab_auto_promote")
+            await self._log_lesson(lesson, confidence=0.85, source="AuraAutonomyAgent.ab_auto_promote")
 
-        return {"winner": current_winner, "scores": scores, "promoted": new_winner}
+        if allocation:
+            await r.set(
+                f"ab:allocation:{EXPERIMENT_ID}",
+                json.dumps(allocation),
+                ex=7 * 24 * 3600,
+            )
+            await r.set(
+                f"ab:evolution_plan:{EXPERIMENT_ID}",
+                json.dumps({
+                    "top_performer": top_performer,
+                    "official_winner": current_winner,
+                    "official_winner_source": official_winner_source,
+                    "allocation": allocation,
+                    "generated_variants": generated_variants,
+                    "status": status,
+                }),
+                ex=7 * 24 * 3600,
+            )
+        else:
+            await r.delete(f"ab:allocation:{EXPERIMENT_ID}")
+            await r.delete(f"ab:evolution_plan:{EXPERIMENT_ID}")
+
+        return {
+            "winner": current_winner,
+            "winner_source": official_winner_source,
+            "top_performer": top_performer,
+            "scores": scores,
+            "session_counts": session_counts,
+            "allocation": allocation,
+            "generated_variants": generated_variants,
+            "status": status,
+            "promoted": new_winner,
+        }
 
     # -----------------------------------------------------------------------
     # B. Bug Detection & Auto-Fix
@@ -947,14 +1135,35 @@ Rules:
             return
 
         # Build message
-        lines = ["🤖 *Ora Autonomy Report*\n"]
+        lines = ["🤖 *Aura Autonomy Report*\n"]
 
         # A/B winner
         winner = report.get("ab_winner")
+        winner_source = report.get("ab_winner_source")
         scores = report.get("ab_scores", {})
+        top_performer = report.get("ab_top_performer")
+        status = report.get("ab_status")
+        allocation = report.get("ab_allocation", {})
         if winner and scores:
             score_str = " | ".join(f"{v}: {s:.2f}" for v, s in scores.items() if s > 0)
-            lines.append(f"📊 *A/B Test*\nCurrent winner: *{winner}*\nScores: {score_str}\n")
+            ab_lines = [
+                "📊 *A/B Test*",
+            ]
+            if winner_source == "default_control":
+                ab_lines.append(f"Control: *{winner}* — no official winner yet")
+            else:
+                ab_lines.append(f"Official winner: *{winner}*")
+            if top_performer:
+                ab_lines.append(f"Current top performer: *{top_performer}*")
+            ab_lines.append(f"Scores: {score_str}")
+            if allocation:
+                allocation_str = " | ".join(
+                    f"{v}: {pct * 100:.0f}%" for v, pct in allocation.items()
+                )
+                ab_lines.append(f"Next traffic: {allocation_str}")
+            if status:
+                ab_lines.append(f"Status: {status}")
+            lines.append("\n".join(ab_lines) + "\n")
 
         # Bugs
         found = report.get("bugs_found", [])
