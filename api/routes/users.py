@@ -98,10 +98,13 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
         """
         SELECT u.id, u.email, u.subscription_tier, u.fulfilment_score,
                u.profile, u.created_at, u.last_active,
-               cp.cp_balance, cp.total_cp_earned
+               COALESCE(SUM(tx.amount) FILTER (WHERE tx.amount > 0), 0) AS total_cp_earned,
+               COALESCE(SUM(tx.amount), 0) AS cp_balance
         FROM users u
-        LEFT JOIN user_cp_balance cp ON cp.user_id = u.id
+        LEFT JOIN cp_transactions tx ON tx.user_id = u.id
         WHERE u.id = $1
+        GROUP BY u.id, u.email, u.subscription_tier, u.fulfilment_score,
+                 u.profile, u.created_at, u.last_active
         """,
         UUID(user_id),
     )

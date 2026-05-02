@@ -145,7 +145,12 @@ class CPAwardBulkRequest(BaseModel):
 async def _get_or_create_user_cp(user_id: UUID) -> dict:
     """Ensure user has a cp_balance row."""
     row = await fetchrow(
-        "SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1",
+        """
+        SELECT
+            COALESCE(SUM(amount), 0) AS cp_balance,
+            COALESCE(SUM(amount) FILTER (WHERE amount > 0), 0) AS total_cp_earned
+        FROM cp_transactions WHERE user_id = $1
+        """,
         user_id
     )
     if not row:
@@ -191,7 +196,12 @@ async def _award_cp(user_id: UUID, amount: int, reason: str, reference: Optional
 
     # Get updated balance
     row = await fetchrow(
-        "SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1",
+        """
+        SELECT
+            COALESCE(SUM(amount), 0) AS cp_balance,
+            COALESCE(SUM(amount) FILTER (WHERE amount > 0), 0) AS total_cp_earned
+        FROM cp_transactions WHERE user_id = $1
+        """,
         user_id
     )
     return {
@@ -437,7 +447,12 @@ async def get_cp_history(user_id: str):
     )
 
     balance = await fetchrow(
-        "SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1", uid
+        """
+        SELECT
+            COALESCE(SUM(amount), 0) AS cp_balance,
+            COALESCE(SUM(amount) FILTER (WHERE amount > 0), 0) AS total_cp_earned
+        FROM cp_transactions WHERE user_id = $1
+        """, uid
     )
 
     return {
@@ -464,16 +479,15 @@ async def ltv_leaderboard(limit: int = 20):
         SELECT
             u.id, u.email,
             COALESCE(u.profile->>'display_name', split_part(u.email, '@', 1)) AS display_name,
-            cp.total_cp_earned,
-            cp.cp_balance,
-            COUNT(tx.id) as contribution_count,
-            cp.last_updated
-        FROM user_cp_balance cp
-        JOIN users u ON u.id = cp.user_id
-        LEFT JOIN cp_transactions tx ON tx.user_id = cp.user_id AND tx.amount > 0
-        WHERE cp.total_cp_earned > 0
-        GROUP BY u.id, u.email, u.profile, cp.total_cp_earned, cp.cp_balance, cp.last_updated
-        ORDER BY cp.total_cp_earned DESC
+            COALESCE(SUM(tx.amount) FILTER (WHERE tx.amount > 0), 0) AS total_cp_earned,
+            COALESCE(SUM(tx.amount), 0) AS cp_balance,
+            COUNT(tx.id) FILTER (WHERE tx.amount > 0) AS contribution_count,
+            MAX(tx.created_at) AS last_updated
+        FROM cp_transactions tx
+        JOIN users u ON u.id = tx.user_id
+        GROUP BY u.id, u.email, u.profile
+        HAVING COALESCE(SUM(tx.amount) FILTER (WHERE tx.amount > 0), 0) > 0
+        ORDER BY total_cp_earned DESC
         LIMIT $1
         """,
         limit

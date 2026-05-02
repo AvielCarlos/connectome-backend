@@ -131,22 +131,23 @@ def _serialize(d: Dict[str, Any]) -> Dict[str, Any]:
 async def get_leaderboard(limit: int = 20):
     """Public leaderboard — top contributors ranked by live earned CP.
 
-    Source of truth: user_cp_balance.total_cp_earned (real earned CP from
-    contributions, feedback, and tasks). The contributors.total_cp column
-    may contain bulk-imported seed data and is intentionally excluded here
-    to keep the leaderboard accurate.
+    Source of truth: cp_transactions (canonical CP ledger — includes bulk-imported
+    PR history and all live activity).
     """
-    balance_rows = await fetch(
+    rows = await fetch(
         """
         SELECT
             u.id, u.email,
             COALESCE(u.profile->>'display_name', split_part(u.email, '@', 1)) AS display_name,
             u.github_username, u.github_avatar_url,
-            cp.cp_balance, cp.total_cp_earned, cp.last_updated
-        FROM user_cp_balance cp
-        JOIN users u ON u.id = cp.user_id
-        WHERE cp.total_cp_earned > 0
-        ORDER BY cp.total_cp_earned DESC
+            COALESCE(SUM(tx.amount) FILTER (WHERE tx.amount > 0), 0) AS total_cp,
+            COALESCE(SUM(tx.amount), 0) AS cp_balance,
+            MAX(tx.created_at) AS last_active
+        FROM cp_transactions tx
+        JOIN users u ON u.id = tx.user_id
+        GROUP BY u.id, u.email, u.profile, u.github_username, u.github_avatar_url
+        HAVING COALESCE(SUM(tx.amount) FILTER (WHERE tx.amount > 0), 0) > 0
+        ORDER BY total_cp DESC
         LIMIT $1
         """,
         limit,
@@ -159,8 +160,8 @@ async def get_leaderboard(limit: int = 20):
         return "👑" if total_cp >= 3000 else "⭐" if total_cp >= 500 else "🔨" if total_cp >= 100 else "👀"
 
     leaderboard = []
-    for i, row in enumerate(balance_rows):
-        total_cp = int(row["total_cp_earned"] or 0)
+    for i, row in enumerate(rows):
+        total_cp = int(row["total_cp"] or 0)
         leaderboard.append({
             "id": str(row["id"]),
             "display_name": row["display_name"] or "Anonymous",
@@ -170,13 +171,13 @@ async def get_leaderboard(limit: int = 20):
             "cp_balance": int(row["cp_balance"] or 0),
             "tier": leaderboard_tier(total_cp),
             "is_founding_steward": total_cp >= 3000,
-            "joined_at": row["last_updated"].isoformat() if row["last_updated"] else None,
+            "joined_at": row["last_active"].isoformat() if row["last_active"] else None,
             "rank": i + 1,
             "tier_badge": badge_for(total_cp),
         })
 
     total_cp_awarded = await fetchval(
-        "SELECT COALESCE(SUM(total_cp_earned), 0) FROM user_cp_balance"
+        "SELECT COALESCE(SUM(amount), 0) FROM cp_transactions WHERE amount > 0"
     ) or 0
 
     return {
@@ -1255,9 +1256,14 @@ async def get_cp_history(
         logger.warning(f"cp_transactions query failed (table may not exist yet): {e}")
         rows = []
 
-    # Also get current balance
+    # Also get current balance — canonical source: cp_transactions
     balance_row = await fetchrow(
-        "SELECT cp_balance, total_cp_earned FROM user_cp_balance WHERE user_id = $1",
+        """
+        SELECT
+            COALESCE(SUM(amount), 0) AS cp_balance,
+            COALESCE(SUM(amount) FILTER (WHERE amount > 0), 0) AS total_cp_earned
+        FROM cp_transactions WHERE user_id = $1
+        """,
         uid,
     )
     cp_balance = int(balance_row["cp_balance"] or 0) if balance_row else 0
