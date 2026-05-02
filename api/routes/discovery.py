@@ -24,6 +24,13 @@ class DiscoveryAnswerBody(BaseModel):
     question_id: str
     answer: Any                 # str | int | float | list
     profile_field: str
+    goal_id: Optional[str] = None
+
+
+class NowCheckinBody(BaseModel):
+    answers: dict[str, Any] = Field(default_factory=dict)
+    goal_id: Optional[str] = None
+    feed_mode: str = "now"
 
 
 ONBOARDING_VARIANTS = {
@@ -513,6 +520,65 @@ async def _store_onboarding_answers(user_id: str, answers: list[str], variant_id
         logger.warning(f"Could not update IOO vector after onboarding: {e}")
 
 
+async def _store_discovery_answer(user_id: str, field_name: str, answer: Any, question_id: str) -> None:
+    if isinstance(answer, (dict, list)):
+        answer_str = json.dumps(answer)
+    else:
+        answer_str = str(answer)
+    try:
+        await execute(
+            """
+            INSERT INTO discovery_profile (user_id, field_name, field_value, question_id)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, field_name)
+            DO UPDATE SET field_value = EXCLUDED.field_value,
+                          question_id = EXCLUDED.question_id,
+                          updated_at = NOW()
+            """,
+            UUID(user_id),
+            field_name,
+            answer_str,
+            question_id,
+        )
+    except Exception as e:
+        logger.warning(f"discovery_profile upsert failed (table may not exist): {e}")
+        try:
+            await execute(
+                """
+                INSERT INTO interactions (user_id, screen_spec_id, exit_point, completed)
+                SELECT $1, id, $2, true FROM screen_specs
+                ORDER BY created_at DESC LIMIT 1
+                """,
+                UUID(user_id),
+                f"discovery:{question_id}:{answer_str[:80]}",
+            )
+        except Exception as _fe:
+            logger.warning(f"discovery fallback interaction insert failed: {_fe}")
+
+
+async def _goal_context_for_checkin(user_id: str, goal_id: Optional[str]) -> dict[str, Any]:
+    if goal_id:
+        row = await fetchrow(
+            "SELECT id, title, description, steps, graph_metadata FROM goals WHERE id = $1 AND user_id = $2",
+            UUID(goal_id),
+            UUID(user_id),
+        )
+    else:
+        row = await fetchrow(
+            "SELECT id, title, description, steps, graph_metadata FROM goals WHERE user_id = $1 AND status = 'active' ORDER BY created_at DESC LIMIT 1",
+            UUID(user_id),
+        )
+    if not row:
+        return {}
+    goal = dict(row)
+    return {
+        "active_goals": [goal.get("title")],
+        "active_goal_id": str(goal.get("id")),
+        "active_goal_title": goal.get("title"),
+        "active_goal_description": goal.get("description"),
+    }
+
+
 @router.post("/answer")
 async def submit_discovery_answer(
     body: DiscoveryAnswerBody,
@@ -525,57 +591,13 @@ async def submit_discovery_answer(
     """
     import json
 
-    # Convert answer to JSON string for storage
-    if isinstance(body.answer, (dict, list)):
-        answer_str = json.dumps(body.answer)
-    else:
-        answer_str = str(body.answer)
+    answer_str = json.dumps(body.answer) if isinstance(body.answer, (dict, list)) else str(body.answer)
 
-    # Fetch current user profile blob
-    row = await fetchrow(
-        "SELECT id, interests FROM users WHERE id = $1",
-        UUID(user_id),
-    )
+    row = await fetchrow("SELECT id FROM users WHERE id = $1", UUID(user_id))
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # We store discovery answers in the `interests` JSONB field (or a
-    # dedicated discovery_profile field if the schema has one).
-    # Use a safe JSONB merge approach via a dedicated column if it exists,
-    # otherwise store in a metadata table.
-    try:
-        # Try to upsert into a discovery_profile table (may not exist yet —
-        # fall back to logging gracefully)
-        await execute(
-            """
-            INSERT INTO discovery_profile (user_id, field_name, field_value, question_id)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (user_id, field_name)
-            DO UPDATE SET field_value = EXCLUDED.field_value,
-                          question_id = EXCLUDED.question_id,
-                          updated_at = NOW()
-            """,
-            UUID(user_id),
-            body.profile_field,
-            answer_str,
-            body.question_id,
-        )
-    except Exception as e:
-        # Table may not exist yet — log and continue gracefully
-        logger.warning(f"discovery_profile upsert failed (table may not exist): {e}")
-        # Fallback: store as interaction with special exit_point
-        try:
-            await execute(
-                """
-                INSERT INTO interactions (user_id, screen_spec_id, exit_point, completed)
-                SELECT $1, id, $2, true FROM screen_specs
-                ORDER BY created_at DESC LIMIT 1
-                """,
-                UUID(user_id),
-                f"discovery:{body.question_id}:{answer_str[:80]}",
-            )
-        except Exception as _fe:
-            logger.warning(f"discovery fallback interaction insert failed: {_fe}")
+    await _store_discovery_answer(user_id, body.profile_field, body.answer, body.question_id)
 
     logger.info(
         f"Discovery answer: user={user_id[:8]} field={body.profile_field} "
@@ -592,11 +614,44 @@ async def submit_discovery_answer(
         import asyncio
         from ora.user_model import update_user_embedding_from_context
         context = {body.profile_field: body.answer}
+        if body.goal_id:
+            context.update(await _goal_context_for_checkin(user_id, body.goal_id))
         # Capability intake refines the Now vector; desired_feed_mode/later interests refine Later.
         vector_mode = "later" if body.profile_field in {"desired_feed_mode", "later_interests", "future_interests"} else "now"
         asyncio.ensure_future(update_user_embedding_from_context(user_id, context, vector_mode))
 
     return {"ok": True, "profile_updated": True}
+
+
+@router.post("/now-checkin")
+async def submit_now_checkin(
+    body: NowCheckinBody,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Store a tiny present-state check-in and refresh the Now vector once.
+
+    Goals define desired future state; this captures the user's current state
+    relative to that goal so iDo can choose better immediate IOO nodes.
+    """
+    row = await fetchrow("SELECT id FROM users WHERE id = $1", UUID(user_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    context: dict[str, Any] = dict(body.answers or {})
+    context.update(await _goal_context_for_checkin(user_id, body.goal_id))
+    if body.goal_id:
+        context["goal_id"] = body.goal_id
+
+    for field_name, answer in context.items():
+        if field_name in {"active_goals", "active_goal_description"}:
+            continue
+        await _store_discovery_answer(user_id, field_name, answer, f"now_checkin_{field_name}")
+
+    from ora.user_model import update_user_embedding_from_context
+    await update_user_embedding_from_context(user_id, context, "now")
+
+    logger.info("Now check-in stored: user=%s fields=%s goal=%s", user_id[:8], len(context), body.goal_id or "active")
+    return {"ok": True, "profile_updated": True, "vector_mode": "now"}
 
 
 @router.post("/onboarding", response_model=OnboardingResponse)
