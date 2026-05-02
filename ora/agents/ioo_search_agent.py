@@ -14,6 +14,9 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 from urllib.parse import quote_plus
 
+SWARMSYNC_API_BASE = "https://api.swarmsync.ai"
+SWARMSYNC_APP_BASE = "https://swarmsync.ai"
+
 import httpx
 
 
@@ -139,6 +142,124 @@ def _google_places_link(place_id: str | None, fallback_query: str) -> str:
     if place_id:
         return f"https://www.google.com/maps/place/?q=place_id:{quote_plus(place_id)}"
     return _query_url("google_maps", fallback_query)
+
+
+def _agent_marketplace_query(node: dict[str, Any], title: str) -> str | None:
+    """Return a SwarmSync marketplace query for safely delegable IOO work."""
+
+    tags = {tag.lower() for tag in node["tags"]}
+    title_lower = title.lower()
+    delegable_terms = {
+        "agent",
+        "agentic",
+        "automation",
+        "research",
+        "analysis",
+        "code",
+        "coding",
+        "developer",
+        "open-source",
+        "admin",
+        "workflow",
+        "market",
+        "data",
+    }
+    if not (tags & delegable_terms or any(term in title_lower for term in delegable_terms)):
+        return None
+
+    if tags & {"code", "coding", "developer", "open-source"} or any(term in title_lower for term in ("code", "developer", "github", "open-source")):
+        return f"code analysis automation {title}"
+    if tags & {"research", "market", "data"} or any(term in title_lower for term in ("research", "analysis", "market", "data")):
+        return f"research data analysis {title}"
+    return f"agent automation workflow {title}"
+
+
+def _live_swarmsync_agent_candidates(query: str | None, title: str) -> list[SearchCandidate]:
+    """Return public SwarmSync agent-marketplace candidates when relevant.
+
+    This is read-only discovery. It does not register Aura, negotiate AP2 work,
+    lock escrow, execute agents, or spend money. Any hiring/action must happen
+    only after explicit user confirmation in a separate execution step.
+    """
+
+    if not query:
+        return []
+
+    try:
+        resp = httpx.get(f"{SWARMSYNC_API_BASE}/agents", timeout=6)
+        resp.raise_for_status()
+        agents = resp.json() or []
+    except Exception:
+        return []
+
+    terms = [term for term in query.lower().replace("/", " ").split() if len(term) > 2]
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for agent in agents if isinstance(agents, list) else []:
+        if not isinstance(agent, dict):
+            continue
+        haystack = " ".join(
+            str(agent.get(key) or "")
+            for key in ("name", "slug", "description", "verificationStatus", "pricingModel")
+        ).lower()
+        haystack += " " + " ".join(str(item) for item in _as_list(agent.get("tags"))).lower()
+        matched_terms = sum(1 for term in terms if term in haystack)
+        if matched_terms == 0:
+            continue
+        trust_score = float(agent.get("trustScore") or 0)
+        success_count = float(agent.get("successCount") or 0)
+        score = matched_terms + min(trust_score / 100.0, 1.0) + min(success_count / 25.0, 0.5)
+        scored.append((score, agent))
+
+    candidates: list[SearchCandidate] = []
+    seen_keys: set[str] = set()
+    for _, agent in sorted(scored, key=lambda item: item[0], reverse=True):
+        slug = str(agent.get("slug") or agent.get("id") or "").strip()
+        name = str(agent.get("name") or slug).strip()
+        dedupe_key = name.lower() or slug.lower()
+        if not slug or dedupe_key in seen_keys:
+            continue
+        seen_keys.add(dedupe_key)
+        idx = len(candidates) + 1
+        if idx > 3:
+            break
+        agent_url = f"{SWARMSYNC_APP_BASE}/agents/{quote_plus(slug)}"
+        trust_score = agent.get("trustScore")
+        status = agent.get("verificationStatus") or agent.get("status")
+        price_cents = agent.get("basePriceCents")
+        confidence = 0.58 + max(0, 3 - idx) * 0.04
+        if trust_score:
+            confidence += min(float(trust_score) / 500.0, 0.12)
+        candidates.append(
+            _candidate(
+                cid=f"swarmsync-agent-{idx}",
+                title=f"SwarmSync agent: {name}",
+                candidate_type="agent_marketplace_option",
+                source_name="SwarmSync agent marketplace",
+                source_type="live_agent_marketplace",
+                source_url=agent_url,
+                confidence=confidence,
+                rationale=(
+                    f"Public SwarmSync listing matched delegable work for '{title}'. "
+                    "Use it as an outsourcing/research option only after explicit user approval."
+                ),
+                next_label="Review agent trust, price, and task fit before approving any hire or escrow",
+                metadata={
+                    "query": query,
+                    "agent_id": agent.get("id"),
+                    "slug": slug,
+                    "description": agent.get("description"),
+                    "verification_status": status,
+                    "trust_score": trust_score,
+                    "success_count": agent.get("successCount"),
+                    "failure_count": agent.get("failureCount"),
+                    "pricing_model": agent.get("pricingModel"),
+                    "base_price_cents": price_cents,
+                    "external_actions_require_confirmation": True,
+                    "ap2_negotiation_performed": False,
+                },
+            )
+        )
+    return candidates
 
 
 def _live_google_places_candidates(query: str, location: str | None, title: str) -> list[SearchCandidate]:
@@ -294,6 +415,13 @@ def build_search_agent_payload(node: Any, user_context: Any, intent: str = "do_n
             candidates.extend(live_place_candidates)
             live_places_available = True
 
+    swarmsync_available = False
+    swarmsync_query = _agent_marketplace_query(n, title)
+    swarmsync_candidates = _live_swarmsync_agent_candidates(swarmsync_query, title)
+    if swarmsync_candidates:
+        candidates.extend(swarmsync_candidates)
+        swarmsync_available = True
+
     if n["step_type"] in {"physical", "hybrid"}:
         maps_query = base_query if location else f"{title} near me"
         candidates.append(
@@ -429,6 +557,7 @@ def build_search_agent_payload(node: Any, user_context: Any, intent: str = "do_n
     live_integrations = {
         "web_search": "not_configured",
         "google_places": "available" if live_places_available else "not_configured_or_no_results",
+        "swarmsync": "available" if swarmsync_available else "not_applicable_or_no_results",
         "aventi": "not_configured",
         "eviva": "not_configured",
     }
@@ -447,7 +576,7 @@ def build_search_agent_payload(node: Any, user_context: Any, intent: str = "do_n
         "fallback": {
             "used": fallback_used,
             "reason": (
-                "Live Google Places results are included."
+                "Live provider results are included."
                 if live_results_available
                 else "Live providers returned no results or are not configured; returning provider-ready query links and prep paths instead."
             ),
