@@ -122,6 +122,7 @@ class ScreenRequest(BaseModel):
     context: Optional[str] = None  # hint to Ora about what kind of screen
     goal_id: Optional[str] = None
     domain: Optional[DomainType] = None  # optional domain filter
+    feed_mode: Optional[Literal["now", "future"]] = "now"
 
 
 class ScreenResponse(BaseModel):

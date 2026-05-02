@@ -15,7 +15,7 @@ import random
 import re
 import uuid as _uuid_mod
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -922,7 +922,7 @@ def _review_rating_component(item: dict[str, Any]) -> Optional[dict[str, Any]]:
     }
 
 
-def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_action") -> dict:
+def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_action", feed_mode: str = "now") -> dict:
     """Build a server-driven card around a real URL/action the user can take."""
     url = item.get("url") or ""
     title = item.get("title") or "Real-world action"
@@ -986,6 +986,9 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "agent": "RealWorldActionAgent",
             "source": source,
             "domain": domain,
+            "feed_mode": feed_mode,
+            "temporal_branch": "future_event" if feed_mode == "future" else "now_action",
+            "starts_at": _serialise_dt(item.get("starts_at")) if item.get("starts_at") else None,
             "city": item.get("city"),
             "location_city": item.get("city"),
             "location_signal": f"city:{item.get('city')}" if item.get("city") else None,
@@ -1186,7 +1189,7 @@ async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> O
             "steps": ["Open the event page.", "Check date, location, cost, and transport.", "Book, invite someone, or save it for later."],
             "why": "This is the live Aventi layer: events you can actually attend, not conceptual prompts.",
         }
-        return await _build_screen_response_from_spec(user_id, tier, daily_limit, _real_action_spec(item, source="live_event"))
+        return await _build_screen_response_from_spec(user_id, tier, daily_limit, _real_action_spec(item, source="live_event", feed_mode="future"))
     except Exception as err:
         logger.debug("Live event action card skipped for user %s: %s", str(user_id)[:8], err)
         return None
@@ -1270,6 +1273,32 @@ def _filter_location_eligible(candidates: list[dict[str, Any]], preferred_city: 
     return eligible or [item for item in candidates if not item.get("city")]
 
 
+def _is_future_opportunity(item: dict[str, Any]) -> bool:
+    """Classify scheduled/time-bound opportunities for the Future feed branch."""
+    if item.get("starts_at"):
+        return True
+    text = _item_location_text(item)
+    kind = str(item.get("kind") or "").lower()
+    future_markers = (
+        "event", "calendar", "schedule", "class", "workshop", "program", "retreat",
+        "ticket", "register", "registration", "booking", "book ", "this week", "next ",
+        "attend", "availability", "rsvp",
+    )
+    immediate_markers = ("youtube", "guided meditation", "walk", "reset", "beginner yoga video")
+    if any(marker in text for marker in immediate_markers):
+        return False
+    return any(marker in text or marker in kind for marker in future_markers)
+
+
+def _filter_temporal_branch(candidates: list[dict[str, Any]], feed_mode: str) -> list[dict[str, Any]]:
+    """Vector branch: Now = immediately doable; Future = upcoming/scheduled."""
+    if feed_mode == "future":
+        future = [item for item in candidates if _is_future_opportunity(item)]
+        return future or candidates
+    now = [item for item in candidates if not _is_future_opportunity(item)]
+    return now or candidates
+
+
 async def _user_travel_mode(user_id: str, tier: str) -> bool:
     """Paid-tier opt-in that allows non-local/travel opportunities in feed."""
     if tier not in ("explorer", "sovereign", "premium"):
@@ -1284,11 +1313,11 @@ async def _user_travel_mode(user_id: str, tier: str) -> bool:
         return False
 
 
-async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None, preferred_city: Optional[str] = None, travel_mode: bool = False) -> Optional[ScreenResponse]:
+async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_index: int = 0, domain_filter: Optional[str] = None, preferred_city: Optional[str] = None, travel_mode: bool = False, feed_mode: str = "now") -> Optional[ScreenResponse]:
     """Diversify the main feed with concrete learn/attend/book actions."""
     # Prefer true live event data for the first Aventi slot, then fall back to
     # curated verified URLs so the feed is never only generic Eviva cards.
-    if slot_index % 5 == 0 and (domain_filter in (None, '', 'Aventi')):
+    if feed_mode == "future" and slot_index % 5 == 0 and (domain_filter in (None, '', 'Aventi')):
         live = await _try_live_event_action(user_id, tier, daily_limit)
         if live is not None:
             return live
@@ -1299,6 +1328,7 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     candidates = [item for item in _CURATED_REAL_ACTIONS if not domain_filter or item.get('domain') == domain_filter or (domain_filter == 'iVive' and item.get('domain') == 'Rest')]
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
+    candidates = _filter_temporal_branch(candidates, feed_mode)
     if preferred_city:
         if not travel_mode:
             candidates = _filter_location_eligible(candidates, preferred_city)
@@ -1309,7 +1339,7 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     if domain_filter == 'iVive' and item.get('domain') == 'Rest':
         item['domain'] = 'iVive'
         item['tag'] = item.get('tag') or 'recovery'
-    return await _build_screen_response_from_spec(user_id, tier, daily_limit, _real_action_spec(item))
+    return await _build_screen_response_from_spec(user_id, tier, daily_limit, _real_action_spec(item, feed_mode=feed_mode))
 
 
 _STATIC_FALLBACK_CARDS = [
@@ -1627,13 +1657,14 @@ async def get_next_screen(
 
     preferred_city = await _user_city(user_id)
     travel_mode = await _user_travel_mode(user_id, tier)
+    feed_mode = body.feed_mode or "now"
 
     # ── Smart feed routing ─────────────────────────────────────────────────
     # Product principle: the feed must feel like a living path. Always give a
     # meaningful share of cards to real actions (live events, videos, classes,
     # adventures) so users are not trapped in generic Eviva/IOO opportunity loops.
-    if random.random() < 0.45:
-        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode)
+    if feed_mode == "future" or random.random() < 0.45:
+        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, feed_mode)
         if real_action is not None:
             return real_action
 
@@ -1695,6 +1726,7 @@ class BatchScreenRequest(BaseModel):
     goal_id: Optional[str] = None
     domain: Optional[DomainType] = None
     context: Optional[str] = None
+    feed_mode: Optional[Literal["now", "future"]] = "now"
 
 
 @router.post("/batch", response_model=List[ScreenResponse])
@@ -1748,6 +1780,7 @@ async def get_screen_batch(
 
     preferred_city = await _user_city(user_id)
     travel_mode = await _user_travel_mode(user_id, tier)
+    feed_mode = body.feed_mode or "now"
 
     # Check if user has active goals (once, shared across batch)
     # Fetch screens sequentially to respect rate limits and user model updates
@@ -1759,8 +1792,8 @@ async def get_screen_batch(
             # actions where possible; slots 1/3 can use IOO/brain. This directly
             # prevents repeated "Eviva Opportunities" cards from occupying the
             # whole swipe queue.
-            if slot_index in (0, 2, 4):
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode)
+            if feed_mode == "future" or slot_index in (0, 2, 4):
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, feed_mode)
                 if real_action is not None:
                     results.append(real_action)
                     continue
@@ -1773,7 +1806,7 @@ async def get_screen_batch(
                     continue
 
             if random.random() < 0.35:
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode)
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, feed_mode)
                 if real_action is not None:
                     results.append(real_action)
                     continue
