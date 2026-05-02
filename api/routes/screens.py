@@ -1299,7 +1299,12 @@ def _filter_temporal_branch(candidates: list[dict[str, Any]], feed_mode: str, ex
 
 
 def _screen_spec_is_future_opportunity(spec: dict[str, Any]) -> bool:
-    """Detect scheduled/time-bound event cards that must not leak into Now."""
+    """Detect scheduled/time-bound event cards that must not leak into Now.
+
+    This is intentionally conservative for Now: explicit events, schedules,
+    booking/registration flows, and date-bound opportunities belong in Future,
+    even if the card also says “today” or suggests an immediate planning step.
+    """
     metadata = spec.get("metadata") or {}
     if isinstance(metadata, str):
         try:
@@ -1336,18 +1341,21 @@ def _screen_spec_is_future_opportunity(spec: dict[str, Any]) -> bool:
     if not text:
         return False
 
-    immediate_markers = ("right now", "today", "10-minute", "5-minute", "walk", "breathing", "journal", "guided meditation", "reset")
-    if any(marker in text for marker in immediate_markers):
-        return False
-
     event_markers = (
-        "event", "workshop", "class", "retreat", "festival", "concert", "ticket", "tickets",
-        "register", "registration", "rsvp", "book now", "booking", "reserve", "reservation",
+        "event", "events", "workshop", "class", "classes", "retreat", "festival", "concert", "ticket", "tickets",
+        "register", "registration", "rsvp", "book now", "booking", "book / register", "reserve", "reservation",
         "starts at", "start time", "doors open", "venue", "calendar", "conference",
         "this weekend", "this week", "next week", "next month", "tomorrow", "saturday", "sunday",
         "monday", "tuesday", "wednesday", "thursday", "friday",
     )
-    return any(marker in text for marker in event_markers)
+    if any(marker in text for marker in event_markers):
+        return True
+
+    immediate_markers = ("right now", "10-minute", "5-minute", "breathing", "journal", "guided meditation", "reset")
+    if any(marker in text for marker in immediate_markers):
+        return False
+
+    return False
 
 
 async def _user_travel_mode(user_id: str, tier: str) -> bool:
@@ -1580,6 +1588,7 @@ async def _try_ioo_card(
     goal_id: Optional[str],
     tier: str,
     daily_limit: int,
+    feed_mode: str = "now",
 ) -> Optional[ScreenResponse]:
     """
     Attempt to build one IOO graph-sourced card.
@@ -1614,6 +1623,18 @@ async def _try_ioo_card(
 
         if not nodes:
             return None
+
+        # Now feed must be immediate executable actions. IOO nodes can include
+        # real future events/classes/bookings, so filter them before selecting.
+        if feed_mode != "future":
+            immediate_nodes = []
+            for candidate in nodes:
+                candidate_spec = _ioo_node_to_screen_dict(candidate)
+                if not _screen_spec_is_future_opportunity(candidate_spec):
+                    immediate_nodes.append(candidate)
+            if not immediate_nodes:
+                return None
+            nodes = immediate_nodes
 
         # Semi-random selection with slight weighting toward higher-difficulty nodes
         # (easier nodes are boring; discovery should stretch people slightly)
@@ -1725,7 +1746,7 @@ async def get_next_screen(
     else:
         # Now feed — IOO neural graph first, no future events
         if not body.domain or True:  # always try IOO for Now feed
-            ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
+            ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode)
             if ioo_response is not None:
                 return ioo_response
         # Only use real-world cards for Now feed if they are strictly immediate actions
@@ -1866,7 +1887,7 @@ async def get_screen_batch(
                     continue
             else:
                 # Now feed: IOO neural graph first, 20% variety, always falls through to brain
-                ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
+                ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode)
                 if ioo_resp is not None:
                     results.append(ioo_resp)
                     continue
