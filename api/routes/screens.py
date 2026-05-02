@@ -1292,9 +1292,62 @@ def _filter_temporal_branch(candidates: list[dict[str, Any]], feed_mode: str, ex
     if feed_mode == "future":
         future = [item for item in candidates if _is_future_opportunity(item)]
         return future or candidates
-    # Now feed: always exclude future events
+    # Now feed: always exclude future events. If none remain, caller should use a
+    # static immediate fallback rather than leaking scheduled events into Now.
     now = [item for item in candidates if not _is_future_opportunity(item)]
-    return now or candidates
+    return now
+
+
+def _screen_spec_is_future_opportunity(spec: dict[str, Any]) -> bool:
+    """Detect scheduled/time-bound event cards that must not leak into Now."""
+    metadata = spec.get("metadata") or {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except Exception:
+            metadata = {}
+
+    if isinstance(metadata, dict):
+        if metadata.get("starts_at") or metadata.get("event_starts_at"):
+            return True
+        if metadata.get("feed_mode") in ("future", "later"):
+            return True
+        if str(metadata.get("temporal_branch") or "").lower() in {"future", "future_event", "scheduled_opportunity"}:
+            return True
+
+    text_parts: list[str] = []
+    for key in ("title", "body", "description", "subtitle", "tag", "button", "domain"):
+        val = spec.get(key)
+        if val:
+            text_parts.append(str(val))
+    if isinstance(metadata, dict):
+        for key in ("title", "description", "summary", "location", "city", "kind", "url"):
+            val = metadata.get(key)
+            if val:
+                text_parts.append(str(val))
+    for component in spec.get("components") or []:
+        if isinstance(component, dict):
+            for key in ("title", "text", "body", "description", "label", "caption", "subtitle"):
+                val = component.get(key)
+                if val:
+                    text_parts.append(str(val))
+
+    text = " ".join(text_parts).lower()
+    if not text:
+        return False
+
+    immediate_markers = ("right now", "today", "10-minute", "5-minute", "walk", "breathing", "journal", "guided meditation", "reset")
+    if any(marker in text for marker in immediate_markers):
+        return False
+
+    event_markers = (
+        "event", "workshop", "class", "retreat", "festival", "concert", "ticket", "tickets",
+        "register", "registration", "rsvp", "book now", "booking", "reserve", "reservation",
+        "starts at", "start time", "doors open", "venue", "calendar", "conference",
+        "this weekend", "this week", "next week", "next month", "tomorrow", "saturday", "sunday",
+        "monday", "tuesday", "wednesday", "thursday", "friday",
+    )
+    return any(marker in text for marker in event_markers)
 
 
 async def _user_travel_mode(user_id: str, tier: str) -> bool:
@@ -1330,6 +1383,8 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
     candidates = _filter_temporal_branch(candidates, feed_mode)
+    if not candidates:
+        return None
     # Sort by city relevance — never hard-block, app works globally
     if preferred_city:
         candidates = _filter_location_eligible(candidates, preferred_city)
@@ -1695,6 +1750,11 @@ async def get_next_screen(
         logger.error(f"Brain error for user {user_id[:8]}, using static fallback: {e}", exc_info=True)
         return await _static_fallback_card(user_id, tier, daily_limit, f"brain_exception:{type(e).__name__}")
 
+    if feed_mode != "future" and _screen_spec_is_future_opportunity(spec_dict):
+        logger.info("Now feed blocked future/scheduled screen for user %s; using immediate fallback", user_id[:8])
+        immediate = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, "now")
+        return immediate or await _static_fallback_card(user_id, tier, daily_limit, "now_future_event_blocked")
+
     # Parse spec into Pydantic model (validates structure)
     try:
         screen = ScreenSpec(
@@ -1825,6 +1885,12 @@ async def get_screen_batch(
                 geo_hints=batch_geo_hints,
                 feed_mode=feed_mode,
             )
+            if feed_mode != "future" and _screen_spec_is_future_opportunity(spec_dict):
+                logger.info("Now batch blocked future/scheduled screen for user %s; using immediate fallback", user_id[:8])
+                immediate = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "now")
+                results.append(immediate or await _static_fallback_card(user_id, tier, daily_limit, "now_batch_future_event_blocked"))
+                continue
+
             screen = ScreenSpec(
                 screen_id=spec_dict["screen_id"],
                 type=spec_dict.get("type", "unknown"),
