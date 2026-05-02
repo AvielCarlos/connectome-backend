@@ -1290,11 +1290,16 @@ def _is_future_opportunity(item: dict[str, Any]) -> bool:
     return any(marker in text or marker in kind for marker in future_markers)
 
 
-def _filter_temporal_branch(candidates: list[dict[str, Any]], feed_mode: str) -> list[dict[str, Any]]:
-    """Vector branch: Now = immediately doable; Future = upcoming/scheduled."""
+def _filter_temporal_branch(candidates: list[dict[str, Any]], feed_mode: str, exclude_future_events: bool = False) -> list[dict[str, Any]]:
+    """Vector branch: Now = immediately doable; Future = upcoming/scheduled.
+
+    When exclude_future_events=True (Now feed), hard-filter all scheduled/future
+    events regardless of other context. Future feed gets only future items.
+    """
     if feed_mode == "future":
         future = [item for item in candidates if _is_future_opportunity(item)]
         return future or candidates
+    # Now feed: always exclude future events
     now = [item for item in candidates if not _is_future_opportunity(item)]
     return now or candidates
 
@@ -1317,7 +1322,10 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     """Diversify the main feed with concrete learn/attend/book actions."""
     # Prefer true live event data for the first Aventi slot, then fall back to
     # curated verified URLs so the feed is never only generic Eviva cards.
-    if feed_mode == "future" and slot_index % 5 == 0 and (domain_filter in (None, '', 'Aventi')):
+    if feed_mode == "now":
+        # Hard block: never inject live event cards into the Now feed
+        pass
+    elif feed_mode == "future" and slot_index % 5 == 0 and (domain_filter in (None, '', 'Aventi')):
         live = await _try_live_event_action(user_id, tier, daily_limit)
         if live is not None:
             return live
@@ -1727,6 +1735,7 @@ class BatchScreenRequest(BaseModel):
     domain: Optional[DomainType] = None
     context: Optional[str] = None
     feed_mode: Optional[Literal["now", "future"]] = "now"
+    exclude_future_events: Optional[bool] = None
 
 
 @router.post("/batch", response_model=List[ScreenResponse])

@@ -123,6 +123,7 @@ class ScreenRequest(BaseModel):
     goal_id: Optional[str] = None
     domain: Optional[DomainType] = None  # optional domain filter
     feed_mode: Optional[Literal["now", "future"]] = "now"
+    exclude_future_events: Optional[bool] = None  # True = hard-filter scheduled/future events from Now feed
 
 
 class ScreenResponse(BaseModel):
