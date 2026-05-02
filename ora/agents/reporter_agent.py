@@ -1,5 +1,5 @@
 """
-ReporterAgent — Ora's autonomous daily reporting agent.
+ReporterAgent — Aura's autonomous daily reporting agent.
 
 Generates a rich daily summary of system state, user activity, and
 performance metrics, then sends it via Telegram to Avi.
@@ -258,7 +258,7 @@ class ReporterAgent:
             latest_line = "\n📝 Latest feedback: " + " | ".join(snippets)
 
         return (
-            f"🧠 Ora Daily Report — {date}\n\n"
+            f"🧠 Aura Daily Report — {date}\n\n"
             f"👥 Users: {total_users} total, {active_today} active today\n"
             f"📊 Engagement: {top_card} cards performing best\n"
             f"🎯 Goals: {goals_completed} completed, {goals_active} active\n"
@@ -268,7 +268,7 @@ class ReporterAgent:
             f"🌍 Events: {events_count} indexed for {cities}\n"
             f"📚 Drive: {docs} docs indexed\n\n"
             f"🔧 System: {system_line}\n"
-            f"— Ora"
+            f"— Aura"
         )
 
     # ------------------------------------------------------------------
