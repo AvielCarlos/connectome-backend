@@ -1882,6 +1882,36 @@ async def run_migrations():
             ON ioo_edges(relation_type)
         """)
 
+        # Privacy-safe cohort learning: aggregate what worked for similar
+        # starting-state/goal clusters without exposing individual user paths.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_cohort_edge_stats (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                cohort_key TEXT NOT NULL,
+                goal_category TEXT,
+                from_node_id UUID REFERENCES ioo_nodes(id) ON DELETE CASCADE,
+                to_node_id UUID REFERENCES ioo_nodes(id) ON DELETE CASCADE,
+                traversal_count INT DEFAULT 0,
+                success_count INT DEFAULT 0,
+                abandon_count INT DEFAULT 0,
+                avg_time_to_success_hours NUMERIC(8,2),
+                weight NUMERIC(6,4) DEFAULT 0.5,
+                confidence NUMERIC(6,4) DEFAULT 0.0,
+                last_reinforced_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(cohort_key, from_node_id, to_node_id)
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_cohort_edge_stats_lookup
+            ON ioo_cohort_edge_stats(cohort_key, to_node_id, confidence DESC)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_cohort_edge_stats_global
+            ON ioo_cohort_edge_stats(to_node_id, confidence DESC)
+        """)
+
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ioo_graph_events (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

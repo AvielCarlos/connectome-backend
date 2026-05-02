@@ -367,6 +367,29 @@ class IOOGraphAgent:
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS physical_context TEXT")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS best_time TEXT")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS temporal_branch TEXT DEFAULT 'now_action'")
+        await execute(
+            """
+            CREATE TABLE IF NOT EXISTS ioo_cohort_edge_stats (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                cohort_key TEXT NOT NULL,
+                goal_category TEXT,
+                from_node_id UUID REFERENCES ioo_nodes(id) ON DELETE CASCADE,
+                to_node_id UUID REFERENCES ioo_nodes(id) ON DELETE CASCADE,
+                traversal_count INT DEFAULT 0,
+                success_count INT DEFAULT 0,
+                abandon_count INT DEFAULT 0,
+                avg_time_to_success_hours NUMERIC(8,2),
+                weight NUMERIC(6,4) DEFAULT 0.5,
+                confidence NUMERIC(6,4) DEFAULT 0.0,
+                last_reinforced_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(cohort_key, from_node_id, to_node_id)
+            )
+            """
+        )
+        await execute("CREATE INDEX IF NOT EXISTS idx_ioo_cohort_edge_stats_lookup ON ioo_cohort_edge_stats(cohort_key, to_node_id, confidence DESC)")
+        await execute("CREATE INDEX IF NOT EXISTS idx_ioo_cohort_edge_stats_global ON ioo_cohort_edge_stats(to_node_id, confidence DESC)")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS requirements JSONB DEFAULT '{}'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS estimated_duration_days INTEGER")
@@ -541,7 +564,24 @@ class IOOGraphAgent:
             str(user_id),
         )
         completed_ids = [str(r["node_id"]) for r in completed_rows]
-        capability_sql, capability_params = await self._capability_filter_sql(str(user_id), start_idx=4)
+        cohort_key = await self._user_cohort_key(str(user_id))
+        capability_sql, capability_params = await self._capability_filter_sql(str(user_id), start_idx=5)
+        cohort_score_sql = """
+                COALESCE((
+                    SELECT MAX(c.weight * LEAST(1.0, c.confidence))
+                    FROM ioo_cohort_edge_stats c
+                    WHERE c.to_node_id = n.id
+                      AND c.traversal_count >= 3
+                      AND c.success_count >= 2
+                      AND c.cohort_key = $4
+                ), COALESCE((
+                    SELECT MAX(c.weight * LEAST(1.0, c.confidence) * 0.65)
+                    FROM ioo_cohort_edge_stats c
+                    WHERE c.to_node_id = n.id
+                      AND c.traversal_count >= 5
+                      AND c.success_count >= 3
+                ), 0.0))
+        """
         location_score_sql = ""
         if user_city:
             city_lit = str(user_city).replace("'", "''")
@@ -570,7 +610,8 @@ class IOOGraphAgent:
                 CASE WHEN n.attempt_count > 0
                      THEN n.success_count::float / n.attempt_count
                      ELSE 0.5
-                END AS success_rate
+                END AS success_rate,
+                {cohort_score_sql} AS cohort_success_score
             FROM ioo_nodes n
             WHERE n.is_active = TRUE
               AND n.embedding IS NOT NULL
@@ -587,15 +628,17 @@ class IOOGraphAgent:
                     WHERE e.to_node_id = n.id
                       AND e.from_node_id::text = ANY($3::text[])
                 ), 0.5) * 0.25 +
-                (CASE WHEN n.attempt_count > 0 THEN n.success_count::float / n.attempt_count ELSE 0.5 END) * 0.15
+                (CASE WHEN n.attempt_count > 0 THEN n.success_count::float / n.attempt_count ELSE 0.5 END) * 0.10 +
+                ({cohort_score_sql}) * 0.15
                 {preference_score_sql}
                 {location_score_sql}
             ) DESC
-            LIMIT ${4 + len(capability_params)}
+            LIMIT ${5 + len(capability_params)}
             """,
             str(user_id),
             query_vec,
             completed_ids,
+            cohort_key,
             *capability_params,
             limit,
         )
@@ -1063,6 +1106,154 @@ class IOOGraphAgent:
         }
 
     # ------------------------------------------------------------------
+    # Privacy-safe cohort learning
+    # ------------------------------------------------------------------
+
+    async def _user_cohort_key(self, user_id: str) -> str:
+        """Coarse, privacy-safe current-state cluster for collective learning.
+
+        Avoids exposing individual users: recommendations only use aggregate edge
+        stats with a confidence/min-count gate. Buckets are intentionally broad.
+        """
+        row = await fetchrow(
+            """
+            SELECT finances_level, fitness_level, free_time_weekday_hours,
+                   free_time_weekend_hours, state_json
+            FROM ioo_user_state
+            WHERE user_id = $1
+            """,
+            str(user_id),
+        )
+        if not row:
+            return "state:unknown"
+        row = dict(row)
+        state = row.get("state_json") or {}
+        if isinstance(state, str):
+            try:
+                state = json.loads(state)
+            except Exception:
+                state = {}
+        energy = str(state.get("current_energy_state") or state.get("energy_state") or "unknown").lower()
+        if any(x in energy for x in ("low", "gentle", "recover")):
+            energy_bucket = "energy_low"
+        elif any(x in energy for x in ("high", "ready", "move")):
+            energy_bucket = "energy_high"
+        elif energy != "unknown":
+            energy_bucket = "energy_steady"
+        else:
+            energy_bucket = "energy_unknown"
+        hours = row.get("free_time_weekday_hours") or row.get("free_time_weekend_hours")
+        try:
+            hours_f = float(hours) if hours is not None else 0.0
+        except Exception:
+            hours_f = 0.0
+        time_bucket = "time_tiny" if hours_f and hours_f <= 0.5 else "time_some" if hours_f and hours_f <= 2 else "time_open" if hours_f else "time_unknown"
+        fitness = row.get("fitness_level")
+        try:
+            fit_i = int(fitness) if fitness is not None else 5
+        except Exception:
+            fit_i = 5
+        fitness_bucket = "fitness_low" if fit_i <= 3 else "fitness_high" if fit_i >= 8 else "fitness_mid"
+        finance_bucket = str(row.get("finances_level") or "unknown").lower()
+        return ":".join([energy_bucket, time_bucket, fitness_bucket, f"money_{finance_bucket}"])
+
+    async def _node_goal_category(self, node_id: str) -> str:
+        row = await fetchrow("SELECT COALESCE(goal_category, domain, type, 'general') AS category FROM ioo_nodes WHERE id = $1::uuid", str(node_id))
+        return str(dict(row).get("category") or "general") if row else "general"
+
+    async def record_cohort_edge_outcome(
+        self,
+        user_id: str,
+        to_node_id: str,
+        success: bool,
+        hours_taken: float = 0.0,
+    ) -> None:
+        """Aggregate successful/failed transitions for similar users.
+
+        Uses the user's most recent previous progress node as the predecessor.
+        Stores only broad cohort_key + edge counts; no user id is stored in the
+        cohort table, preserving privacy while letting Aura learn what worked.
+        """
+        previous = await fetchrow(
+            """
+            SELECT node_id FROM ioo_user_progress
+            WHERE user_id = $1
+              AND node_id <> $2::uuid
+              AND status IN ('started', 'completed', 'viewed')
+            ORDER BY COALESCE(completed_at, started_at, created_at) DESC
+            LIMIT 1
+            """,
+            str(user_id),
+            str(to_node_id),
+        )
+        if not previous:
+            return
+        from_node_id = str(previous["node_id"])
+        cohort_key = await self._user_cohort_key(user_id)
+        goal_category = await self._node_goal_category(to_node_id)
+        await execute(
+            """
+            INSERT INTO ioo_cohort_edge_stats (
+                cohort_key, goal_category, from_node_id, to_node_id,
+                traversal_count, success_count, abandon_count,
+                avg_time_to_success_hours, weight, confidence, last_reinforced_at
+            ) VALUES (
+                $1, $2, $3::uuid, $4::uuid,
+                1, CASE WHEN $5 THEN 1 ELSE 0 END, CASE WHEN $5 THEN 0 ELSE 1 END,
+                CASE WHEN $5 THEN $6 ELSE NULL END,
+                CASE WHEN $5 THEN 0.62 ELSE 0.38 END,
+                0.10,
+                NOW()
+            )
+            ON CONFLICT (cohort_key, from_node_id, to_node_id) DO UPDATE SET
+                traversal_count = ioo_cohort_edge_stats.traversal_count + 1,
+                success_count = ioo_cohort_edge_stats.success_count + CASE WHEN $5 THEN 1 ELSE 0 END,
+                abandon_count = ioo_cohort_edge_stats.abandon_count + CASE WHEN $5 THEN 0 ELSE 1 END,
+                avg_time_to_success_hours = CASE
+                    WHEN $5 AND ioo_cohort_edge_stats.avg_time_to_success_hours IS NULL THEN $6
+                    WHEN $5 THEN (ioo_cohort_edge_stats.avg_time_to_success_hours * GREATEST(ioo_cohort_edge_stats.success_count, 1) + $6) / (ioo_cohort_edge_stats.success_count + 1)
+                    ELSE ioo_cohort_edge_stats.avg_time_to_success_hours
+                END,
+                weight = CASE
+                    WHEN (ioo_cohort_edge_stats.traversal_count + 1) >= 3 THEN
+                        LEAST(1.0, GREATEST(0.05, 0.25 + 0.75 * ((ioo_cohort_edge_stats.success_count + CASE WHEN $5 THEN 1 ELSE 0 END)::float / (ioo_cohort_edge_stats.traversal_count + 1))))
+                    ELSE ioo_cohort_edge_stats.weight
+                END,
+                confidence = LEAST(1.0, (ioo_cohort_edge_stats.traversal_count + 1)::float / 20.0),
+                last_reinforced_at = NOW(),
+                updated_at = NOW()
+            """,
+            cohort_key,
+            goal_category,
+            from_node_id,
+            str(to_node_id),
+            bool(success),
+            float(hours_taken or 0.0),
+        )
+
+    async def _cohort_boost_sql(self, user_id: str, alias: str = "n", cohort_param_index: int = 4) -> tuple[str, list]:
+        cohort_key = await self._user_cohort_key(user_id)
+        return (
+            f"""
+            COALESCE((
+                SELECT MAX(c.weight * LEAST(1.0, c.confidence))
+                FROM ioo_cohort_edge_stats c
+                WHERE c.to_node_id = {alias}.id
+                  AND c.traversal_count >= 3
+                  AND c.success_count >= 2
+                  AND c.cohort_key = ${cohort_param_index}
+            ), COALESCE((
+                SELECT MAX(c.weight * LEAST(1.0, c.confidence) * 0.65)
+                FROM ioo_cohort_edge_stats c
+                WHERE c.to_node_id = {alias}.id
+                  AND c.traversal_count >= 5
+                  AND c.success_count >= 3
+            ), 0.0))
+            """,
+            [cohort_key],
+        )
+
+    # ------------------------------------------------------------------
     # Traversal recording
     # ------------------------------------------------------------------
 
@@ -1125,8 +1316,13 @@ class IOOGraphAgent:
                 str(node_id),
             )
 
-        # Also update edges that lead to this node
+        # Also update edges that lead to this node, including privacy-safe
+        # cohort edge stats so Aura learns what worked for similar people.
         await self._update_edges_for_node(node_id, success)
+        try:
+            await self.record_cohort_edge_outcome(user_id, node_id, success, hours_taken)
+        except Exception as e:
+            logger.debug(f"IOO cohort edge outcome update skipped: {e}")
         await self.reinforce_node_signal(node_id, "complete" if success else "abandon", user_id=user_id)
 
     async def _update_edges_for_node(self, node_id: str, success: bool) -> None:
