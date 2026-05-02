@@ -156,6 +156,62 @@ def _dedup_events(events: List[Dict]) -> List[Dict]:
 
 
 
+def _city_matches(a: str, b: str) -> bool:
+    def token(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower().split(",")[0]).strip()
+    aa, bb = token(a), token(b)
+    return bool(aa and bb and (aa == bb or aa in bb or bb in aa))
+
+
+async def _verify_event_geo(ev: Dict[str, Any], requested_city: str) -> Optional[Dict[str, Any]]:
+    """Require event coordinates and confirmed city/country before storing/serving.
+
+    Event cards are location-sensitive: a live event without verified lat/lng +
+    city/country can leak wrong-city cards. We either confirm/enrich from public
+    venue/address data or skip the event.
+    """
+    city = str(ev.get("city") or requested_city or "").strip()
+    country = str(ev.get("country") or "").strip()
+    lat = ev.get("latitude")
+    lng = ev.get("longitude")
+
+    needs_geo = lat in (None, "") or lng in (None, "") or not country or not _city_matches(city, requested_city)
+    if needs_geo:
+        query = ", ".join(part for part in [
+            str(ev.get("venue_name") or "").strip(),
+            str(ev.get("address") or "").strip(),
+            requested_city,
+        ] if part)
+        try:
+            from core.geo import geocode_location_query
+            geo = await geocode_location_query(query) if query else None
+        except Exception as e:
+            logger.debug("Event geo verification skipped for %s: %s", ev.get("title"), e)
+            geo = None
+        if geo:
+            lat = lat or geo.get("lat")
+            lng = lng or geo.get("lon")
+            country = country or geo.get("country") or ""
+            confirmed_city = geo.get("city") or city
+            if confirmed_city:
+                city = confirmed_city
+
+    if lat in (None, "") or lng in (None, "") or not city or not country:
+        return None
+    if requested_city and not _city_matches(city, requested_city):
+        return None
+
+    try:
+        ev["latitude"] = float(lat)
+        ev["longitude"] = float(lng)
+    except Exception:
+        return None
+    ev["city"] = city
+    ev["country"] = country
+    ev["location_verified"] = True
+    return ev
+
+
 def _city_slug(city: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", city.lower()).strip("-")
 
@@ -322,6 +378,7 @@ def _event_from_jsonld(item: Dict[str, Any], city: str, source: str, page_url: s
         "venue_name": venue,
         "address": address,
         "city": city,
+        "country": "",
         "latitude": lat,
         "longitude": lng,
         "starts_at": starts_at,
@@ -799,8 +856,16 @@ async def _upsert_events(events: List[Dict], openai_client) -> int:
                 if existing:
                     continue  # cross-source duplicate
 
-            # Generate embedding
-            embed_text = f"{ev.get('title', '')}: {ev.get('description', '')}"
+            ev = await _verify_event_geo(ev, ev.get("city", ""))
+            if not ev:
+                continue
+
+            # Generate embedding with verified city/country/coordinates so event vectors are geo-grounded.
+            embed_text = (
+                f"{ev.get('title', '')}: {ev.get('description', '')}\n"
+                f"Verified event location: {ev.get('city', '')}, {ev.get('country', '')}. "
+                f"Coordinates: {ev.get('latitude')}, {ev.get('longitude')}."
+            )
             embedding = await _generate_embedding(embed_text, openai_client)
             embed_str = f"[{','.join(str(x) for x in embedding)}]" if embedding else None
 
@@ -808,15 +873,15 @@ async def _upsert_events(events: List[Dict], openai_client) -> int:
                 """
                 INSERT INTO events (
                     external_id, title, description, category,
-                    venue_name, address, city, latitude, longitude,
+                    venue_name, address, city, country, latitude, longitude,
                     starts_at, ends_at, url, image_url,
                     price_range, source, relevance_tags, embedding,
                     updated_at
                 ) VALUES (
                     $1, $2, $3, $4,
-                    $5, $6, $7, $8, $9,
-                    $10, $11, $12, $13,
-                    $14, $15, $16, $17::vector,
+                    $5, $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14,
+                    $15, $16, $17, $18::vector,
                     NOW()
                 )
                 ON CONFLICT (external_id) DO UPDATE SET
@@ -825,6 +890,10 @@ async def _upsert_events(events: List[Dict], openai_client) -> int:
                     category      = EXCLUDED.category,
                     venue_name    = EXCLUDED.venue_name,
                     address       = EXCLUDED.address,
+                    city          = EXCLUDED.city,
+                    country       = EXCLUDED.country,
+                    latitude      = EXCLUDED.latitude,
+                    longitude     = EXCLUDED.longitude,
                     starts_at     = EXCLUDED.starts_at,
                     ends_at       = EXCLUDED.ends_at,
                     url           = EXCLUDED.url,
@@ -841,6 +910,7 @@ async def _upsert_events(events: List[Dict], openai_client) -> int:
                 ev.get("venue_name", ""),
                 ev.get("address", ""),
                 ev.get("city", ""),
+                ev.get("country", ""),
                 ev.get("latitude"),
                 ev.get("longitude"),
                 ev.get("starts_at"),
@@ -863,8 +933,11 @@ async def _upsert_events(events: List[Dict], openai_client) -> int:
                     "title": ev.get("title", ""),
                     "summary": ev.get("description", ""),
                     "url": ev.get("url", ""),
-                    "location": ev.get("city", ""),
+                    "location": f"{ev.get('city', '')}, {ev.get('country', '')}".strip(', '),
                     "city": ev.get("city", ""),
+                    "country": ev.get("country", ""),
+                    "latitude": ev.get("latitude"),
+                    "longitude": ev.get("longitude"),
                     "tags": ev.get("relevance_tags", []) or [ev.get("category", "general")],
                     "relevance_score": 0.74,
                     "starts_at": ev.get("starts_at"),
@@ -1047,11 +1120,14 @@ class EventAgent:
         rows = await fetch(
             f"""
             SELECT id, external_id, title, description, category,
-                   venue_name, address, city, latitude, longitude,
+                   venue_name, address, city, country, latitude, longitude,
                    starts_at, ends_at, url, image_url, price_range,
                    source, relevance_tags
             FROM events
             WHERE city = $1
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+              AND COALESCE(country, '') <> ''
               AND starts_at > NOW()
               AND starts_at < $2
               {cat_clause}
@@ -1079,7 +1155,14 @@ class EventAgent:
         from core.database import fetchrow as _fetchrow
 
         user = await _fetchrow(
-            "SELECT city, event_preferences, embedding FROM users WHERE id = $1",
+            """
+            SELECT COALESCE(NULLIF(s.location_city, ''), NULLIF(u.city, '')) AS city,
+                   NULLIF(s.location_country, '') AS country,
+                   u.event_preferences, u.embedding
+            FROM users u
+            LEFT JOIN ioo_user_state s ON s.user_id = u.id
+            WHERE u.id = $1
+            """,
             user_id,
         )
         if not user:
@@ -1089,6 +1172,7 @@ class EventAgent:
         if not city:
             return []
 
+        country = user.get("country") or ""
         prefs = user.get("event_preferences") or []
         user_embedding = user.get("embedding")  # stored as string '[...]'
         days_ahead = min(max(1, days_ahead), MAX_SERVE_WINDOW_DAYS)
@@ -1097,6 +1181,10 @@ class EventAgent:
         # Preference-based category filter
         pref_clause = ""
         params: List[Any] = [city, until]
+        country_clause = ""
+        if country:
+            params.append(country)
+            country_clause = f"AND country = ${len(params)}"
         if prefs:
             params.append(prefs)
             pref_clause = f"AND (relevance_tags && ${len(params)} OR category = ANY(${len(params)}))"
@@ -1112,11 +1200,15 @@ class EventAgent:
         rows = await fetch(
             f"""
             SELECT id, external_id, title, description, category,
-                   venue_name, address, city, latitude, longitude,
+                   venue_name, address, city, country, latitude, longitude,
                    starts_at, ends_at, url, image_url, price_range,
                    source, relevance_tags
             FROM events
             WHERE city = $1
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+              AND COALESCE(country, '') <> ''
+              {country_clause}
               AND starts_at > NOW()
               AND starts_at < $2
               AND embedding IS NOT NULL
@@ -1132,11 +1224,15 @@ class EventAgent:
             rows = await fetch(
                 f"""
                 SELECT id, external_id, title, description, category,
-                       venue_name, address, city, latitude, longitude,
+                       venue_name, address, city, country, latitude, longitude,
                        starts_at, ends_at, url, image_url, price_range,
                        source, relevance_tags
                 FROM events
                 WHERE city = $1
+                  AND latitude IS NOT NULL
+                  AND longitude IS NOT NULL
+                  AND COALESCE(country, '') <> ''
+                  {country_clause}
                   AND starts_at > NOW()
                   AND starts_at < $2
                   {pref_clause}

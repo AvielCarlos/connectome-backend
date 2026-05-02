@@ -341,9 +341,54 @@ async def update_user_embedding_from_context(
                     value = ", ".join(str(v) for v in value)
                 lines.append(f"{label}: {value}")
 
-        location = profile.get("location") or profile.get("city")
-        if location:
-            lines.append(f"Location: {location}")
+        # Hard location contract: vectors should carry the user's real live
+        # location, or their explicit Travel Mode location if one is set.
+        location_city = context_answers.get("location_city") or context_answers.get("city")
+        location_country = context_answers.get("location_country") or context_answers.get("country")
+        location_lat = context_answers.get("location_lat")
+        location_lng = context_answers.get("location_lng")
+        try:
+            loc_row = await fetchrow(
+                """
+                SELECT COALESCE(NULLIF(s.location_city, ''), NULLIF(u.city, '')) AS city,
+                       NULLIF(s.location_country, '') AS country,
+                       u.location_lat, u.location_lng, u.profile
+                FROM users u
+                LEFT JOIN ioo_user_state s ON s.user_id = u.id
+                WHERE u.id = $1
+                """,
+                UUID(user_id),
+            )
+            if loc_row:
+                db_profile = loc_row.get("profile") or {}
+                if isinstance(db_profile, str):
+                    try:
+                        db_profile = json.loads(db_profile)
+                    except Exception:
+                        db_profile = {}
+                travel_enabled = bool((db_profile or profile or {}).get("travel_mode_enabled"))
+                travel_city = (db_profile or profile or {}).get("travel_city") or (db_profile or profile or {}).get("travel_location_city")
+                travel_country = (db_profile or profile or {}).get("travel_country") or (db_profile or profile or {}).get("travel_location_country")
+                if travel_enabled and travel_city:
+                    location_city = travel_city
+                    location_country = travel_country or location_country
+                    lines.append("Location source: Travel Mode")
+                else:
+                    location_city = location_city or loc_row.get("city")
+                    location_country = location_country or loc_row.get("country")
+                    location_lat = location_lat if location_lat is not None else loc_row.get("location_lat")
+                    location_lng = location_lng if location_lng is not None else loc_row.get("location_lng")
+                    if location_city:
+                        lines.append("Location source: Live/real user location")
+        except Exception as loc_e:
+            logger.debug(f"user vector location lookup skipped: {loc_e}")
+
+        if location_city or location_country:
+            lines.append(f"User location city/country: {location_city or ''}, {location_country or ''}".strip())
+        elif profile.get("location") or profile.get("city"):
+            lines.append(f"Location: {profile.get('location') or profile.get('city')}")
+        if location_lat is not None and location_lng is not None:
+            lines.append(f"User location coordinates: {location_lat}, {location_lng}")
 
         embed_text = "\n".join(lines)
 

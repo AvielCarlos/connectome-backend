@@ -993,8 +993,13 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "temporal_branch": "future_event" if feed_mode == "future" else "now_action",
             "starts_at": _serialise_dt(item.get("starts_at")) if item.get("starts_at") else None,
             "city": item.get("city"),
+            "country": item.get("country"),
             "location_city": item.get("city"),
-            "location_signal": f"city:{item.get('city')}" if item.get("city") else None,
+            "location_country": item.get("country"),
+            "latitude": item.get("latitude"),
+            "longitude": item.get("longitude"),
+            "location_verified": bool(item.get("latitude") is not None and item.get("longitude") is not None and item.get("city") and item.get("country")),
+            "location_signal": f"city_country:{item.get('city')},{item.get('country')} coords:{item.get('latitude')},{item.get('longitude')}" if item.get("city") else None,
             "opportunity_kind": item.get("kind"),
             "path_progression": _path_progression_metadata(kind="user_created_opportunity" if source == "user_created_opportunity" else "real_world_action", domain=domain, current_stage="confirm_micro_node"),
             "tags": [item.get("tag") or "real_action", "diversity_seed"],
@@ -1166,14 +1171,14 @@ async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> O
         agent = EventAgent()
         city = await _user_city(user_id)
         events = await agent.get_recommended_events(user_id=str(user_id), days_ahead=14, limit=8)
-        events = [ev for ev in events if ev.get("url")]
+        events = [ev for ev in events if ev.get("url") and ev.get("latitude") is not None and ev.get("longitude") is not None and ev.get("city") and ev.get("country")]
         if not events and city:
             try:
                 await agent.sync_city(city, force=False)
             except Exception as sync_err:
                 logger.debug("Live event feed sync skipped for %s/%s: %s", str(user_id)[:8], city, sync_err)
             events = await agent.get_events_for_city(city=city, days_ahead=14, limit=8)
-            events = [ev for ev in events if ev.get("url")]
+            events = [ev for ev in events if ev.get("url") and ev.get("latitude") is not None and ev.get("longitude") is not None and ev.get("city") and ev.get("country")]
         if not events:
             return None
         event = events[0] if len(events) <= 2 else random.choice(events[: min(5, len(events))])
@@ -1187,6 +1192,11 @@ async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> O
             "url": event.get("url"),
             "button": "Open event details →",
             "venue": event.get("venue_name") or event.get("address") or event.get("city"),
+            "city": event.get("city"),
+            "country": event.get("country"),
+            "latitude": event.get("latitude"),
+            "longitude": event.get("longitude"),
+            "map_url": f"https://www.google.com/maps/search/?api=1&query={event.get('latitude')},{event.get('longitude')}" if event.get("latitude") is not None and event.get("longitude") is not None else None,
             "starts_at": event.get("starts_at"),
             "price": event.get("price_range"),
             "steps": ["Open the event page.", "Check date, location, cost, and transport.", "Book, invite someone, or save it for later."],

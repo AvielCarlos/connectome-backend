@@ -763,3 +763,7 @@ CREATE INDEX IF NOT EXISTS idx_ioo_nodes_scale_depth ON ioo_nodes(node_scale, ma
 CREATE INDEX IF NOT EXISTS idx_ioo_nodes_macro_micro_score ON ioo_nodes(macro_micro_score);
 CREATE INDEX IF NOT EXISTS idx_ioo_nodes_macro_micro_grade ON ioo_nodes(macro_micro_grade);
 CREATE INDEX IF NOT EXISTS idx_ioo_nodes_primary_macro_domain ON ioo_nodes(primary_macro_domain);
+
+
+-- Event geo hardening: verified country for city/country/coordinate matching
+ALTER TABLE events ADD COLUMN IF NOT EXISTS country VARCHAR(100);
