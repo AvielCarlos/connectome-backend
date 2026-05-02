@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 GEO_API_URL = "http://ip-api.com/json/{ip}?fields=status,city,regionName,country,countryCode,timezone,lat,lon"
 REVERSE_GEO_URL = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat={lat}&lon={lon}&zoom=10&addressdetails=1"
+FORWARD_GEO_URL = "https://nominatim.openstreetmap.org/search?format=jsonv2&q={query}&limit=1&addressdetails=1"
 CACHE_TTL_SECONDS = 86_400  # 24 hours
 
 
@@ -147,6 +148,70 @@ async def reverse_geocode_lat_lng(lat: float, lon: float) -> Optional[Dict[str, 
             return result
     except Exception as e:
         logger.debug(f"Reverse geo lookup failed for {lat_f},{lon_f}: {e}")
+        return None
+
+
+async def geocode_location_query(query: str) -> Optional[Dict[str, Any]]:
+    """Resolve an event venue/address/city query into city/country + coordinates.
+
+    Used conservatively for public event metadata. Cached by normalized query so
+    event syncs do not hammer the public geocoder. Returns None on ambiguity or
+    failure rather than fabricating a location.
+    """
+    text = " ".join(str(query or "").split())[:300]
+    if not text:
+        return None
+
+    cache_key = "geo:forward:" + text.lower()
+    try:
+        from core.redis_client import get_redis
+        r = await get_redis()
+        cached = await r.get(cache_key)
+        if cached:
+            return json.loads(cached)
+    except Exception:
+        pass
+
+    try:
+        import urllib.parse
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.get(
+                FORWARD_GEO_URL.format(query=urllib.parse.quote(text)),
+                headers={"User-Agent": "ConnectomeAura/1.0 event-location-verify"},
+            )
+            resp.raise_for_status()
+            rows = resp.json()
+            if not rows:
+                return None
+            data = rows[0]
+            address = data.get("address") or {}
+            lat = float(data.get("lat"))
+            lon = float(data.get("lon"))
+            city = (
+                address.get("city")
+                or address.get("town")
+                or address.get("village")
+                or address.get("municipality")
+                or address.get("county")
+                or ""
+            )
+            result = {
+                "city": city,
+                "region": address.get("state") or address.get("region") or "",
+                "country": address.get("country") or "",
+                "country_code": (address.get("country_code") or "").upper(),
+                "lat": lat,
+                "lon": lon,
+            }
+            try:
+                from core.redis_client import get_redis
+                r = await get_redis()
+                await r.setex(cache_key, CACHE_TTL_SECONDS, json.dumps(result))
+            except Exception:
+                pass
+            return result
+    except Exception as e:
+        logger.debug(f"Forward geo lookup failed for {text}: {e}")
         return None
 
 

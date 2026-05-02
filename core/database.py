@@ -1375,6 +1375,7 @@ async def run_migrations():
                 venue_name TEXT,
                 address TEXT,
                 city VARCHAR(100),
+                country VARCHAR(100),
                 latitude FLOAT,
                 longitude FLOAT,
                 starts_at TIMESTAMPTZ,
@@ -1388,6 +1389,9 @@ async def run_migrations():
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 updated_at TIMESTAMPTZ DEFAULT NOW()
             )
+        """)
+        await conn.execute("""
+            ALTER TABLE events ADD COLUMN IF NOT EXISTS country VARCHAR(100)
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS events_city_idx

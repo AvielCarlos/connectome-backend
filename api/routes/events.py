@@ -15,6 +15,7 @@ Conveyor belt model:
   • starts_at > NOW() always — never return past events
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -42,6 +43,7 @@ class EventCard(BaseModel):
     venue_name: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
+    country: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     starts_at: Optional[datetime] = None
@@ -73,6 +75,7 @@ class SyncResponse(BaseModel):
 
 class LocationUpdate(BaseModel):
     city: str = Field(..., min_length=1, max_length=100, description="City name e.g. 'Vancouver'")
+    country: Optional[str] = Field(None, min_length=1, max_length=100)
     location_lat: Optional[float] = Field(None, ge=-90, le=90)
     location_lng: Optional[float] = Field(None, ge=-180, le=180)
     event_preferences: Optional[List[str]] = Field(
@@ -131,7 +134,7 @@ async def list_events(
     return EventListResponse(
         events=[EventCard(**ev) for ev in events],
         count=len(events),
-        city=city,
+        city=f"{city}, {country}" if country else city,
         days_ahead=days_ahead,
         window_start=now,
         window_end=until,
@@ -167,15 +170,24 @@ async def recommended_events(
     until = now + timedelta(days=days_ahead)
 
     user = await fetchrow(
-        "SELECT city FROM users WHERE id = $1", UUID(user_id)
+        """
+        SELECT COALESCE(NULLIF(s.location_city, ''), NULLIF(u.city, '')) AS city,
+               NULLIF(s.location_country, '') AS country,
+               u.location_lat, u.location_lng
+        FROM users u
+        LEFT JOIN ioo_user_state s ON s.user_id = u.id
+        WHERE u.id = $1
+        """,
+        UUID(user_id),
     )
-    if not user or not user.get("city"):
+    if not user or not user.get("city") or not user.get("country"):
         raise HTTPException(
             status_code=400,
-            detail="Set your city first via POST /api/users/location",
+            detail="Set your city/country first via live location or Travel Mode",
         )
 
     city = user["city"]
+    country = user.get("country")
 
     try:
         agent = EventAgent()
@@ -191,7 +203,7 @@ async def recommended_events(
     return EventListResponse(
         events=[EventCard(**ev) for ev in events],
         count=len(events),
-        city=city,
+        city=f"{city}, {country}" if country else city,
         days_ahead=days_ahead,
         window_start=now,
         window_end=until,
@@ -261,6 +273,15 @@ async def update_user_location(
         "event_preferences": ["wellness", "tech", "music"]
       }
     """
+    country = (body.country or "").strip()
+    if (not country) and body.location_lat is not None and body.location_lng is not None:
+        try:
+            from core.geo import reverse_geocode_lat_lng
+            geo = await reverse_geocode_lat_lng(body.location_lat, body.location_lng)
+            country = (geo or {}).get("country") or ""
+        except Exception:
+            country = ""
+
     try:
         await execute(
             """
@@ -277,6 +298,38 @@ async def update_user_location(
             body.event_preferences or [],
             UUID(user_id),
         )
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, location_city, location_country, state_json, last_updated)
+            VALUES ($1, $2, $3, $4::jsonb, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                location_city = EXCLUDED.location_city,
+                location_country = COALESCE(EXCLUDED.location_country, ioo_user_state.location_country),
+                state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || EXCLUDED.state_json,
+                last_updated = NOW()
+            """,
+            str(user_id),
+            body.city,
+            country or None,
+            json.dumps({
+                "location_lat": body.location_lat,
+                "location_lng": body.location_lng,
+                "geo_source": "manual_or_travel_location",
+            }),
+        )
+        try:
+            from ora.user_model import update_user_embedding_from_context
+            location_context = {
+                "location_city": body.city,
+                "location_country": country or None,
+                "location_lat": body.location_lat,
+                "location_lng": body.location_lng,
+                "location_source": "manual_or_travel_location",
+            }
+            await update_user_embedding_from_context(str(user_id), location_context, "now")
+            await update_user_embedding_from_context(str(user_id), location_context, "later")
+        except Exception as vec_e:
+            logger.debug(f"Manual/travel location user vector refresh skipped for {user_id[:8]}: {vec_e}")
     except Exception as e:
         logger.error(f"POST /api/users/location error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Could not update location")
@@ -307,6 +360,7 @@ async def update_user_location(
     return {
         "status": "updated",
         "city": body.city,
+        "country": country or None,
         "location_lat": body.location_lat,
         "location_lng": body.location_lng,
         "event_preferences": body.event_preferences or [],
@@ -387,6 +441,19 @@ async def update_user_live_location(
             await get_graph_agent().build_user_ioo_vector(str(user_id))
         except Exception as e:
             logger.debug(f"Live location IOO vector refresh skipped for {user_id[:8]}: {e}")
+        try:
+            from ora.user_model import update_user_embedding_from_context
+            location_context = {
+                "location_city": city,
+                "location_country": country or None,
+                "location_lat": body.location_lat,
+                "location_lng": body.location_lng,
+                "location_source": "browser_gps",
+            }
+            await update_user_embedding_from_context(str(user_id), location_context, "now")
+            await update_user_embedding_from_context(str(user_id), location_context, "later")
+        except Exception as e:
+            logger.debug(f"Live location user vector refresh skipped for {user_id[:8]}: {e}")
     except Exception as e:
         logger.error(f"POST /api/users/location/live error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Could not update live location")
