@@ -278,11 +278,11 @@ async def explain_screen(
 async def get_aura_self(
     user_id: str = Depends(get_current_user_id),
 ):
-    """Return Ora's full self-description — identity, stats, latest reflection."""
+    """Return Aura's full self-description — identity, stats, latest reflection."""
     brain = get_brain()
     consciousness = getattr(brain, "consciousness", None)
     if not consciousness:
-        raise HTTPException(status_code=503, detail="OraConsciousness not available")
+        raise HTTPException(status_code=503, detail="Aura consciousness not available")
 
     try:
         state = await consciousness.get_self_state()
@@ -312,17 +312,17 @@ async def get_aura_self(
 async def get_opening_message(
     user_id: str = Depends(get_current_user_id),
 ):
-    """Generate Ora's opening message when the user opens OraScreen."""
+    """Generate Aura's opening message when the user opens Aura chat."""
     brain = get_brain()
     consciousness = getattr(brain, "consciousness", None)
     if not consciousness:
-        return {"message": "Hi. I'm Ora — the brain of Connectome, the AI OS for human fulfilment. I can help you navigate your IOO graph toward what matters next."}
+        return {"message": "Hi. I'm Aura — the brain of Connectome, the AI OS for human fulfilment. I can help you navigate your IOO graph toward what matters next."}
 
     try:
         message = await consciousness.opening_message(user_id)
     except Exception as e:
         logger.warning(f"Opening message error: {e}")
-        message = "Hi. I'm Ora — the brain of Connectome, powered by the Ascension Technologies DAO. I can help you navigate your IOO graph toward your deepest fulfilment."
+        message = "Hi. I'm Aura — the brain of Connectome, powered by the Ascension Technologies DAO. I can help you navigate your IOO graph toward your deepest fulfilment."
 
     return {"message": message}
 
