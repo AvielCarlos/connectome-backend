@@ -325,6 +325,22 @@ async def update_user_embedding_from_context(
             prefix = "Active immediate goals" if vector_mode == "now" else "Future/later path goals"
             lines.append(f"{prefix}: {', '.join(active_goals)}")
 
+        present_state_fields = [
+            ("active_goal_title", "Goal Aura is optimising for now"),
+            ("goal_current_stage", "Current stage toward that goal"),
+            ("goal_biggest_gap", "Biggest present-state gap/blocker"),
+            ("current_constraint", "Current constraint"),
+            ("social_bandwidth", "Social bandwidth"),
+            ("mobility_now", "Mobility right now"),
+            ("desired_next_step_style", "Desired next-step style"),
+        ]
+        for key, label in present_state_fields:
+            value = context_answers.get(key) or profile.get(key)
+            if value:
+                if isinstance(value, list):
+                    value = ", ".join(str(v) for v in value)
+                lines.append(f"{label}: {value}")
+
         location = profile.get("location") or profile.get("city")
         if location:
             lines.append(f"Location: {location}")
