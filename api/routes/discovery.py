@@ -582,6 +582,18 @@ async def submit_discovery_answer(
         f"q={body.question_id} answer_len={len(answer_str)}"
     )
 
+    # Re-embed user vector when a capability/context answer comes in
+    # so the IOO/vector search immediately reflects the user's current state
+    CAPABILITY_FIELDS = {
+        "today_capacity", "current_energy_state", "available_resources_today",
+        "energy_state", "capacity", "resources",
+    }
+    if body.profile_field in CAPABILITY_FIELDS or body.question_id.startswith("feed_capability"):
+        import asyncio
+        from ora.user_model import update_user_embedding_from_context
+        context = {body.profile_field: body.answer}
+        asyncio.ensure_future(update_user_embedding_from_context(user_id, context))
+
     return {"ok": True, "profile_updated": True}
 
 

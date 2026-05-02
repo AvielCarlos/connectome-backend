@@ -247,6 +247,105 @@ async def update_user_embedding_from_cards(user_id: str, openai_client=None) -> 
         logger.debug(f"update_user_embedding_from_cards failed: {e}")
 
 
+async def update_user_embedding_from_context(
+    user_id: str,
+    context_answers: dict,
+) -> None:
+    """
+    Re-embed the user vector from capability/context answers (energy, time, resources,
+    interests, goals) so the IOO/vector search immediately reflects the user's current state.
+
+    Called fire-and-forget after capability intake answers are saved.
+    context_answers = e.g. {
+        'today_capacity': '15–30 minutes',
+        'current_energy_state': 'High / ready to move',
+        'available_resources_today': ['Just my phone', 'Home/quiet space'],
+        'interests': [...],
+        'active_goals': [...],
+    }
+    """
+    try:
+        from core.config import settings
+        api_key = getattr(settings, "OPENAI_API_KEY", "")
+        if not api_key:
+            return
+
+        # Load current user model for existing context
+        model = await load_user_model(user_id)
+        profile = model.profile if model else {}
+
+        # Build a rich text description of the user's current state
+        lines = ["User current state for personalised feed recommendations:"]
+
+        capacity = context_answers.get("today_capacity") or profile.get("today_capacity")
+        if capacity:
+            lines.append(f"Available time today: {capacity}")
+
+        energy = context_answers.get("current_energy_state") or profile.get("current_energy_state")
+        if energy:
+            lines.append(f"Energy level: {energy}")
+
+        resources = context_answers.get("available_resources_today") or profile.get("available_resources_today")
+        if resources:
+            if isinstance(resources, list):
+                lines.append(f"Available resources: {', '.join(resources)}")
+            else:
+                lines.append(f"Available resources: {resources}")
+
+        interests = context_answers.get("interests") or profile.get("interests", [])
+        if interests:
+            lines.append(f"Interests: {', '.join(interests[:10])}")
+
+        value_scores = profile.get("value_scores") or profile.get("value_compass") or {}
+        if value_scores:
+            top = sorted(value_scores.items(), key=lambda x: -x[1])[:4]
+            lines.append(f"Top values: {', '.join(f'{k} ({v}/10)' for k, v in top)}")
+
+        active_goals = context_answers.get("active_goals") or []
+        if model and model.goals:
+            active_goals = [g["title"] for g in model.goals if g.get("status") == "active"][:5]
+        if active_goals:
+            lines.append(f"Active goals: {', '.join(active_goals)}")
+
+        location = profile.get("location") or profile.get("city")
+        if location:
+            lines.append(f"Location: {location}")
+
+        embed_text = "\n".join(lines)
+
+        import httpx
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                "https://api.openai.com/v1/embeddings",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": "text-embedding-3-small", "input": embed_text[:8000]},
+            )
+            r.raise_for_status()
+            embedding = r.json()["data"][0]["embedding"]
+
+        # Blend with existing embedding (80% context, 20% history) for continuity
+        if model and model.embedding and len(model.embedding) == 1536:
+            arr = np.array(embedding, dtype=np.float32)
+            existing = np.array(model.embedding, dtype=np.float32)
+            blended = 0.8 * arr + 0.2 * existing
+            norm = np.linalg.norm(blended)
+            if norm > 0:
+                blended = blended / norm
+            embedding = blended.tolist()
+
+        embedding_str = "[" + ",".join(f"{v:.6f}" for v in embedding) + "]"
+        await execute(
+            "UPDATE users SET embedding = $1::vector WHERE id = $2",
+            embedding_str,
+            UUID(user_id),
+        )
+        await redis_delete(f"user_model:{user_id}")
+        logger.info(f"update_user_embedding_from_context: user={user_id[:8]} re-embedded from context answers")
+
+    except Exception as e:
+        logger.debug(f"update_user_embedding_from_context failed: {e}")
+
+
 async def update_domain_weights(
     user_id: str,
     domain: str,
