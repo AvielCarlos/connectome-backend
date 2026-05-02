@@ -129,6 +129,55 @@ def _screen_spec_embedding_text(spec: dict, agent_type: str = "", domain: str | 
         if part
     )
 
+
+def _node_temporal_branch(node: dict) -> str:
+    """Hard-code Now vs Later semantics for IOO nodes.
+
+    now_action = immediately executable with current-state resources.
+    future_opportunity = scheduled/bookable/plannable opportunity: events, classes,
+    bookings, programs, reservations, trips, tickets, RSVPs, etc.
+    """
+    text = " ".join(
+        str(node.get(key) or "")
+        for key in (
+            "title", "description", "type", "step_type", "goal_category",
+            "physical_context", "best_time", "requires_location",
+        )
+    ).lower()
+    tags = node.get("tags") or []
+    if isinstance(tags, str):
+        text += " " + tags.lower()
+    elif isinstance(tags, list):
+        text += " " + " ".join(str(t).lower() for t in tags)
+    future_markers = (
+        "event", "events", "workshop", "workshops", "class", "classes",
+        "program", "retreat", "festival", "concert", "conference", "ticket",
+        "tickets", "rsvp", "register", "registration", "booking", "book ",
+        "book/", "reservation", "reserve", "calendar", "schedule",
+        "appointment", "availability", "trip", "travel", "flight", "hotel",
+        "this week", "this weekend", "next week", "next month", "tomorrow",
+    )
+    if any(marker in text for marker in future_markers):
+        return "future_opportunity"
+    return "now_action"
+
+
+def _node_embedding_text_with_temporal_contract(node: dict) -> str:
+    temporal = _node_temporal_branch(node)
+    if temporal == "future_opportunity":
+        contract = (
+            "Temporal branch: LATER/FUTURE ONLY. This node is a scheduled, "
+            "bookable, reservable, RSVP/register, event/class/program/trip style "
+            "opportunity. It must not appear in Now."
+        )
+    else:
+        contract = (
+            "Temporal branch: NOW ONLY. This node is immediately executable with "
+            "current state/time/energy/resources, not a scheduled event, class, "
+            "booking, RSVP, reservation, or future opportunity."
+        )
+    return _node_embedding_text(node) + "\n" + contract
+
 class IOOGraphAgent:
     """Traverses and learns the IOO achievement graph."""
 
@@ -243,7 +292,7 @@ class IOOGraphAgent:
                 SELECT DISTINCT ON (n.id)
                     n.id, n.type, n.title, n.description, n.tags, n.domain,
                     n.requires_finances, n.requires_fitness_level, n.requires_skills,
-                    n.requires_location, n.requires_time_hours,
+                    n.requires_location, n.requires_time_hours, n.temporal_branch,
                     n.attempt_count, n.success_count, n.avg_completion_hours,
                     COALESCE(
                         (SELECT MAX(e.weight) FROM ioo_edges e
@@ -281,7 +330,7 @@ class IOOGraphAgent:
                 SELECT
                     n.id, n.type, n.title, n.description, n.tags, n.domain,
                     n.requires_finances, n.requires_fitness_level, n.requires_skills,
-                    n.requires_location, n.requires_time_hours,
+                    n.requires_location, n.requires_time_hours, n.temporal_branch,
                     n.attempt_count, n.success_count, n.avg_completion_hours,
                     0.5 AS edge_weight,
                     CASE WHEN n.attempt_count > 0
@@ -317,6 +366,7 @@ class IOOGraphAgent:
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS step_type TEXT DEFAULT 'hybrid'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS physical_context TEXT")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS best_time TEXT")
+        await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS temporal_branch TEXT DEFAULT 'now_action'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS requirements JSONB DEFAULT '{}'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS prerequisite_nodes UUID[] DEFAULT '{}'")
         await execute("ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS estimated_duration_days INTEGER")
@@ -386,7 +436,7 @@ class IOOGraphAgent:
         await self._ensure_vector_schema()
         rows = await fetch(
             """
-            SELECT id, type, title, description, tags, domain, goal_category, step_type, physical_context, best_time
+            SELECT id, type, title, description, tags, domain, goal_category, step_type, physical_context, best_time, requires_location, temporal_branch
             FROM ioo_nodes
             WHERE is_active = TRUE AND embedding IS NULL
             ORDER BY created_at ASC
@@ -395,13 +445,15 @@ class IOOGraphAgent:
         embedded = 0
         for row in rows:
             node = dict(row)
-            emb = await self._embed_text(_node_embedding_text(node))
+            temporal_branch = _node_temporal_branch(node)
+            emb = await self._embed_text(_node_embedding_text_with_temporal_contract(node))
             if not emb:
                 continue
             await execute(
-                "UPDATE ioo_nodes SET embedding = $2::vector, updated_at = NOW() WHERE id = $1",
+                "UPDATE ioo_nodes SET embedding = $2::vector, temporal_branch = $3, updated_at = NOW() WHERE id = $1",
                 str(node["id"]),
                 _embedding_to_pgvector(emb),
+                temporal_branch,
             )
             embedded += 1
         return embedded
@@ -455,6 +507,7 @@ class IOOGraphAgent:
         goal_context: str,
         limit: int = 10,
         preference: str = "mixed",
+        feed_mode: str = "now",
     ) -> list:
         """
         Vector similarity recommendation using the user's goal context.
@@ -473,7 +526,14 @@ class IOOGraphAgent:
         user_country = user_state["location_country"] if user_state else None
         if user_city or user_country:
             location_context = f" near city: {user_city or ''}, country: {user_country or ''}"
-        goal_emb = await self._embed_text((goal_context or "personal growth real-world experience") + location_context)
+        feed_mode = "future" if feed_mode in ("future", "later") else "now"
+        if feed_mode == "future":
+            temporal_sql = "AND n.temporal_branch = 'future_opportunity'"
+            temporal_context = " FUTURE/LATER vector: only scheduled/bookable opportunities, events, classes, programs, reservations, trips, tickets, RSVPs, or other time-bound opportunities. Never immediate now actions."
+        else:
+            temporal_sql = "AND COALESCE(n.temporal_branch, 'now_action') = 'now_action'"
+            temporal_context = " NOW vector: only immediate current-state actions. Never events/classes/bookings/reservations/tickets/RSVPs."
+        goal_emb = await self._embed_text((goal_context or "personal growth real-world experience") + location_context + temporal_context)
         query_vec = _embedding_to_pgvector(goal_emb)
 
         completed_rows = await fetch(
@@ -497,7 +557,7 @@ class IOOGraphAgent:
             f"""
             SELECT
                 n.id, n.type, n.title, n.description, n.tags, n.domain, n.goal_category,
-                n.step_type, n.physical_context, n.best_time,
+                n.step_type, n.physical_context, n.best_time, n.temporal_branch,
                 n.requires_finances, n.requires_fitness_level, n.requires_skills,
                 n.requires_location, n.requires_time_hours,
                 n.attempt_count, n.success_count, n.avg_completion_hours,
@@ -519,6 +579,7 @@ class IOOGraphAgent:
                   WHERE user_id = $1 AND status IN ('completed', 'abandoned')
               )
               {capability_sql}
+              {temporal_sql}
             ORDER BY (
                 (1 - (n.embedding <=> $2::vector)) * 0.60 +
                 COALESCE((
@@ -925,11 +986,13 @@ class IOOGraphAgent:
             raw = row["embedding"]
             if not raw:
                 node = dict(row)
-                emb = await self._embed_text(_node_embedding_text(node))
+                temporal_branch = _node_temporal_branch(node)
+                emb = await self._embed_text(_node_embedding_text_with_temporal_contract(node))
                 await execute(
-                    "UPDATE ioo_nodes SET embedding = $2::vector, updated_at = NOW() WHERE id = $1",
+                    "UPDATE ioo_nodes SET embedding = $2::vector, temporal_branch = $3, updated_at = NOW() WHERE id = $1",
                     str(row["id"]),
                     _embedding_to_pgvector(emb),
+                    temporal_branch,
                 )
             else:
                 emb = _parse_pgvector(raw)

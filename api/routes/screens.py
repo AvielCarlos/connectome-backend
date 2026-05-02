@@ -202,6 +202,7 @@ def _ioo_node_to_screen_dict(node: dict) -> dict:
             "source": "ioo_graph",
             "node_id": str(node["id"]),
             "node_type": node.get("type"),
+            "temporal_branch": node.get("temporal_branch") or ("future_opportunity" if _screen_spec_is_future_opportunity({"title": node.get("title"), "body": node.get("description"), "metadata": {"tags": node.get("tags") or []}}) else "now_action"),
             "screen_pattern": pattern,
             "pattern_version": "adaptive_v1",
             "path_progression": _path_progression_metadata(
@@ -1648,6 +1649,7 @@ async def _try_ioo_card(
                         goal_context="life improvement discovery exploration",
                         limit=10,
                         preference="mixed",
+                        feed_mode=feed_mode,
                     )
                 except Exception:
                     nodes = await _ioo.recommend_next_nodes(user_id=str(user_id), goal_id=None, limit=8)
@@ -1658,20 +1660,25 @@ async def _try_ioo_card(
         if not nodes:
             return None
 
-        # Now feed must be immediate executable actions. IOO nodes can include
-        # real future events/classes/bookings, so filter them before selecting.
-        if feed_mode != "future":
-            immediate_nodes = []
-            for candidate in nodes:
-                candidate_spec = _ioo_node_to_screen_dict(candidate)
-                if _screen_spec_is_future_opportunity(candidate_spec):
+        # Hard temporal split: Now = immediate executable nodes; Future/Later =
+        # scheduled/bookable/plannable opportunities only.
+        filtered_nodes = []
+        for candidate in nodes:
+            candidate_spec = _ioo_node_to_screen_dict(candidate)
+            temporal_branch = str((candidate_spec.get("metadata") or {}).get("temporal_branch") or "").lower()
+            is_future = temporal_branch in {"future", "future_event", "future_opportunity", "scheduled_opportunity"} or _screen_spec_is_future_opportunity(candidate_spec)
+            if feed_mode == "future":
+                if not is_future:
+                    continue
+            else:
+                if is_future:
                     continue
                 if not travel_mode and _screen_spec_wrong_location(candidate_spec, preferred_city):
                     continue
-                immediate_nodes.append(candidate)
-            if not immediate_nodes:
-                return None
-            nodes = immediate_nodes
+            filtered_nodes.append(candidate)
+        if not filtered_nodes:
+            return None
+        nodes = filtered_nodes
 
         # Semi-random selection with slight weighting toward higher-difficulty nodes
         # (easier nodes are boring; discovery should stretch people slightly)
@@ -1776,10 +1783,13 @@ async def get_next_screen(
     # Now feed: IOO neural graph is the primary intelligence layer.
     # Future feed: live events / real-world actions are primary.
     if feed_mode == "future":
-        # Future feed — prioritise real-world events/actions
+        # Future/Later feed — scheduled/bookable/plannable opportunities only
         real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, feed_mode)
         if real_action is not None:
             return real_action
+        ioo_future = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode, preferred_city, travel_mode)
+        if ioo_future is not None:
+            return ioo_future
     else:
         # Now feed — IOO neural graph first, no future events
         if not body.domain or True:  # always try IOO for Now feed
@@ -1920,10 +1930,14 @@ async def get_screen_batch(
             # Now feed  — IOO neural graph is primary; no future events ever
             # Future feed — real-world events/actions are primary
             if feed_mode == "future":
-                # Future: prioritise live events, fall through to brain if none
+                # Future/Later: prioritise scheduled/bookable opportunities only
                 real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "future")
                 if real_action is not None:
                     results.append(real_action)
+                    continue
+                ioo_future = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode, preferred_city, travel_mode)
+                if ioo_future is not None:
+                    results.append(ioo_future)
                     continue
             else:
                 # Now feed: IOO neural graph first, 20% variety, always falls through to brain

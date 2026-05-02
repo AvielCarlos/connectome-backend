@@ -279,6 +279,10 @@ async def update_user_embedding_from_context(
         profile = model.profile if model else {}
 
         lines = [f"User {vector_mode.upper()} vector for personalised feed recommendations:"]
+        if vector_mode == "later":
+            lines.append("Hard temporal contract: Later/Future vector is only for scheduled or bookable opportunities — events, classes, programs, trips, appointments, reservations, tickets, RSVPs, registration, and future planning. Exclude generic actions that can be done right now.")
+        else:
+            lines.append("Hard temporal contract: Now vector is only for immediate current-state actions that can begin or complete right now/today. Exclude scheduled events, bookings, classes, trips, reservations, tickets, RSVPs, and future opportunities.")
 
         prompt_key = "later_vector_prompt" if vector_mode == "later" else "now_vector_prompt"
         manual_prompt = context_answers.get(prompt_key) or profile.get(prompt_key)
