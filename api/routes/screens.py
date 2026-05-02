@@ -211,6 +211,8 @@ def _ioo_node_to_screen_dict(node: dict) -> dict:
                 source_node_id=str(node["id"]),
             ),
             "domain": node.get("domain"),
+            "city": node.get("city") or node.get("location_city") or node.get("location"),
+            "location_city": node.get("city") or node.get("location_city") or node.get("location"),
             "tags": node.get("tags") or [],
         },
         "is_limited": False,
@@ -1266,6 +1268,34 @@ def _filter_location_eligible(candidates: list[dict[str, Any]], preferred_city: 
     return sorted(candidates, key=lambda item: (_city_rank(item, preferred_city), item.get("key", "")))
 
 
+def _filter_location_local_only(candidates: list[dict[str, Any]], preferred_city: Optional[str]) -> list[dict[str, Any]]:
+    """When the user has a known city, Now feed must not show other cities.
+
+    Generic/locationless immediate cards remain eligible; explicitly different-city
+    cards are only allowed in Future/Travel Mode.
+    """
+    if not preferred_city:
+        return candidates
+    return [item for item in candidates if _city_rank(item, preferred_city) < 2]
+
+
+def _screen_spec_wrong_location(spec: dict[str, Any], preferred_city: Optional[str]) -> bool:
+    if not preferred_city:
+        return False
+    metadata = spec.get("metadata") or {}
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except Exception:
+            metadata = {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+    city = metadata.get("city") or metadata.get("location_city") or metadata.get("venue_city")
+    if not city:
+        return False
+    return _city_rank({"city": str(city)}, preferred_city) == 2
+
+
 def _is_future_opportunity(item: dict[str, Any]) -> bool:
     """Classify scheduled/time-bound opportunities for the Future feed branch."""
     if item.get("starts_at"):
@@ -1391,9 +1421,11 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
     candidates = _filter_temporal_branch(candidates, feed_mode)
+    if feed_mode != "future" and preferred_city and not travel_mode:
+        candidates = _filter_location_local_only(candidates, preferred_city)
     if not candidates:
         return None
-    # Sort by city relevance — never hard-block, app works globally
+    # Sort by city relevance — Future/Travel can broaden scope; Now is local/generic only
     if preferred_city:
         candidates = _filter_location_eligible(candidates, preferred_city)
     start = int(digest[:8], 16) % len(candidates)
@@ -1589,6 +1621,8 @@ async def _try_ioo_card(
     tier: str,
     daily_limit: int,
     feed_mode: str = "now",
+    preferred_city: Optional[str] = None,
+    travel_mode: bool = False,
 ) -> Optional[ScreenResponse]:
     """
     Attempt to build one IOO graph-sourced card.
@@ -1630,8 +1664,11 @@ async def _try_ioo_card(
             immediate_nodes = []
             for candidate in nodes:
                 candidate_spec = _ioo_node_to_screen_dict(candidate)
-                if not _screen_spec_is_future_opportunity(candidate_spec):
-                    immediate_nodes.append(candidate)
+                if _screen_spec_is_future_opportunity(candidate_spec):
+                    continue
+                if not travel_mode and _screen_spec_wrong_location(candidate_spec, preferred_city):
+                    continue
+                immediate_nodes.append(candidate)
             if not immediate_nodes:
                 return None
             nodes = immediate_nodes
@@ -1746,7 +1783,7 @@ async def get_next_screen(
     else:
         # Now feed — IOO neural graph first, no future events
         if not body.domain or True:  # always try IOO for Now feed
-            ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode)
+            ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode, preferred_city, travel_mode)
             if ioo_response is not None:
                 return ioo_response
         # Only use real-world cards for Now feed if they are strictly immediate actions
@@ -1771,8 +1808,11 @@ async def get_next_screen(
         logger.error(f"Brain error for user {user_id[:8]}, using static fallback: {e}", exc_info=True)
         return await _static_fallback_card(user_id, tier, daily_limit, f"brain_exception:{type(e).__name__}")
 
-    if feed_mode != "future" and _screen_spec_is_future_opportunity(spec_dict):
-        logger.info("Now feed blocked future/scheduled screen for user %s; using immediate fallback", user_id[:8])
+    if feed_mode != "future" and (
+        _screen_spec_is_future_opportunity(spec_dict)
+        or (not travel_mode and _screen_spec_wrong_location(spec_dict, preferred_city))
+    ):
+        logger.info("Now feed blocked future/scheduled/nonlocal screen for user %s; using immediate fallback", user_id[:8])
         immediate = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, "now")
         return immediate or await _static_fallback_card(user_id, tier, daily_limit, "now_future_event_blocked")
 
@@ -1887,7 +1927,7 @@ async def get_screen_batch(
                     continue
             else:
                 # Now feed: IOO neural graph first, 20% variety, always falls through to brain
-                ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode)
+                ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode, preferred_city, travel_mode)
                 if ioo_resp is not None:
                     results.append(ioo_resp)
                     continue
@@ -1906,8 +1946,11 @@ async def get_screen_batch(
                 geo_hints=batch_geo_hints,
                 feed_mode=feed_mode,
             )
-            if feed_mode != "future" and _screen_spec_is_future_opportunity(spec_dict):
-                logger.info("Now batch blocked future/scheduled screen for user %s; using immediate fallback", user_id[:8])
+            if feed_mode != "future" and (
+                _screen_spec_is_future_opportunity(spec_dict)
+                or (not travel_mode and _screen_spec_wrong_location(spec_dict, preferred_city))
+            ):
+                logger.info("Now batch blocked future/scheduled/nonlocal screen for user %s; using immediate fallback", user_id[:8])
                 immediate = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "now")
                 results.append(immediate or await _static_fallback_card(user_id, tier, daily_limit, "now_batch_future_event_blocked"))
                 continue
