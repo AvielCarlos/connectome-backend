@@ -220,7 +220,11 @@ async def update_profile(
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
 
-    profile = dict(row["profile"]) if row["profile"] else {}
+    raw_profile = row["profile"]
+    if isinstance(raw_profile, str):
+        profile = json.loads(raw_profile) if raw_profile else {}
+    else:
+        profile = dict(raw_profile) if raw_profile else {}
 
     if body.display_name is not None:
         profile["display_name"] = body.display_name
@@ -306,7 +310,7 @@ async def update_profile(
         email=updated["email"],
         subscription_tier=updated["subscription_tier"],
         fulfilment_score=updated["fulfilment_score"] or 0.0,
-        profile=dict(updated["profile"]) if updated["profile"] else {},
+        profile=json.loads(updated["profile"]) if isinstance(updated["profile"], str) and updated["profile"] else (dict(updated["profile"]) if updated["profile"] else {}),
         created_at=updated["created_at"],
         last_active=updated["last_active"],
     )
