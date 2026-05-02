@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -34,6 +34,18 @@ class ExecuteIOORequest(BaseModel):
 class CompleteExecutionRequest(BaseModel):
     completion_note: Optional[str] = None
     evidence: Optional[dict] = None
+
+
+class ModulateSubroutineRequest(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    execution_state: Optional[str] = Field(
+        default=None,
+        pattern="^(ready|active|blocked|paused|completed|archived)$",
+    )
+    temporal_mode: Optional[str] = Field(default=None, pattern="^(now|later|future)$")
+    cadence: Optional[str] = None
+    state_patch: Optional[dict[str, Any]] = None
 
 
 def _to_plain(value):
@@ -116,6 +128,115 @@ def _xp_reward_from_protocol(protocol: dict) -> int:
     return 100
 
 
+def _subroutine_type_for_node(node: dict) -> str:
+    """Infer the reusable execution loop type represented by a node."""
+    text = " ".join(
+        str(node.get(key) or "")
+        for key in ("title", "description", "domain", "goal_category", "tags", "step_type")
+    ).lower()
+    if any(token in text for token in ("sleep", "recover", "breath", "nervous", "meditat")):
+        return "regulation"
+    if any(token in text for token in ("learn", "course", "read", "research", "study")):
+        return "learning"
+    if any(token in text for token in ("build", "ship", "code", "write", "create", "launch")):
+        return "creation"
+    if any(token in text for token in ("meet", "friend", "community", "call", "message", "network")):
+        return "social"
+    if any(token in text for token in ("workout", "walk", "run", "body", "nutrition", "food")):
+        return "vitality"
+    return "execution"
+
+
+async def _upsert_path_subroutine(user_id: str, node: dict, intent: str, protocol: dict) -> dict:
+    """Create/update the stable subroutine that an execution run instantiates.
+
+    This deliberately merges subroutines with execution: the subroutine is the
+    reusable loop; execution_runs are concrete attempts of that loop.
+    """
+    node_id = str(node["id"])
+    temporal_mode = "later" if intent == "do_later" else "now"
+    routine_type = _subroutine_type_for_node(node)
+    state_patch = {
+        "source": "ioo_execute",
+        "node_title": node.get("title"),
+        "node_domain": node.get("domain"),
+        "last_intent": intent,
+        "execution_plan_preview": (protocol.get("execution_plan") or {}).get("summary"),
+    }
+    row = await fetchrow(
+        """
+        INSERT INTO ioo_path_subroutines (
+            user_id, node_id, title, description, routine_type, temporal_mode,
+            execution_state, cadence, state_json, last_executed_at, updated_at
+        )
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, 'active', $7, $8::jsonb, NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING
+        RETURNING *
+        """,
+        str(user_id),
+        node_id,
+        f"{node.get('title') or 'IOO node'} subroutine",
+        node.get("description"),
+        routine_type,
+        temporal_mode,
+        node.get("best_time"),
+        json.dumps(state_patch),
+    )
+    if row:
+        return _record_to_dict(row)
+
+    # Reuse the latest non-archived subroutine for this node/user if it exists.
+    existing = await fetchrow(
+        """
+        SELECT * FROM ioo_path_subroutines
+        WHERE user_id = $1::uuid AND node_id = $2::uuid AND execution_state != 'archived'
+        ORDER BY updated_at DESC
+        LIMIT 1
+        """,
+        str(user_id),
+        node_id,
+    )
+    if existing:
+        updated = await fetchrow(
+            """
+            UPDATE ioo_path_subroutines
+            SET execution_state = 'active', temporal_mode = $3,
+                state_json = COALESCE(state_json, '{}'::jsonb) || $4::jsonb,
+                last_executed_at = NOW(), updated_at = NOW()
+            WHERE id = $1::uuid AND user_id = $2::uuid
+            RETURNING *
+            """,
+            str(existing["id"]),
+            str(user_id),
+            temporal_mode,
+            json.dumps(state_patch),
+        )
+        return _record_to_dict(updated)
+
+    # No unique index intentionally: multiple loops can emerge from same node
+    # later. For v1, if INSERT ... RETURNING was blocked by a rare conflict path,
+    # create a fresh row explicitly.
+    created = await fetchrow(
+        """
+        INSERT INTO ioo_path_subroutines (
+            user_id, node_id, title, description, routine_type, temporal_mode,
+            execution_state, cadence, state_json, last_executed_at, updated_at
+        )
+        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, 'active', $7, $8::jsonb, NOW(), NOW())
+        RETURNING *
+        """,
+        str(user_id),
+        node_id,
+        f"{node.get('title') or 'IOO node'} subroutine",
+        node.get("description"),
+        routine_type,
+        temporal_mode,
+        node.get("best_time"),
+        json.dumps(state_patch),
+    )
+    return _record_to_dict(created)
+
+
 @router.post("/execute")
 async def execute_ioo_node(
     body: ExecuteIOORequest,
@@ -138,18 +259,27 @@ async def execute_ioo_node(
 
     user_context = await _load_execution_context(user_id)
     protocol = build_execution_protocol(_record_to_dict(node), user_context, body.intent)
+    subroutine = await _upsert_path_subroutine(str(user_id), _record_to_dict(node), body.intent, protocol)
+    protocol["path_subroutine"] = {
+        "id": subroutine.get("id"),
+        "title": subroutine.get("title"),
+        "routine_type": subroutine.get("routine_type"),
+        "temporal_mode": subroutine.get("temporal_mode"),
+        "execution_state": subroutine.get("execution_state"),
+    }
 
     # SearchAgent enrichment is included in the protocol as side-effect-free
     # candidates/query surfaces. Live providers can replace the graceful fallback
     # without changing the persisted execution-run shape.
     run = await fetchrow(
         """
-        INSERT INTO ioo_execution_runs (user_id, node_id, intent, status, protocol, updated_at)
-        VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb, NOW())
+        INSERT INTO ioo_execution_runs (user_id, node_id, subroutine_id, intent, status, protocol, updated_at)
+        VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6::jsonb, NOW())
         RETURNING id, status, created_at, updated_at
         """,
         str(user_id),
         str(body.node_id),
+        subroutine.get("id"),
         body.intent,
         protocol["status"],
         json.dumps(protocol),
@@ -170,9 +300,67 @@ async def execute_ioo_node(
         "run_id": str(run["id"]),
         "status": run["status"],
         "protocol": protocol,
+        "path_subroutine": subroutine,
         "created_at": _to_plain(run["created_at"]),
         "updated_at": _to_plain(run["updated_at"]),
     }
+
+
+@router.get("/subroutines")
+async def list_path_subroutines(user_id: str = Depends(get_current_user_id)):
+    """Return the user's active path subroutines/execution loops."""
+    rows = await fetchrow(
+        """
+        SELECT COALESCE(jsonb_agg(to_jsonb(s) ORDER BY s.updated_at DESC), '[]'::jsonb) AS items
+        FROM ioo_path_subroutines s
+        WHERE s.user_id = $1::uuid AND s.execution_state != 'archived'
+        """,
+        str(user_id),
+    )
+    return {"subroutines": _to_plain(rows["items"] if rows else [])}
+
+
+@router.patch("/subroutines/{subroutine_id}")
+async def modulate_path_subroutine(
+    subroutine_id: UUID,
+    body: ModulateSubroutineRequest,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Let the user modulate a path subroutine/execution loop."""
+    current = await fetchrow(
+        "SELECT * FROM ioo_path_subroutines WHERE id = $1::uuid AND user_id = $2::uuid",
+        str(subroutine_id),
+        str(user_id),
+    )
+    if not current:
+        raise HTTPException(status_code=404, detail="Path subroutine not found")
+    state_patch = body.state_patch or {}
+    if body.cadence is not None:
+        state_patch["cadence_user_note"] = body.cadence
+    updated = await fetchrow(
+        """
+        UPDATE ioo_path_subroutines
+        SET title = COALESCE($3, title),
+            description = COALESCE($4, description),
+            execution_state = COALESCE($5, execution_state),
+            temporal_mode = COALESCE($6, temporal_mode),
+            cadence = COALESCE($7, cadence),
+            state_json = COALESCE(state_json, '{}'::jsonb) || $8::jsonb,
+            updated_at = NOW(),
+            completed_at = CASE WHEN $5 = 'completed' THEN COALESCE(completed_at, NOW()) ELSE completed_at END
+        WHERE id = $1::uuid AND user_id = $2::uuid
+        RETURNING *
+        """,
+        str(subroutine_id),
+        str(user_id),
+        body.title,
+        body.description,
+        body.execution_state,
+        body.temporal_mode,
+        body.cadence,
+        json.dumps(state_patch),
+    )
+    return {"subroutine": _record_to_dict(updated)}
 
 
 @router.get("/execution/{run_id}")
@@ -183,7 +371,7 @@ async def get_execution_run(
     """Return a persisted IOO execution run for the current user."""
     run = await fetchrow(
         """
-        SELECT id, user_id, node_id, intent, status, protocol,
+        SELECT id, user_id, node_id, subroutine_id, intent, status, protocol,
                created_at, updated_at, completed_at
         FROM ioo_execution_runs
         WHERE id = $1::uuid AND user_id = $2::uuid
@@ -205,7 +393,7 @@ async def complete_execution_run(
     """Mark an execution run complete and return a reward-hook placeholder."""
     run = await fetchrow(
         """
-        SELECT id, node_id, protocol, status
+        SELECT id, node_id, subroutine_id, protocol, status
         FROM ioo_execution_runs
         WHERE id = $1::uuid AND user_id = $2::uuid
         """,
@@ -250,6 +438,21 @@ async def complete_execution_run(
         str(user_id),
         str(run["node_id"]),
     )
+
+    if run["subroutine_id"]:
+        await execute(
+            """
+            UPDATE ioo_path_subroutines
+            SET execution_state = 'ready',
+                state_json = COALESCE(state_json, '{}'::jsonb) || $3::jsonb,
+                updated_at = NOW(),
+                last_executed_at = NOW()
+            WHERE id = $1::uuid AND user_id = $2::uuid
+            """,
+            str(run["subroutine_id"]),
+            str(user_id),
+            json.dumps({"last_completion_note": completion_payload.get("completion_note"), "last_run_id": str(run_id)}),
+        )
 
     # Feed completion back into the living IOO neural graph so successful
     # experiences reinforce their node/edges, reward proof, spawn adjacent
