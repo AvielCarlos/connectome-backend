@@ -306,7 +306,7 @@ class AuraBrain:
             raise ValueError(f"User {user_id} not found")
 
         user_context = user_model.to_context_dict()
-        user_context["feed_mode"] = "future" if feed_mode in ("future", "later") else "now"
+        user_context["feed_mode"] = "path" if feed_mode == "path" else ("future" if feed_mode in ("future", "later") else "now")
         screens_today = await increment_daily_screen_count(user_id)
 
         # Inject session mood from Redis cache

@@ -549,8 +549,11 @@ class IOOGraphAgent:
         user_country = user_state["location_country"] if user_state else None
         if user_city or user_country:
             location_context = f" near city: {user_city or ''}, country: {user_country or ''}"
-        feed_mode = "future" if feed_mode in ("future", "later") else "now"
-        if feed_mode == "future":
+        feed_mode = "path" if feed_mode == "path" else ("future" if feed_mode in ("future", "later") else "now")
+        if feed_mode == "path":
+            temporal_sql = ""
+            temporal_context = " PATH vector: mix immediate actions, near-term bridges, scheduled opportunities, and future-facing possibilities. Preserve temporal_branch as ranking metadata instead of splitting the product into Now/Future navigation."
+        elif feed_mode == "future":
             temporal_sql = "AND n.temporal_branch = 'future_opportunity'"
             temporal_context = " FUTURE/LATER vector: only scheduled/bookable opportunities, events, classes, programs, reservations, trips, tickets, RSVPs, or other time-bound opportunities. Never immediate now actions."
         else:

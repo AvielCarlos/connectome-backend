@@ -30,7 +30,7 @@ class DiscoveryAnswerBody(BaseModel):
 class NowCheckinBody(BaseModel):
     answers: dict[str, Any] = Field(default_factory=dict)
     goal_id: Optional[str] = None
-    feed_mode: str = "now"
+    feed_mode: str = "path"
 
 
 ONBOARDING_VARIANTS = {
@@ -628,10 +628,10 @@ async def submit_now_checkin(
     body: NowCheckinBody,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Store a tiny present-state check-in and refresh the Now vector once.
+    """Store a tiny present-state check-in and refresh the Path vector once.
 
     Goals define desired future state; this captures the user's current state
-    relative to that goal so iDo can choose better immediate IOO nodes.
+    relative to that goal so Aura can choose better immediate and future-facing IOO nodes.
     """
     row = await fetchrow("SELECT id FROM users WHERE id = $1", UUID(user_id))
     if not row:
@@ -650,8 +650,8 @@ async def submit_now_checkin(
     from ora.user_model import update_user_embedding_from_context
     await update_user_embedding_from_context(user_id, context, "now")
 
-    logger.info("Now check-in stored: user=%s fields=%s goal=%s", user_id[:8], len(context), body.goal_id or "active")
-    return {"ok": True, "profile_updated": True, "vector_mode": "now"}
+    logger.info("Path check-in stored: user=%s fields=%s goal=%s", user_id[:8], len(context), body.goal_id or "active")
+    return {"ok": True, "profile_updated": True, "vector_mode": "path"}
 
 
 @router.post("/onboarding", response_model=OnboardingResponse)

@@ -124,8 +124,8 @@ class ScreenRequest(BaseModel):
     context: Optional[str] = None  # hint to Ora about what kind of screen
     goal_id: Optional[str] = None
     domain: Optional[DomainType] = None  # optional domain filter
-    feed_mode: Optional[Literal["now", "future"]] = "now"
-    exclude_future_events: Optional[bool] = None  # True = hard-filter scheduled/future events from Now feed
+    feed_mode: Optional[Literal["now", "future", "path"]] = "path"
+    exclude_future_events: Optional[bool] = None  # True = hard-filter scheduled/future events from legacy Now feed
 
 
 class ScreenResponse(BaseModel):

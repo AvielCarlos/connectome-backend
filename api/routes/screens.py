@@ -972,6 +972,9 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "items": links[:5],
             "note": "Aura keeps the page links close so users can verify, book, buy, register, navigate, or review before acting.",
         })
+    temporal_branch = "future_event" if item.get("starts_at") or feed_mode == "future" else "now_action"
+    if feed_mode == "path" and temporal_branch != "future_event":
+        temporal_branch = str(item.get("temporal_branch") or "path_step")
     components += [
         {"type": "section_header", "text": "Why this belongs here"},
         {"type": "body_text", "text": item.get("why") or "Aura is turning the feed into a path of concrete possibilities, not repeated generic cards."},
@@ -990,7 +993,7 @@ def _real_action_spec(item: dict[str, Any], *, source: str = "curated_real_actio
             "source": source,
             "domain": domain,
             "feed_mode": feed_mode,
-            "temporal_branch": "future_event" if feed_mode == "future" else "now_action",
+            "temporal_branch": temporal_branch,
             "starts_at": _serialise_dt(item.get("starts_at")) if item.get("starts_at") else None,
             "city": item.get("city"),
             "country": item.get("country"),
@@ -1325,11 +1328,14 @@ def _is_future_opportunity(item: dict[str, Any]) -> bool:
 
 
 def _filter_temporal_branch(candidates: list[dict[str, Any]], feed_mode: str, exclude_future_events: bool = False) -> list[dict[str, Any]]:
-    """Vector branch: Now = immediately doable; Future = upcoming/scheduled.
+    """Vector branch: Now = immediate, Future = scheduled, Path = unified.
 
     When exclude_future_events=True (Now feed), hard-filter all scheduled/future
     events regardless of other context. Future feed gets only future items.
+    Path keeps both and lets ranking/metadata carry the temporal intelligence.
     """
+    if feed_mode == "path":
+        return candidates
     if feed_mode == "future":
         future = [item for item in candidates if _is_future_opportunity(item)]
         return future or candidates
@@ -1420,7 +1426,7 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     if feed_mode == "now":
         # Hard block: never inject live event cards into the Now feed
         pass
-    elif feed_mode == "future" and slot_index % 5 == 0 and (domain_filter in (None, '', 'Aventi')):
+    elif feed_mode in ("future", "path") and slot_index % 5 == 0 and (domain_filter in (None, '', 'Aventi')):
         live = await _try_live_event_action(user_id, tier, daily_limit)
         if live is not None:
             return live
@@ -1436,7 +1442,7 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
         candidates = _filter_location_local_only(candidates, preferred_city)
     if not candidates:
         return None
-    # Sort by city relevance — Future/Travel can broaden scope; Now is local/generic only
+    # Sort by city relevance — Path/Future/Travel can broaden scope; Now is local/generic only
     if preferred_city:
         candidates = _filter_location_eligible(candidates, preferred_city)
     start = int(digest[:8], 16) % len(candidates)
@@ -1670,14 +1676,18 @@ async def _try_ioo_card(
         if not nodes:
             return None
 
-        # Hard temporal split: Now = immediate executable nodes; Future/Later =
-        # scheduled/bookable/plannable opportunities only.
+        # Temporal routing: legacy Now/Future keep their hard split, while Path
+        # keeps both immediate and future-facing nodes and relies on metadata
+        # (temporal_branch, starts_at, urgency) for ranking and UI chips.
         filtered_nodes = []
         for candidate in nodes:
             candidate_spec = _ioo_node_to_screen_dict(candidate)
             temporal_branch = str((candidate_spec.get("metadata") or {}).get("temporal_branch") or "").lower()
             is_future = temporal_branch in {"future", "future_event", "future_opportunity", "scheduled_opportunity"} or _screen_spec_is_future_opportunity(candidate_spec)
-            if feed_mode == "future":
+            if feed_mode == "path":
+                if not travel_mode and _screen_spec_wrong_location(candidate_spec, preferred_city):
+                    continue
+            elif feed_mode == "future":
                 if not is_future:
                     continue
             else:
@@ -1787,12 +1797,24 @@ async def get_next_screen(
 
     preferred_city = await _user_city(user_id)
     travel_mode = await _user_travel_mode(user_id, tier)
-    feed_mode = body.feed_mode or "now"
+    feed_mode = body.feed_mode or "path"
 
     # ── Smart feed routing ─────────────────────────────────────────────────
-    # Now feed: IOO neural graph is the primary intelligence layer.
-    # Future feed: live events / real-world actions are primary.
-    if feed_mode == "future":
+    # Path feed: one unified surface where IOO graph intelligence and real-world
+    # opportunities can coexist; temporal_branch remains metadata, not nav.
+    # Legacy Now/Future clients are still accepted for backwards compatibility.
+    if feed_mode == "path":
+        if random.random() < 0.30:
+            real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, feed_mode)
+            if real_action is not None:
+                return real_action
+        ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode, preferred_city, travel_mode)
+        if ioo_response is not None:
+            return ioo_response
+        real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, feed_mode)
+        if real_action is not None:
+            return real_action
+    elif feed_mode == "future":
         # Future/Later feed — scheduled/bookable/plannable opportunities only
         real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, feed_mode)
         if real_action is not None:
@@ -1828,7 +1850,7 @@ async def get_next_screen(
         logger.error(f"Brain error for user {user_id[:8]}, using static fallback: {e}", exc_info=True)
         return await _static_fallback_card(user_id, tier, daily_limit, f"brain_exception:{type(e).__name__}")
 
-    if feed_mode != "future" and (
+    if feed_mode == "now" and (
         _screen_spec_is_future_opportunity(spec_dict)
         or (not travel_mode and _screen_spec_wrong_location(spec_dict, preferred_city))
     ):
@@ -1873,7 +1895,7 @@ class BatchScreenRequest(BaseModel):
     goal_id: Optional[str] = None
     domain: Optional[DomainType] = None
     context: Optional[str] = None
-    feed_mode: Optional[Literal["now", "future"]] = "now"
+    feed_mode: Optional[Literal["now", "future", "path"]] = "path"
     exclude_future_events: Optional[bool] = None
 
 
@@ -1928,7 +1950,7 @@ async def get_screen_batch(
 
     preferred_city = await _user_city(user_id)
     travel_mode = await _user_travel_mode(user_id, tier)
-    feed_mode = body.feed_mode or "now"
+    feed_mode = body.feed_mode or "path"
 
     # Check if user has active goals (once, shared across batch)
     # Fetch screens sequentially to respect rate limits and user model updates
@@ -1937,9 +1959,23 @@ async def get_screen_batch(
             slot_index = len(results)
 
             # Feed routing by mode:
-            # Now feed  — IOO neural graph is primary; no future events ever
-            # Future feed — real-world events/actions are primary
-            if feed_mode == "future":
+            # Path feed — unified IOO + real-world surface; temporal_branch is metadata.
+            # Now/Future remain as backwards-compatible hard branches.
+            if feed_mode == "path":
+                if random.random() < 0.30:
+                    real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "path")
+                    if real_action is not None:
+                        results.append(real_action)
+                        continue
+                ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit, feed_mode, preferred_city, travel_mode)
+                if ioo_resp is not None:
+                    results.append(ioo_resp)
+                    continue
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "path")
+                if real_action is not None:
+                    results.append(real_action)
+                    continue
+            elif feed_mode == "future":
                 # Future/Later: prioritise scheduled/bookable opportunities only
                 real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "future")
                 if real_action is not None:
@@ -1970,7 +2006,7 @@ async def get_screen_batch(
                 geo_hints=batch_geo_hints,
                 feed_mode=feed_mode,
             )
-            if feed_mode != "future" and (
+            if feed_mode == "now" and (
                 _screen_spec_is_future_opportunity(spec_dict)
                 or (not travel_mode and _screen_spec_wrong_location(spec_dict, preferred_city))
             ):
