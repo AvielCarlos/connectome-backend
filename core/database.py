@@ -1957,12 +1957,46 @@ async def run_migrations():
             ON ioo_user_progress(status)
         """)
 
+        # Path Subroutines — reusable execution loops inside open IOO paths.
+        # A subroutine is not separate from execution: it is the stable loop
+        # that repeated execution runs instantiate, modulate, and learn from.
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS ioo_path_subroutines (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                goal_id UUID REFERENCES goals(id) ON DELETE SET NULL,
+                node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL,
+                title TEXT NOT NULL,
+                description TEXT,
+                routine_type TEXT NOT NULL DEFAULT 'execution',
+                temporal_mode TEXT NOT NULL DEFAULT 'now'
+                    CHECK (temporal_mode IN ('now','later','future')),
+                execution_state TEXT NOT NULL DEFAULT 'ready'
+                    CHECK (execution_state IN ('ready','active','blocked','paused','completed','archived')),
+                cadence TEXT,
+                state_json JSONB DEFAULT '{}',
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                last_executed_at TIMESTAMPTZ,
+                completed_at TIMESTAMPTZ
+            )
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_path_subroutines_user
+            ON ioo_path_subroutines(user_id, execution_state, updated_at DESC)
+        """)
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_ioo_path_subroutines_node
+            ON ioo_path_subroutines(node_id)
+        """)
+
         # IOO Execution Protocol runs — turns possibility-map nodes into reality plans
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS ioo_execution_runs (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 user_id UUID REFERENCES users(id),
                 node_id UUID,
+                subroutine_id UUID REFERENCES ioo_path_subroutines(id) ON DELETE SET NULL,
                 intent TEXT NOT NULL DEFAULT 'do_now',
                 status TEXT NOT NULL DEFAULT 'created',
                 protocol JSONB DEFAULT '{}',
@@ -1970,6 +2004,10 @@ async def run_migrations():
                 updated_at TIMESTAMP DEFAULT NOW(),
                 completed_at TIMESTAMP
             )
+        """)
+        await conn.execute("""
+            ALTER TABLE ioo_execution_runs
+            ADD COLUMN IF NOT EXISTS subroutine_id UUID REFERENCES ioo_path_subroutines(id) ON DELETE SET NULL
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_ioo_execution_runs_user
