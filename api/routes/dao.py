@@ -129,99 +129,60 @@ def _serialize(d: Dict[str, Any]) -> Dict[str, Any]:
 
 @router.get("/leaderboard")
 async def get_leaderboard(limit: int = 20):
-    """Public leaderboard — top contributors with tier, CP, and recent contribution."""
-    # CP can come from two legacy systems:
-    # - user_cp_balance (email/user-based rewards)
-    # - contributors.total_cp (DAO task/PR rewards backed by cp_ledger)
-    # Merge them so task submitters and legacy CP recipients both appear.
+    """Public leaderboard — top contributors ranked by live earned CP.
+
+    Source of truth: user_cp_balance.total_cp_earned (real earned CP from
+    contributions, feedback, and tasks). The contributors.total_cp column
+    may contain bulk-imported seed data and is intentionally excluded here
+    to keep the leaderboard accurate.
+    """
     balance_rows = await fetch(
         """
         SELECT
             u.id, u.email,
             COALESCE(u.profile->>'display_name', split_part(u.email, '@', 1)) AS display_name,
+            u.github_username, u.github_avatar_url,
             cp.cp_balance, cp.total_cp_earned, cp.last_updated
         FROM user_cp_balance cp
         JOIN users u ON u.id = cp.user_id
         WHERE cp.total_cp_earned > 0
-        """
+        ORDER BY cp.total_cp_earned DESC
+        LIMIT $1
+        """,
+        limit,
     )
 
-    contributor_rows = await fetch(
-        """
-        SELECT
-            id, github_username, display_name, email,
-            total_cp, tier, joined_at, is_founding_steward
-        FROM contributors
-        WHERE total_cp > 0
-        """
-    )
-
-    def leaderboard_tier(total_cp: int, contributor_tier: Optional[str] = None) -> str:
-        if contributor_tier and contributor_tier != "observer":
-            return contributor_tier
+    def leaderboard_tier(total_cp: int) -> str:
         return "steward" if total_cp >= 3000 else "builder" if total_cp >= 500 else "contributor" if total_cp >= 100 else "observer"
 
     def badge_for(total_cp: int) -> str:
         return "👑" if total_cp >= 3000 else "⭐" if total_cp >= 500 else "🔨" if total_cp >= 100 else "👀"
 
-    merged: Dict[str, Dict[str, Any]] = {}
-
-    for row in balance_rows:
-        email = (row["email"] or "").lower()
-        key = f"email:{email}" if email else f"user:{row['id']}"
+    leaderboard = []
+    for i, row in enumerate(balance_rows):
         total_cp = int(row["total_cp_earned"] or 0)
-        merged[key] = {
+        leaderboard.append({
             "id": str(row["id"]),
             "display_name": row["display_name"] or "Anonymous",
+            "github_username": row["github_username"],
+            "github_avatar_url": row["github_avatar_url"],
             "total_cp": total_cp,
             "cp_balance": int(row["cp_balance"] or 0),
             "tier": leaderboard_tier(total_cp),
             "is_founding_steward": total_cp >= 3000,
             "joined_at": row["last_updated"].isoformat() if row["last_updated"] else None,
-        }
+            "rank": i + 1,
+            "tier_badge": badge_for(total_cp),
+        })
 
-    for row in contributor_rows:
-        email = (row["email"] or "").lower()
-        github_username = (row["github_username"] or "").lower()
-        key = f"email:{email}" if email else f"github:{github_username}" if github_username else f"contributor:{row['id']}"
-        contributor_cp = int(row["total_cp"] or 0)
-        existing = merged.get(key)
-
-        if existing:
-            total_cp = int(existing["total_cp"] or 0) + contributor_cp
-            existing.update({
-                "total_cp": total_cp,
-                "cp_balance": int(existing["cp_balance"] or 0) + contributor_cp,
-                "tier": leaderboard_tier(total_cp, row["tier"]),
-                "is_founding_steward": bool(row["is_founding_steward"]) or total_cp >= 3000,
-                "joined_at": existing["joined_at"] or (row["joined_at"].isoformat() if row["joined_at"] else None),
-            })
-        else:
-            total_cp = contributor_cp
-            merged[key] = {
-                "id": str(row["id"]),
-                "display_name": row["display_name"] or row["github_username"] or "Anonymous",
-                "total_cp": total_cp,
-                "cp_balance": total_cp,
-                "tier": leaderboard_tier(total_cp, row["tier"]),
-                "is_founding_steward": bool(row["is_founding_steward"]) or total_cp >= 3000,
-                "joined_at": row["joined_at"].isoformat() if row["joined_at"] else None,
-            }
-
-    leaderboard = sorted(
-        (entry for entry in merged.values() if int(entry["total_cp"] or 0) > 0),
-        key=lambda entry: int(entry["total_cp"] or 0),
-        reverse=True,
-    )[:limit]
-
-    for i, entry in enumerate(leaderboard):
-        entry["rank"] = i + 1
-        entry["tier_badge"] = badge_for(int(entry["total_cp"] or 0))
+    total_cp_awarded = await fetchval(
+        "SELECT COALESCE(SUM(total_cp_earned), 0) FROM user_cp_balance"
+    ) or 0
 
     return {
         "leaderboard": leaderboard,
-        "total_contributors": len(merged),
-        "total_cp_awarded": sum(int(entry["total_cp"] or 0) for entry in merged.values()),
+        "total_contributors": len(leaderboard),
+        "total_cp_awarded": int(total_cp_awarded),
     }
 
 
