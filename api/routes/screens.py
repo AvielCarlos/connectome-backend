@@ -1798,24 +1798,23 @@ async def get_screen_batch(
             # Now feed  — IOO neural graph is primary; no future events ever
             # Future feed — real-world events/actions are primary
             if feed_mode == "future":
-                # Future: prioritise live events / real-world actions every slot
+                # Future: prioritise live events, fall through to brain if none
                 real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "future")
                 if real_action is not None:
                     results.append(real_action)
                     continue
             else:
-                # Now feed: IOO graph first (every slot), small variety window
+                # Now feed: IOO neural graph first, 20% variety, always falls through to brain
                 ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
                 if ioo_resp is not None:
                     results.append(ioo_resp)
                     continue
-                # 20% variety with immediate-only real actions (future events blocked)
                 if random.random() < 0.20:
                     real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "now")
                     if real_action is not None:
                         results.append(real_action)
                         continue
-                    continue
+                # Always fall through to brain AI below — never skip
 
             spec_dict, db_id, screens_today = await brain.get_screen(
                 user_id=user_id,
