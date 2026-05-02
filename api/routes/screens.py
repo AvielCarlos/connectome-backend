@@ -1668,19 +1668,24 @@ async def get_next_screen(
     feed_mode = body.feed_mode or "now"
 
     # ── Smart feed routing ─────────────────────────────────────────────────
-    # Product principle: the feed must feel like a living path. Always give a
-    # meaningful share of cards to real actions (live events, videos, classes,
-    # adventures) so users are not trapped in generic Eviva/IOO opportunity loops.
-    if feed_mode == "future" or random.random() < 0.45:
+    # Now feed: IOO neural graph is the primary intelligence layer.
+    # Future feed: live events / real-world actions are primary.
+    if feed_mode == "future":
+        # Future feed — prioritise real-world events/actions
         real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, feed_mode)
         if real_action is not None:
             return real_action
-
-    # IOO remains the intelligence layer, but not the whole feed.
-    if not body.domain and random.random() < 0.55:
-        ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
-        if ioo_response is not None:
-            return ioo_response
+    else:
+        # Now feed — IOO neural graph first, no future events
+        if not body.domain or True:  # always try IOO for Now feed
+            ioo_response = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
+            if ioo_response is not None:
+                return ioo_response
+        # Only use real-world cards for Now feed if they are strictly immediate actions
+        if random.random() < 0.25:  # 25% non-IOO variety, future events already hard-blocked
+            real_action = await _try_real_world_card(user_id, tier, daily_limit, current_count, body.domain, preferred_city, travel_mode, "now")
+            if real_action is not None:
+                return real_action
     # ──────────────────────────────────────────────────────────────────────
 
     try:
@@ -1797,27 +1802,27 @@ async def get_screen_batch(
         try:
             slot_index = len(results)
 
-            # Force diversity in every prefetched batch. Slots 0/2/4 are real
-            # actions where possible; slots 1/3 can use IOO/brain. This directly
-            # prevents repeated "Eviva Opportunities" cards from occupying the
-            # whole swipe queue.
-            if feed_mode == "future" or slot_index in (0, 2, 4):
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, feed_mode)
+            # Feed routing by mode:
+            # Now feed  — IOO neural graph is primary; no future events ever
+            # Future feed — real-world events/actions are primary
+            if feed_mode == "future":
+                # Future: prioritise live events / real-world actions every slot
+                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "future")
                 if real_action is not None:
                     results.append(real_action)
                     continue
-
-            # No goals gate: anyone can discover IOO nodes regardless of whether they have active goals.
-            if not body.domain and random.random() < 0.50:
+            else:
+                # Now feed: IOO graph first (every slot), small variety window
                 ioo_resp = await _try_ioo_card(user_id, body.goal_id, tier, daily_limit)
                 if ioo_resp is not None:
                     results.append(ioo_resp)
                     continue
-
-            if random.random() < 0.35:
-                real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, feed_mode)
-                if real_action is not None:
-                    results.append(real_action)
+                # 20% variety with immediate-only real actions (future events blocked)
+                if random.random() < 0.20:
+                    real_action = await _try_real_world_card(user_id, tier, daily_limit, slot_index, body.domain, preferred_city, travel_mode, "now")
+                    if real_action is not None:
+                        results.append(real_action)
+                        continue
                     continue
 
             spec_dict, db_id, screens_today = await brain.get_screen(
