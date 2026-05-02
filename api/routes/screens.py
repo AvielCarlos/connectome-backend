@@ -1237,40 +1237,33 @@ def _item_location_text(item: dict[str, Any]) -> str:
 
 
 def _city_rank(item: dict[str, Any], preferred_city: Optional[str]) -> int:
+    """Rank items by city relevance. 0 = local match, 1 = no city set, 2 = different city.
+    Different-city items are de-prioritised but NOT hard-blocked so app works globally.
+    """
     if not preferred_city:
-        return 0
+        return 1
     preferred = _city_token(preferred_city)
     if not preferred:
-        return 0
+        return 1
     item_city = _city_token(item.get("city"))
     if item_city:
         if preferred == item_city or preferred in item_city or item_city in preferred:
-            return 0
-        # Wrong-city physical opportunities should be ineligible for a user
-        # with a known location. This is a hard filter upstream, not just a
-        # ranking hint.
-        return 4
+            return 0  # local match — highest priority
+        return 2  # different city — de-prioritised but still eligible
 
-    # Defensive fallback for older curated cards that forgot to set `city` but
-    # clearly mention a city in title/body/URLs (e.g. Vancouver yoga). Known user
-    # location must still win over those legacy cards.
+    # No explicit city set on item — check text for implicit city mentions
     text = _item_location_text(item)
-    known_local_markers = {
-        "victoria": ("victoria", "greater victoria", "gvpl", "viatec"),
-        "vancouver": ("vancouver", "stanley park", "science world", "yyoga", "abbotsford"),
-    }
-    for city_name, markers in known_local_markers.items():
-        if any(marker in text for marker in markers):
-            return 0 if city_name == preferred else 4
-    return 1
+    preferred_lower = preferred_city.lower()
+    if preferred_lower in text:
+        return 0  # text mentions user's city
+    return 1  # generic / no location — eligible everywhere
 
 
 def _filter_location_eligible(candidates: list[dict[str, Any]], preferred_city: Optional[str]) -> list[dict[str, Any]]:
-    """Hard-filter wrong-city local opportunities when user location is known."""
+    """Sort by city relevance. Never hard-blocks — app works anywhere in the world."""
     if not preferred_city:
         return candidates
-    eligible = [item for item in candidates if _city_rank(item, preferred_city) <= 1]
-    return eligible or [item for item in candidates if not item.get("city")]
+    return sorted(candidates, key=lambda item: (_city_rank(item, preferred_city), item.get("key", "")))
 
 
 def _is_future_opportunity(item: dict[str, Any]) -> bool:
@@ -1337,10 +1330,9 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
     candidates = _filter_temporal_branch(candidates, feed_mode)
+    # Sort by city relevance — never hard-block, app works globally
     if preferred_city:
-        if not travel_mode:
-            candidates = _filter_location_eligible(candidates, preferred_city)
-        candidates = sorted(candidates, key=lambda item: (_city_rank(item, preferred_city), item.get("key", "")))
+        candidates = _filter_location_eligible(candidates, preferred_city)
     start = int(digest[:8], 16) % len(candidates)
     idx = (start + slot_index + current_count) % len(candidates)
     item = dict(candidates[idx])
