@@ -592,7 +592,9 @@ async def submit_discovery_answer(
         import asyncio
         from ora.user_model import update_user_embedding_from_context
         context = {body.profile_field: body.answer}
-        asyncio.ensure_future(update_user_embedding_from_context(user_id, context))
+        # Capability intake refines the Now vector; desired_feed_mode/later interests refine Later.
+        vector_mode = "later" if body.profile_field in {"desired_feed_mode", "later_interests", "future_interests"} else "now"
+        asyncio.ensure_future(update_user_embedding_from_context(user_id, context, vector_mode))
 
     return {"ok": True, "profile_updated": True}
 

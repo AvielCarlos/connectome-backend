@@ -257,6 +257,30 @@ async def update_profile(
             )
         except Exception as e:
             logger.warning(f"Could not mirror profile value weights into IOO state: {e}")
+    if getattr(body, "now_vector_prompt", None) is not None:
+        profile["now_vector_prompt"] = (body.now_vector_prompt or "")[:2000]
+    if getattr(body, "later_vector_prompt", None) is not None:
+        profile["later_vector_prompt"] = (body.later_vector_prompt or "")[:2000]
+    if getattr(body, "now_vector_prompt", None) is not None or getattr(body, "later_vector_prompt", None) is not None:
+        try:
+            await execute(
+                """
+                INSERT INTO ioo_user_state (user_id, state_json, last_updated)
+                VALUES ($1, $2::jsonb, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || EXCLUDED.state_json,
+                    last_updated = NOW()
+                """,
+                UUID(user_id),
+                json.dumps({
+                    "now_vector_prompt": profile.get("now_vector_prompt"),
+                    "later_vector_prompt": profile.get("later_vector_prompt"),
+                    "vector_prompts_source": "manual_profile_update",
+                }),
+            )
+        except Exception as e:
+            logger.warning(f"Could not mirror vector prompts into IOO state: {e}")
+
     if getattr(body, "travel_mode_enabled", None) is not None:
         from api.tier_guard import get_user_tier
         tier = await get_user_tier(user_id)
@@ -301,9 +325,19 @@ async def update_profile(
         UUID(user_id),
     )
 
-    # Invalidate user model cache
+    # Invalidate user model cache + re-embed mode-specific vectors if user edited them
     from core.redis_client import redis_delete
     await redis_delete(f"user_model:{user_id}")
+    if getattr(body, "now_vector_prompt", None) is not None or getattr(body, "later_vector_prompt", None) is not None:
+        try:
+            import asyncio
+            from ora.user_model import update_user_embedding_from_context
+            if getattr(body, "now_vector_prompt", None) is not None:
+                asyncio.ensure_future(update_user_embedding_from_context(user_id, {"now_vector_prompt": profile.get("now_vector_prompt")}, "now"))
+            if getattr(body, "later_vector_prompt", None) is not None:
+                asyncio.ensure_future(update_user_embedding_from_context(user_id, {"later_vector_prompt": profile.get("later_vector_prompt")}, "later"))
+        except Exception as e:
+            logger.debug(f"Could not schedule vector prompt re-embed: {e}")
 
     return UserProfile(
         id=updated["id"],

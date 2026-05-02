@@ -39,6 +39,12 @@ class UserModel:
         self.embedding: Optional[List[float]] = self._parse_embedding(
             row.get("embedding")
         )
+        self.now_embedding: Optional[List[float]] = self._parse_embedding(
+            row.get("now_embedding")
+        )
+        self.later_embedding: Optional[List[float]] = self._parse_embedding(
+            row.get("later_embedding")
+        )
         self.goals: List[Dict[str, Any]] = []
         self.recent_interactions: List[Dict[str, Any]] = []
         # Domain weights: how much the user engages with each domain
@@ -130,6 +136,8 @@ async def load_user_model(user_id: str) -> Optional[UserModel]:
         "fulfilment_score": model.fulfilment_score,
         "profile": model.profile,
         "embedding": model.embedding,
+        "now_embedding": model.now_embedding,
+        "later_embedding": model.later_embedding,
         "goals": model.goals,
         "recent_interactions": model.recent_interactions,
         "domain_weights": model.domain_weights,
@@ -250,19 +258,15 @@ async def update_user_embedding_from_cards(user_id: str, openai_client=None) -> 
 async def update_user_embedding_from_context(
     user_id: str,
     context_answers: dict,
+    vector_mode: str = "now",
 ) -> None:
     """
-    Re-embed the user vector from capability/context answers (energy, time, resources,
-    interests, goals) so the IOO/vector search immediately reflects the user's current state.
+    Re-embed a mode-specific user vector from capability/context answers.
 
-    Called fire-and-forget after capability intake answers are saved.
-    context_answers = e.g. {
-        'today_capacity': '15–30 minutes',
-        'current_energy_state': 'High / ready to move',
-        'available_resources_today': ['Just my phone', 'Home/quiet space'],
-        'interests': [...],
-        'active_goals': [...],
-    }
+    now_embedding   = current-state/actionability vector (energy, time, resources)
+    later_embedding = future-planning/aspiration vector (interests, larger goals)
+
+    The global users.embedding is kept in sync with Now for legacy ranking paths.
     """
     try:
         from core.config import settings
@@ -270,33 +274,42 @@ async def update_user_embedding_from_context(
         if not api_key:
             return
 
-        # Load current user model for existing context
+        vector_mode = "later" if vector_mode in ("later", "future") else "now"
         model = await load_user_model(user_id)
         profile = model.profile if model else {}
 
-        # Build a rich text description of the user's current state
-        lines = ["User current state for personalised feed recommendations:"]
+        lines = [f"User {vector_mode.upper()} vector for personalised feed recommendations:"]
+
+        prompt_key = "later_vector_prompt" if vector_mode == "later" else "now_vector_prompt"
+        manual_prompt = context_answers.get(prompt_key) or profile.get(prompt_key)
+        if manual_prompt:
+            lines.append(f"User manual {vector_mode} guidance: {manual_prompt}")
 
         capacity = context_answers.get("today_capacity") or profile.get("today_capacity")
-        if capacity:
+        if capacity and vector_mode == "now":
             lines.append(f"Available time today: {capacity}")
 
         energy = context_answers.get("current_energy_state") or profile.get("current_energy_state")
-        if energy:
-            lines.append(f"Energy level: {energy}")
+        if energy and vector_mode == "now":
+            lines.append(f"Energy level right now: {energy}")
 
         resources = context_answers.get("available_resources_today") or profile.get("available_resources_today")
-        if resources:
+        if resources and vector_mode == "now":
             if isinstance(resources, list):
-                lines.append(f"Available resources: {', '.join(resources)}")
+                lines.append(f"Available resources now: {', '.join(resources)}")
             else:
-                lines.append(f"Available resources: {resources}")
+                lines.append(f"Available resources now: {resources}")
 
         interests = context_answers.get("interests") or profile.get("interests", [])
-        if interests:
-            lines.append(f"Interests: {', '.join(interests[:10])}")
+        later_interests = context_answers.get("later_interests") or profile.get("later_interests", [])
+        chosen_interests = later_interests if vector_mode == "later" and later_interests else interests
+        if chosen_interests:
+            if isinstance(chosen_interests, list):
+                lines.append(f"Interests: {', '.join(chosen_interests[:10])}")
+            else:
+                lines.append(f"Interests: {chosen_interests}")
 
-        value_scores = profile.get("value_scores") or profile.get("value_compass") or {}
+        value_scores = profile.get("value_weights") or profile.get("value_scores") or profile.get("value_compass") or {}
         if value_scores:
             top = sorted(value_scores.items(), key=lambda x: -x[1])[:4]
             lines.append(f"Top values: {', '.join(f'{k} ({v}/10)' for k, v in top)}")
@@ -305,7 +318,8 @@ async def update_user_embedding_from_context(
         if model and model.goals:
             active_goals = [g["title"] for g in model.goals if g.get("status") == "active"][:5]
         if active_goals:
-            lines.append(f"Active goals: {', '.join(active_goals)}")
+            prefix = "Active immediate goals" if vector_mode == "now" else "Future/later path goals"
+            lines.append(f"{prefix}: {', '.join(active_goals)}")
 
         location = profile.get("location") or profile.get("city")
         if location:
@@ -323,24 +337,33 @@ async def update_user_embedding_from_context(
             r.raise_for_status()
             embedding = r.json()["data"][0]["embedding"]
 
-        # Blend with existing embedding (80% context, 20% history) for continuity
-        if model and model.embedding and len(model.embedding) == 1536:
+        existing_mode = model.later_embedding if (model and vector_mode == "later") else (model.now_embedding if model else None)
+        existing_global = model.embedding if model else None
+        existing = existing_mode if existing_mode and len(existing_mode) == 1536 else existing_global
+        if existing and len(existing) == 1536:
             arr = np.array(embedding, dtype=np.float32)
-            existing = np.array(model.embedding, dtype=np.float32)
-            blended = 0.8 * arr + 0.2 * existing
+            old = np.array(existing, dtype=np.float32)
+            blended = 0.8 * arr + 0.2 * old
             norm = np.linalg.norm(blended)
             if norm > 0:
                 blended = blended / norm
             embedding = blended.tolist()
 
         embedding_str = "[" + ",".join(f"{v:.6f}" for v in embedding) + "]"
-        await execute(
-            "UPDATE users SET embedding = $1::vector WHERE id = $2",
-            embedding_str,
-            UUID(user_id),
-        )
+        if vector_mode == "now":
+            await execute(
+                "UPDATE users SET embedding = $1::vector, now_embedding = $1::vector WHERE id = $2",
+                embedding_str,
+                UUID(user_id),
+            )
+        else:
+            await execute(
+                "UPDATE users SET later_embedding = $1::vector WHERE id = $2",
+                embedding_str,
+                UUID(user_id),
+            )
         await redis_delete(f"user_model:{user_id}")
-        logger.info(f"update_user_embedding_from_context: user={user_id[:8]} re-embedded from context answers")
+        logger.info(f"update_user_embedding_from_context: user={user_id[:8]} mode={vector_mode} re-embedded")
 
     except Exception as e:
         logger.debug(f"update_user_embedding_from_context failed: {e}")

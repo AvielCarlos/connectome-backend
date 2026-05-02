@@ -2170,6 +2170,12 @@ async def run_migrations():
         await conn.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS path_credits INTEGER DEFAULT 0
         """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS now_embedding vector(1536)
+        """)
+        await conn.execute("""
+            ALTER TABLE users ADD COLUMN IF NOT EXISTS later_embedding vector(1536)
+        """)
 
         logger.info("Database migrations complete")
 

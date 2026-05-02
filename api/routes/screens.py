@@ -1687,6 +1687,7 @@ async def get_next_screen(
             goal_id=body.goal_id,
             domain=body.domain,
             geo_hints=geo_hints,
+            feed_mode=feed_mode,
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -1822,6 +1823,7 @@ async def get_screen_batch(
                 goal_id=body.goal_id,
                 domain=body.domain,
                 geo_hints=batch_geo_hints,
+                feed_mode=feed_mode,
             )
             screen = ScreenSpec(
                 screen_id=spec_dict["screen_id"],

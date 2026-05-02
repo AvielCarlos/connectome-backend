@@ -55,6 +55,8 @@ class UserUpdate(BaseModel):
     goals_text: Optional[str] = None
     location: Optional[str] = None  # City/location for WorldAgent local events
     value_weights: Optional[Dict[str, int]] = None  # top-level values, 1-10 compass for Aura
+    now_vector_prompt: Optional[str] = None  # user-editable Now vector instruction
+    later_vector_prompt: Optional[str] = None  # user-editable Later/Future vector instruction
     travel_mode_enabled: Optional[bool] = None  # paid-tier opt-in to include non-local/travel opportunities
 
 

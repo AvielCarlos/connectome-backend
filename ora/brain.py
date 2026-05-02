@@ -295,6 +295,7 @@ class AuraBrain:
         goal_id: Optional[str] = None,
         domain: Optional[str] = None,
         geo_hints: Optional[Dict[str, Any]] = None,
+        feed_mode: str = "now",
     ) -> Tuple[Dict[str, Any], str, int]:
         """
         Main entry point for screen requests.
@@ -305,6 +306,7 @@ class AuraBrain:
             raise ValueError(f"User {user_id} not found")
 
         user_context = user_model.to_context_dict()
+        user_context["feed_mode"] = "future" if feed_mode in ("future", "later") else "now"
         screens_today = await increment_daily_screen_count(user_id)
 
         # Inject session mood from Redis cache
@@ -393,11 +395,11 @@ class AuraBrain:
         _use_vector = (
             not should_interview
             and len(user_model.recent_interactions) > 20
-            and user_model.embedding is not None
+            and (user_model.later_embedding if feed_mode in ("future", "later") else user_model.now_embedding or user_model.embedding) is not None
             and random.random() < 0.30
         )
         if _use_vector:
-            _v_cards = await self._get_vector_similar_cards(user_id, domain)
+            _v_cards = await self._get_vector_similar_cards(user_id, domain, feed_mode=feed_mode)
             if _v_cards:
                 spec_dict = random.choice(_v_cards)
                 agent_name = "VectorSimilarityFeed"
@@ -565,7 +567,7 @@ class AuraBrain:
     # -----------------------------------------------------------------------
 
     async def _get_vector_similar_cards(
-        self, user_id: str, domain: str, limit: int = 5
+        self, user_id: str, domain: str, limit: int = 5, feed_mode: str = "now"
     ) -> list:
         """
         Fetch screen specs most similar to the user's embedding using pgvector
@@ -574,8 +576,9 @@ class AuraBrain:
         """
         from uuid import UUID as _UUID
         try:
+            col = "later_embedding" if feed_mode in ("future", "later") else "now_embedding"
             user_row = await fetchrow(
-                "SELECT embedding FROM users WHERE id = $1",
+                f"SELECT COALESCE({col}, embedding) AS embedding FROM users WHERE id = $1",
                 _UUID(user_id),
             )
             if not user_row or not user_row["embedding"]:
