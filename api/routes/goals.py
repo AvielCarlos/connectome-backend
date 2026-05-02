@@ -264,6 +264,58 @@ def _build_goal_out(row) -> GoalOut:
     )
 
 
+async def _mirror_goal_state_vector(user_id: str, goal_row) -> None:
+    """Mirror goal current/desired-state signals into IOO user state.
+
+    Goals are the user's declared desired-state interface. Keeping a compact
+    vector signal in ioo_user_state lets Aura/iDo route Now/Future/Map/Execute
+    recommendations against the gap between current state and desired state.
+    """
+    try:
+        metadata = goal_row["graph_metadata"] if "graph_metadata" in goal_row.keys() else {}
+        if isinstance(metadata, str):
+            metadata = json.loads(metadata) if metadata else {}
+        steps = goal_row["steps"] if "steps" in goal_row.keys() else []
+        if isinstance(steps, str):
+            steps = json.loads(steps) if steps else []
+        current_state = metadata.get("current_state") or metadata.get("current_state_text") or "declared_intention"
+        desired_state = metadata.get("desired_state") or metadata.get("desired_state_text") or (goal_row["measurable_outcome"] if "measurable_outcome" in goal_row.keys() else None) or goal_row["title"]
+        completed_steps = sum(1 for step in (steps or []) if step.get("completed"))
+        total_steps = len(steps or [])
+        signal = {
+            "goal_id": str(goal_row["id"]),
+            "title": goal_row["title"],
+            "domain": goal_row["domain"] if "domain" in goal_row.keys() else None,
+            "current_state": current_state,
+            "desired_state": desired_state,
+            "intention_text": goal_row["intention_text"] if "intention_text" in goal_row.keys() else goal_row["title"],
+            "measurable_outcome": goal_row["measurable_outcome"] if "measurable_outcome" in goal_row.keys() else goal_row["title"],
+            "success_metric": goal_row["success_metric"] if "success_metric" in goal_row.keys() else None,
+            "target_value": goal_row["target_value"] if "target_value" in goal_row.keys() else None,
+            "target_date": goal_row["target_date"] if "target_date" in goal_row.keys() else None,
+            "progress": float(goal_row["progress"] or 0.0),
+            "completed_steps": completed_steps,
+            "total_steps": total_steps,
+            "gap_summary": metadata.get("gap_summary") or f"Move from {current_state} toward {desired_state}",
+        }
+        await execute(
+            """
+            INSERT INTO ioo_user_state (user_id, state_json, last_updated)
+            VALUES ($1, $2::jsonb, NOW())
+            ON CONFLICT (user_id) DO UPDATE SET
+                state_json = COALESCE(ioo_user_state.state_json, '{}'::jsonb) || EXCLUDED.state_json,
+                last_updated = NOW()
+            """,
+            UUID(user_id),
+            json.dumps({
+                "desired_state_vector": signal,
+                "latest_goal_vector_event": "goal_state_updated",
+            }),
+        )
+    except Exception as err:
+        logger.warning("Could not mirror goal state vector for user %s: %s", user_id[:8], err)
+
+
 # ---------------------------------------------------------------------------
 # Clarification models/helpers
 # ---------------------------------------------------------------------------
@@ -600,6 +652,7 @@ async def create_goal(
     # Invalidate user model cache
     from core.redis_client import redis_delete
     await redis_delete(f"user_model:{user_id}")
+    await _mirror_goal_state_vector(user_id, row)
 
     logger.info(f"Goal created for user {user_id[:8]}: {body.title} ({len(steps)} steps)")
     return _build_goal_out(row)
@@ -862,6 +915,7 @@ async def update_goal(
 
     from core.redis_client import redis_delete
     await redis_delete(f"user_model:{user_id}")
+    await _mirror_goal_state_vector(user_id, updated)
 
     return _build_goal_out(updated)
 
@@ -933,6 +987,7 @@ async def complete_goal(
 
     from core.redis_client import redis_delete
     await redis_delete(f"user_model:{user_id}")
+    await _mirror_goal_state_vector(user_id, updated)
 
     logger.info(f"Goal completed for user {user_id[:8]}: {row['title']}")
 
