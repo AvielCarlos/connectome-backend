@@ -39,6 +39,66 @@ def _get_openai():
         return None
 
 
+
+
+async def _drive_goal_context(user_id: str, goal_title: str, conversation: List[Dict[str, Any]]) -> tuple[str, List[Dict[str, Any]]]:
+    """Fetch user-scoped Drive excerpts to ground goal clarification and IOO routing.
+
+    Privacy: DriveAgentV2 enforces owner_user_id/user_id scoping and respects
+    the user's Drive privacy level. We only pass short excerpts into the prompt.
+    """
+    query_parts = [goal_title]
+    for turn in conversation[-6:]:
+        text = (turn.get("content") or "").strip()
+        if text:
+            query_parts.append(text[:300])
+    query = " ".join(query_parts).strip() or "goals values projects"
+    try:
+        from ora.agents.drive_agent_v2 import DriveAgentV2
+        from ora.brain import get_brain
+
+        brain = get_brain()
+        agent = DriveAgentV2(openai_client=getattr(brain, "_openai", None))
+        hits = await agent.semantic_search(
+            query=query,
+            user_id=str(user_id),
+            limit=4,
+            min_similarity=0.68,
+        )
+    except Exception as e:
+        logger.debug(f"Drive goal context skipped: {e}")
+        hits = []
+
+    if not hits:
+        return "", []
+
+    lines = []
+    safe_hits = []
+    for h in hits[:4]:
+        name = str(h.get("name") or "Drive note")[:120]
+        excerpt = str(h.get("excerpt") or "").replace("\n", " ")[:500]
+        if not excerpt:
+            continue
+        lines.append(f"- {name}: {excerpt}")
+        safe_hits.append({
+            "drive_id": h.get("drive_id"),
+            "name": name,
+            "excerpt": excerpt[:220],
+            "similarity": h.get("similarity"),
+        })
+
+    if not lines:
+        return "", []
+
+    context = (
+        "Relevant user-owned Google Drive notes. Use these as personal grounding "
+        "for values, past projects, blockers, and long-standing intentions. Do not "
+        "quote sensitive details unless necessary; never imply access beyond connected Drive.\n"
+        + "\n".join(lines)
+    )
+    return context[:2400], safe_hits
+
+
 def _generate_smart_mock_steps(title: str, description: Optional[str] = None) -> List[Dict[str, Any]]:
     """Generate goal-aware placeholder steps based on title keywords when OpenAI is unavailable."""
     lower = (title + " " + (description or "")).lower()
@@ -722,7 +782,11 @@ Rules:
 - Do not promise guaranteed life outcomes, money, dating success, medical outcomes, or token rewards.
 - Before complete, do not output JSON; just ask the next question."""
 
+    drive_context, drive_hits = await _drive_goal_context(str(user_id), body.goal_title, conversation)
+
     messages = [{"role": "system", "content": system}]
+    if drive_context:
+        messages.append({"role": "system", "content": drive_context})
     if body.user_profile:
         messages.append({
             "role": "system",
@@ -766,6 +830,14 @@ Rules:
         structured_goal.setdefault("measurable_outcome", structured_goal.get("specifics") or body.goal_title)
         structured_goal.setdefault("success_metric", "Observable completion of the clarified outcome")
         structured_goal.setdefault("difficulty_estimate", structured_goal.get("difficulty", 5))
+        if drive_hits:
+            structured_goal["drive_context"] = {
+                "used": True,
+                "documents": [
+                    {"drive_id": h.get("drive_id"), "name": h.get("name"), "similarity": h.get("similarity")}
+                    for h in drive_hits
+                ],
+            }
 
         if parsed and parsed.get("graph_nodes"):
             suggested_path = []
@@ -821,6 +893,10 @@ Rules:
                 for n in (nodes or [])[:5]
             ]
             if vector_nodes:
+                if drive_hits:
+                    for vn in vector_nodes:
+                        vn["drive_grounded"] = True
+                        vn["drive_context"] = [h.get("name") for h in drive_hits[:2]]
                 suggested_path = (suggested_path[:3] + vector_nodes)[:7]
         except Exception as e:
             logger.warning(f"IOO path suggestion failed: {e}")
