@@ -45,6 +45,8 @@ class UserProfile(BaseModel):
     profile: Dict[str, Any]
     created_at: datetime
     last_active: Optional[datetime]
+    cp_balance: int = 0
+    total_dao_cp: int = 0
     domain: Optional[DomainType] = None  # active domain focus
 
 

@@ -143,6 +143,8 @@ async def get_profile(user_id: str = Depends(get_current_user_id)):
         profile=profile_data,
         created_at=row["created_at"],
         last_active=row["last_active"],
+        cp_balance=_cp_balance,
+        total_dao_cp=_total_cp,
     )
 
 
