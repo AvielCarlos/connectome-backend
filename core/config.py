@@ -102,7 +102,7 @@ class Settings(BaseSettings):
 
 
     # Monetization — Legacy
-    FREE_TIER_DAILY_SCREENS: int = 10
+    FREE_TIER_DAILY_SCREENS: int = 20
     PREMIUM_PRICE_CENTS: int = 1299
 
     # Stripe — set these in Railway env vars after creating products at dashboard.stripe.com

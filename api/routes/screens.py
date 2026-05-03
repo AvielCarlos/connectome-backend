@@ -1156,7 +1156,7 @@ async def _build_screen_response_from_spec(user_id: str, tier: str, daily_limit:
         screen_spec_db_id=db_id,
         screens_today=screens_today,
         daily_limit=daily_limit,
-        is_limited=(tier == "free"),
+        is_limited=False,
     )
 
 
@@ -1728,7 +1728,7 @@ async def _try_ioo_card(
             screen_spec_db_id=db_id,
             screens_today=screens_today,
             daily_limit=daily_limit,
-            is_limited=(tier == "free"),
+            is_limited=False,
         )
     except Exception as _err:
         logger.warning(f"IOO card build failed, falling back to brain: {_err}")
@@ -1751,23 +1751,24 @@ async def get_next_screen(
 ):
     """
     Request the next screen from Ora.
-    MVP/stability: preserves auth but does not hard-block the main feed on
-    daily limits. Paywall enforcement can return after feed stability is proven.
+    Request the next screen from Aura.
+    Enforces the PricingAgent daily screen limit before generating, so free
+    users keep a real daily cap without false limiter cards in the queue.
     """
     # Check subscription tier via PricingAgent-backed tier guard
-    from api.tier_guard import check_tier_limit, get_user_tier, build_upgrade_card, get_current_usage
+    from api.tier_guard import get_user_tier, build_upgrade_card
     from ora.agents.pricing_agent import get_pricing_agent
 
     tier = await get_user_tier(user_id)
     pricing_agent = get_pricing_agent()
     limits = await pricing_agent.get_tier_limits(tier)
     configured_daily_limit = limits.get("daily_screens", 10)
-    daily_limit = configured_daily_limit if configured_daily_limit == -1 else max(configured_daily_limit, 999)
+    daily_limit = configured_daily_limit
 
     # Get current count BEFORE incrementing (brain will increment)
     current_count = await get_daily_screen_count(user_id)
 
-    if False and daily_limit != -1 and current_count >= daily_limit:
+    if daily_limit != -1 and current_count >= daily_limit:
         # Return Ora's warm upgrade card instead of a cold 402
         upgrade_card = await build_upgrade_card("daily_screens", daily_limit, tier)
         raise HTTPException(
@@ -1881,7 +1882,7 @@ async def get_next_screen(
         screen_spec_db_id=db_id,
         screens_today=screens_today,
         daily_limit=daily_limit,
-        is_limited=(tier == "free"),
+        is_limited=False,
     )
 
 
@@ -1918,22 +1919,30 @@ async def get_screen_batch(
     if not user_row:
         raise HTTPException(status_code=404, detail="User not found")
 
-    tier = user_row["subscription_tier"]
-    is_free = tier == "free"
-    daily_limit = max(settings.FREE_TIER_DAILY_SCREENS, 999)
+    from api.tier_guard import get_user_tier, build_upgrade_card
+    from ora.agents.pricing_agent import get_pricing_agent
 
-    if is_free:
-        # MVP/stability: keep authentication, but do not hard-block the primary
-        # feed on daily limits. A broken empty feed is worse than over-serving
-        # during pre-product-stability.
-        current_count = await get_daily_screen_count(user_id)
-        if current_count >= settings.FREE_TIER_DAILY_SCREENS:
-            logger.info(
-                "Free user %s exceeded configured daily screen limit (%s/%s); serving feed for MVP stability",
-                user_id[:8],
-                current_count,
-                settings.FREE_TIER_DAILY_SCREENS,
-            )
+    tier = await get_user_tier(user_id)
+    pricing_agent = get_pricing_agent()
+    limits = await pricing_agent.get_tier_limits(tier)
+    daily_limit = limits.get("daily_screens", settings.FREE_TIER_DAILY_SCREENS)
+    current_count = await get_daily_screen_count(user_id)
+    if daily_limit != -1 and current_count >= daily_limit:
+        upgrade_card = await build_upgrade_card("daily_screens", daily_limit, tier)
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "error": "daily_limit_reached",
+                "screens_today": current_count,
+                "daily_limit": daily_limit,
+                "tier": tier,
+                "upgrade_card": upgrade_card,
+                "upgrade_url": "/api/payments/checkout",
+            },
+            headers={"X-Upgrade-URL": "/api/payments/checkout"},
+        )
+    if daily_limit != -1:
+        count = min(count, max(0, daily_limit - current_count))
 
     brain = get_brain()
     results: List[ScreenResponse] = []
@@ -2033,7 +2042,7 @@ async def get_screen_batch(
                     screen_spec_db_id=db_id,
                     screens_today=screens_today,
                     daily_limit=daily_limit,
-                    is_limited=is_free,
+                    is_limited=False,
                 )
             )
         except HTTPException:

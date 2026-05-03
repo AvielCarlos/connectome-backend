@@ -8,8 +8,10 @@ import os
 from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException, Header
+from pydantic import BaseModel
 
-from core.database import fetchrow, fetch
+from core.database import execute, fetchrow, fetch
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -20,6 +22,61 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN") or os.getenv("ADMIN_SECRET", "")
 def _require_admin(x_admin_token: str = Header(default="")):
     if not ADMIN_TOKEN or x_admin_token != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="Forbidden")
+
+
+class AdminTierResetRequest(BaseModel):
+    email: str = "carlosandromeda8@gmail.com"
+    tier: str = "sovereign"
+    reset_feed: bool = True
+
+
+@router.post("/users/tier-reset")
+async def admin_set_user_tier_and_reset_feed(
+    body: AdminTierResetRequest,
+    x_admin_token: str = Header(default=""),
+) -> Dict[str, Any]:
+    """Admin-only tier switcher plus feed counter reset for testing tiers."""
+    _require_admin(x_admin_token)
+    email = body.email.strip().lower()
+    if email not in settings.admin_email_list:
+        raise HTTPException(status_code=403, detail="Tier switcher is restricted to admin accounts")
+    tier = body.tier.strip().lower()
+    if tier not in {"free", "explorer", "sovereign", "premium"}:
+        raise HTTPException(status_code=400, detail="Invalid tier")
+
+    user = await fetchrow("SELECT id, email FROM users WHERE lower(email) = $1", email)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user_id = str(user["id"])
+    normalized_tier = "explorer" if tier == "premium" else tier
+
+    await execute(
+        "UPDATE users SET subscription_tier = $2, is_premium = $3 WHERE id = $1",
+        user_id,
+        normalized_tier,
+        normalized_tier in ("explorer", "sovereign"),
+    )
+    await execute(
+        """
+        INSERT INTO subscriptions (user_id, tier, status, updated_at)
+        VALUES ($1, $2, 'active', NOW())
+        ON CONFLICT (user_id)
+        DO UPDATE SET tier = EXCLUDED.tier, status = 'active', updated_at = NOW()
+        """,
+        user_id,
+        normalized_tier,
+    )
+
+    feed_reset = False
+    if body.reset_feed:
+        try:
+            from core.redis_client import redis_delete
+            await redis_delete(f"screens_today:{user_id}")
+            feed_reset = True
+        except Exception as err:
+            logger.warning("Admin tier switch feed reset failed for %s: %s", email, err)
+
+    return {"ok": True, "email": email, "tier": normalized_tier, "feed_reset": feed_reset}
 
 
 @router.get("/insights")

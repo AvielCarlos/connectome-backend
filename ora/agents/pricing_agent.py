@@ -33,13 +33,13 @@ ORA_TIERS: Dict[str, Any] = {
         "description": "Start your path with Aura",
         "features": [
             "4 active paths on your IOO graph",
-            "10 daily discovery cards",
+            "20 daily discovery cards",
             "Basic Aura chat",
             "Community feed",
             "Earn CP through contributions",
         ],
         "limits": {
-            "daily_screens": 10,
+            "daily_screens": 20,
             "active_paths": 4,
             "chat_messages_daily": 10,
             "drive_docs_indexed": 0,
