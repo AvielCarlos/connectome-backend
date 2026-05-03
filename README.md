@@ -2,16 +2,16 @@
 
 Connectome is the nervous system of the Ascension Technologies ecosystem: an AI OS that turns goals, context, places, routines, reflections, and community signals into coordinated action for human flourishing.
 
-This backend is where Ora's brain, agent runtime, IOO Execution Protocol, contribution tracking, CP rewards, and graph intelligence come together.
+This backend is where Aura's brain, agent runtime, IOO Execution Protocol, contribution tracking, CP rewards, and graph intelligence come together.
 
 ## Why builders should care
 
 Most AI products are chat boxes. Connectome is infrastructure for an agentic life OS:
 
-- **Agent developers** can build specialized Ora agents that reason over goals, context, venues, routines, feedback, and DAO signals.
+- **Agent developers** can build specialized Aura agents that reason over goals, context, venues, routines, feedback, and DAO signals.
 - **Backend and infra engineers** can harden a real FastAPI + PostgreSQL/pgvector + Redis system already deployed toward production.
 - **Graph and ML engineers** can improve the IOO ontology, embeddings, prerequisite inference, and recommendation loops.
-- **Product-minded developers** can ship features that immediately become part of the iDo/Ora daily experience.
+- **Product-minded developers** can ship features that immediately become part of the Path Feed/Aura daily experience.
 - **Open-source contributors** earn visible Contribution Points (CP), leaderboard recognition, and a path toward founding steward status in the Ascension DAO.
 
 ## Architecture overview
@@ -19,7 +19,7 @@ Most AI products are chat boxes. Connectome is infrastructure for an agentic lif
 ```text
 Connectome Backend
 ├── FastAPI API surface          api/routes/*
-├── Ora agent brain              ora/agents/*
+├── Aura agent brain              ora/agents/*
 ├── IOO Execution Protocol       api/routes/ioo*.py + graph/embedding logic
 ├── DAO + contribution layer     api/routes/dao*.py, github_webhook.py, leaderboard.py
 ├── Persistence                  PostgreSQL, pgvector, Redis
@@ -28,10 +28,21 @@ Connectome Backend
 
 Key domains:
 
-- **Ora** — the brain: executive agents, coaching, context, discovery, growth, contribution recruitment.
+- **Aura** — the brain: executive agents, coaching, context, discovery, growth, contribution recruitment.
 - **Connectome** — the AI OS / nervous system: APIs, memory, graph, execution protocol, surfaces.
-- **iDo** — the daily app experience where users interact with Ora.
+- **Path Feed** — the daily app experience where users interact with Aura.
 - **Ascension Technologies** — DAO, governance, Contribution Points, ownership/economic coordination layer.
+
+## Try / share / contribute
+
+We are currently aiming for **10 new users per day** through no-spam inbound growth: useful public assets, clear GitHub issues, SEO/owned pages, and product proof — not cold DMs or blasts.
+
+Useful first actions:
+
+- Try the app: https://avielcarlos.github.io/connectome-web/
+- Open the Path Feed and give feedback on confusing or useful cards.
+- Share one concrete critique or screenshot with context.
+- Builders: pick one narrow issue and comment with your approach before opening a PR.
 
 ## Contribute and earn CP
 
