@@ -1434,7 +1434,7 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     current_count = await get_daily_screen_count(user_id)
     rotation_bucket = datetime.now(timezone.utc).strftime("%Y-%m-%d:%H")
     digest = hashlib.sha256(f"{user_id}:{rotation_bucket}:{current_count}".encode("utf-8")).hexdigest()
-    candidates = [item for item in _CURATED_REAL_ACTIONS if not domain_filter or item.get('domain') == domain_filter or (domain_filter == 'iVive' and item.get('domain') == 'Rest')]
+    candidates = [item for item in _CURATED_REAL_ACTIONS if not domain_filter or item.get('domain') == domain_filter]
     if not candidates:
         candidates = _CURATED_REAL_ACTIONS
     candidates = _filter_temporal_branch(candidates, feed_mode)
@@ -1448,9 +1448,6 @@ async def _try_real_world_card(user_id: str, tier: str, daily_limit: int, slot_i
     start = int(digest[:8], 16) % len(candidates)
     idx = (start + slot_index + current_count) % len(candidates)
     item = dict(candidates[idx])
-    if domain_filter == 'iVive' and item.get('domain') == 'Rest':
-        item['domain'] = 'iVive'
-        item['tag'] = item.get('tag') or 'recovery'
     return await _build_screen_response_from_spec(user_id, tier, daily_limit, _real_action_spec(item, feed_mode=feed_mode))
 
 
@@ -1506,11 +1503,12 @@ _STATIC_FALLBACK_CARDS = [
     {
         "title": "Choose Rest on purpose",
         "image": "https://images.unsplash.com/photo-1495195134817-aeb325a55b65?w=1200&auto=format&fit=crop",
-        "body": "A deliberate recovery micro-step: put your phone down for three minutes and let your nervous system learn that nothing needs to be chased right now.",
-        "domain": "Rest",
+        "body": "An iVive recovery micro-step: put your phone down for three minutes and let your nervous system learn that nothing needs to be chased right now.",
+        "domain": "iVive",
+        "aspect": "Rest",
         "tag": "recovery",
         "button": "Begin rest →",
-        "why": "Rest is the substrate under iVive, Eviva, and Aventi. Sometimes the best next action is reducing load before adding direction.",
+        "why": "Rest is an iVive aspect — the recovery layer that makes Eviva contribution and Aventi aliveness sustainable. Sometimes the best next action is reducing load before adding direction.",
         "steps": [
             "Put the phone face down or away from your hand.",
             "Let your eyes rest on one still object.",
@@ -1542,7 +1540,7 @@ async def _static_fallback_card(
         "layout": "card_stack",
         "components": [
             {"type": "hero_image", "source": item["image"], "alt": item["title"]},
-            {"type": "category_badge", "text": item["domain"].upper(), "color": "#00d4aa"},
+            {"type": "category_badge", "text": (f'{item["domain"]} · {item["aspect"]}' if item.get("aspect") else item["domain"]).upper(), "color": "#00d4aa"},
             {"type": "headline", "text": item["title"]},
             {"type": "body", "text": item["body"]},
             _path_progression_component(kind="fallback_action", domain=item["domain"], current_stage="confirm_micro_node"),
@@ -1564,9 +1562,10 @@ async def _static_fallback_card(
             "metadata": {
             "agent": "StaticFallbackAgent",
             "source": "static_fallback",
-            "domain": "iVive" if item["domain"] == "Rest" else item["domain"],
+            "domain": item["domain"],
+            "aspect": item.get("aspect"),
             "path_progression": _path_progression_metadata(kind="fallback_action", domain=item["domain"], current_stage="confirm_micro_node"),
-            "tags": [item["tag"], "mvp_stability"],
+            "tags": [item["tag"], "mvp_stability", *([str(item["aspect"]).lower()] if item.get("aspect") else [])],
             "fallback_reason": reason,
             "ioo_execution_status": "pending_user_response",
             "ioo_learning_event": "fallback_card_shown",

@@ -25,6 +25,9 @@ class IOOEnrichmentAgent:
     CATEGORIES_BY_DOMAIN = {
         "iVive": [
             "iVive physical mental spiritual creative financial self-growth",
+            "iVive rest recovery sleep nervous system restoration",
+            "iVive rest Sabbath digital detox low-stimulation renewal",
+            "iVive rest active recovery after burnout or overwork",
             "health/fitness",
             "mental wellness",
             "finance",
@@ -43,11 +46,6 @@ class IOOEnrichmentAgent:
             "Aventi fun adventure events dating travel friendship",
             "Aventi local micro-adventures and friendship opportunities",
             "Aventi creative dates, social hobbies, and travel readiness",
-        ],
-        "Rest": [
-            "Rest recovery sleep nervous system restoration",
-            "Rest Sabbath digital detox low-stimulation renewal",
-            "Rest active recovery after burnout or overwork",
         ],
     }
     CATEGORIES = [category for categories in CATEGORIES_BY_DOMAIN.values() for category in categories]
@@ -72,16 +70,23 @@ class IOOEnrichmentAgent:
         self.openai = openai_client
 
     def pick_categories(self, count: int = 4) -> List[str]:
-        """Pick a daily balanced slice across Ora's lived-action domains.
+        """Pick a daily balanced slice across the three lived-action domains.
 
-        Feed quality drops when enrichment over-rotates into one silo. The
-        daily cycle should always touch iVive, Eviva, Aventi, and Rest so Ora
-        can build bridges between capability, service, adventure, and recovery.
+        Rest is an iVive aspect, not a fourth domain. The daily cycle still
+        keeps recovery alive by pairing one iVive rest/recovery category with
+        iVive capacity, Eviva contribution, and Aventi aliveness.
         """
         seed = int(hashlib.sha256(str(date.today()).encode()).hexdigest(), 16)
-        picked: List[str] = []
-        for offset, (_domain, categories) in enumerate(self.CATEGORIES_BY_DOMAIN.items()):
-            picked.append(categories[(seed + offset) % len(categories)])
+        ivive_categories = self.CATEGORIES_BY_DOMAIN["iVive"]
+        rest_categories = [c for c in ivive_categories if "rest" in c.lower() or "sleep" in c.lower() or "recovery" in c.lower()]
+        capacity_categories = [c for c in ivive_categories if c not in rest_categories]
+        picked: List[str] = [
+            capacity_categories[seed % len(capacity_categories)],
+            self.CATEGORIES_BY_DOMAIN["Eviva"][(seed + 1) % len(self.CATEGORIES_BY_DOMAIN["Eviva"])],
+            self.CATEGORIES_BY_DOMAIN["Aventi"][(seed + 2) % len(self.CATEGORIES_BY_DOMAIN["Aventi"])],
+        ]
+        if count > len(picked) and rest_categories:
+            picked.append(rest_categories[(seed + 3) % len(rest_categories)])
         if count <= len(picked):
             return picked[:count]
         remaining = [category for category in self.CATEGORIES if category not in picked]
@@ -153,17 +158,17 @@ class IOOEnrichmentAgent:
                 ("Try one social hobby taster session", "Book or attend one beginner-friendly class, meetup, or creative group where conversation happens naturally.", "physical", ["Aventi", "social", "hobby"]),
                 ("Create a simple travel-readiness checklist", "List passport, budget, dates, destination constraints, and one first booking/research action.", "digital", ["Aventi", "travel", "readiness"]),
             ],
-            "Rest recovery sleep nervous system restoration": [
-                ("Choose tonight's shutdown time and protect it", "Set a specific lights-out target, remove one sleep blocker, and start winding down 45 minutes before bed.", "physical", ["Rest", "sleep", "recovery"]),
-                ("Do a 10-minute nervous-system reset", "Use breath, stretching, yoga nidra, or a slow walk to shift out of stress before choosing the next action.", "physical", ["Rest", "nervous-system", "reset"]),
+            "iVive rest recovery sleep nervous system restoration": [
+                ("Choose tonight's shutdown time and protect it", "Set a specific lights-out target, remove one sleep blocker, and start winding down 45 minutes before bed.", "physical", ["iVive", "rest", "sleep", "recovery"]),
+                ("Do a 10-minute nervous-system reset", "Use breath, stretching, yoga nidra, or a slow walk to shift out of stress before choosing the next action.", "physical", ["iVive", "rest", "nervous-system", "reset"]),
             ],
-            "Rest Sabbath digital detox low-stimulation renewal": [
-                ("Schedule a two-hour low-stimulation block", "Pick a calendar window with no feeds, messages, or productivity pressure; choose one restorative activity.", "hybrid", ["Rest", "digital-detox", "renewal"]),
-                ("Prepare a phone-free recovery menu", "Write three offline options—walk, bath, reading, prayer, music, cooking—so rest has an easy next step.", "digital", ["Rest", "offline", "renewal"]),
+            "iVive rest Sabbath digital detox low-stimulation renewal": [
+                ("Schedule a two-hour low-stimulation block", "Pick a calendar window with no feeds, messages, or productivity pressure; choose one restorative activity.", "hybrid", ["iVive", "rest", "digital-detox", "renewal"]),
+                ("Prepare a phone-free recovery menu", "Write three offline options—walk, bath, reading, prayer, music, cooking—so rest has an easy next step.", "digital", ["iVive", "rest", "offline", "renewal"]),
             ],
-            "Rest active recovery after burnout or overwork": [
-                ("Replace one hard task with active recovery", "Choose one non-urgent task to defer and do a gentle body-based recovery action instead.", "physical", ["Rest", "burnout", "active-recovery"]),
-                ("Name the next minimum viable obligation", "Reduce today's pressure to the one obligation that actually matters, then leave space for recovery.", "digital", ["Rest", "prioritisation", "burnout"]),
+            "iVive rest active recovery after burnout or overwork": [
+                ("Replace one hard task with active recovery", "Choose one non-urgent task to defer and do a gentle body-based recovery action instead.", "physical", ["iVive", "rest", "burnout", "active-recovery"]),
+                ("Name the next minimum viable obligation", "Reduce today's pressure to the one obligation that actually matters, then leave space for recovery.", "digital", ["iVive", "rest", "prioritisation", "burnout"]),
             ],
             "finance": [
                 ("List all recurring monthly expenses", "Create visibility before making any financial changes.", "digital", ["finance", "budget"]),
@@ -188,7 +193,7 @@ class IOOEnrichmentAgent:
             prompt = f"""
 Extract actionable IOO graph nodes for the goal category: {category}.
 Use the search evidence below. Return JSON only: {{"steps": [{{"title": str, "description": str, "step_type": "digital|physical|hybrid", "tags": [str], "confidence": 0-1, "source_url": str}}]}}
-Prefer clear opportunities, prerequisites, habits, metrics, physical actions, and digital actions. For Eviva categories, extract concrete jobs, volunteering roles, open-source contribution paths, community initiatives, impact startups, and prerequisites that may need iVive capability-building. For Aventi, prefer specific lived experiences, social invitations, local adventures, dating/friendship pathways, and travel-readiness bridges. For Rest, prefer recovery, sleep, nervous-system, Sabbath/digital-detox, and burnout-repair nodes that make action sustainable. Avoid vague motivation, generic content, and broad labels like "exercise more" unless the title itself contains a concrete next action.
+Prefer clear opportunities, prerequisites, habits, metrics, physical actions, and digital actions. For Eviva categories, extract concrete jobs, volunteering roles, open-source contribution paths, community initiatives, impact startups, and prerequisites that may need iVive capability-building. For Aventi, prefer specific lived experiences, social invitations, local adventures, dating/friendship pathways, and travel-readiness bridges. For iVive rest categories, prefer recovery, sleep, nervous-system, Sabbath/digital-detox, and burnout-repair nodes that make action sustainable; keep their domain as iVive and mark rest/recovery in tags. Avoid vague motivation, generic content, and broad labels like "exercise more" unless the title itself contains a concrete next action.
 
 Evidence:
 {source_text}
@@ -240,7 +245,9 @@ Evidence:
         return str(node["id"]) if node else None
 
     async def run_daily(self, categories: Optional[List[str]] = None) -> Dict[str, Any]:
-        categories = categories or self.pick_categories(3)
+        # Daily enrichment should touch all three lived-action domains, with
+        # rest/recovery treated as a continuously tested iVive aspect.
+        categories = categories or self.pick_categories(4)
         proposed = promoted = skipped = 0
         for category in categories:
             results: List[Dict[str, str]] = []
@@ -287,8 +294,8 @@ Evidence:
             return "Eviva"
         if category.startswith("Aventi") or "adventure" in lowered or "dating" in lowered or "travel" in lowered:
             return "Aventi"
-        if category.startswith("Rest") or "sleep" in lowered or "recovery" in lowered or "burnout" in lowered:
-            return "Rest"
+        if "rest" in lowered or "sleep" in lowered or "recovery" in lowered or "burnout" in lowered:
+            return "iVive"
         return "iVive"
 
 
