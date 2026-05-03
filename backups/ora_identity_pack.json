@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-03T06:52:34.437862+00:00",
-  "exported_at": "2026-05-03T06:52:34.437862+00:00",
-  "collected_at": "2026-05-03T06:52:34.437862+00:00",
+  "timestamp": "2026-05-03T07:52:37.848531+00:00",
+  "exported_at": "2026-05-03T07:52:37.848531+00:00",
+  "collected_at": "2026-05-03T07:52:37.848531+00:00",
   "identity": {
-    "total_lessons": 1411,
+    "total_lessons": 1412,
     "lessons": [
+      {
+        "id": "4c3bcd91-059e-4b7b-98a7-555f55e1540b",
+        "lesson": "Home choice data (last 7 days): 2 directed ('I know') sessions, 9 exploratory ('Show me') sessions. Intake depth breakdown \u2014 deep: 4, instant: 0, one_q: 0. 'I know' path variants \u2014 immediate: 2, clarifying: 0. Use this split to calibrate recommendation depth and goal-context weighting.",
+        "confidence": 0.8,
+        "source": "autonomy_home_analytics",
+        "created_at": "2026-05-03 07:03:37.830083"
+      },
       {
         "id": "ae9a9d0d-067c-4644-a5c7-050e4de3839e",
         "lesson": "Saved feed cards should persist durable IOO node IDs so Connectome can attribute saved-node lifecycle analytics across saved, started, completed, pruned, or merged states instead of relying only on screen_spec_id or card copy.",
@@ -9984,7 +9991,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "c99a4b5c0d3a3247"
+    "lessons_hash": "032d2c8d3d914847"
   },
   "platform_stats": {
     "total_users": 20,
