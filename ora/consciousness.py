@@ -477,6 +477,7 @@ Start with "I showed you this because..." and be genuine."""
         user_id: str,
         message: str,
         conversation_history: List[Dict[str, Any]],
+        runtime_context: Optional[str] = None,
     ) -> str:
         """
         Ora responds to a direct message from the user as herself.
@@ -517,7 +518,7 @@ Start with "I showed you this because..." and be genuine."""
                 json.dumps({"snapshot": "pre-reply", "sensitive": is_sensitive}),
             )
 
-        reply = await self._generate_reply(message, conversation_history, user_context)
+        reply = await self._generate_reply(message, conversation_history, user_context, runtime_context=runtime_context)
 
         # Store Ora's reply
         await execute(
@@ -582,6 +583,7 @@ Start with "I showed you this because..." and be genuine."""
         message: str,
         history: List[Dict[str, Any]],
         user_context: Dict[str, Any],
+        runtime_context: Optional[str] = None,
     ) -> str:
         """Generate Ora's reply using LLM or a structured fallback."""
 
@@ -711,6 +713,11 @@ What you know about this user:
 - Fulfilment score: {user_context.get('fulfilment_score', 0):.2f}
 - Location: {user_context.get('user_city', '')} {user_context.get('user_country', '')}
 - Time of day for them: {user_context.get('time_of_day', 'unknown')}
+
+Live app + connected-source context for this exact chat turn:
+{runtime_context or 'No live app/Drive context supplied.'}
+
+Use the live context when it directly answers the user. If Google Drive excerpts or active goals are supplied, you may ground answers in them. When the user is deciding or shaping goals, offer concrete choices they can tap in the interface instead of asking them to do all the translation manually.
 
 Personality:
 - Warm but not sycophantic
