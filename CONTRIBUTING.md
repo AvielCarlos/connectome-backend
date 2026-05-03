@@ -1,6 +1,6 @@
 # Contributing to Connectome Backend
 
-Connectome is the AI OS backend for Ora and the Ascension Technologies ecosystem. Contributions should make the system more useful, reliable, intelligent, or easier for other builders to extend.
+Connectome is the AI OS backend for Aura and the Ascension Technologies ecosystem. Contributions should make the system more useful, reliable, intelligent, or easier for other builders to extend.
 
 ## Local setup
 
@@ -22,6 +22,10 @@ python -m compileall api core ora main.py
 
 If your change touches a route, include a short curl/example request in the PR description when possible.
 
+## No-spam growth principle
+
+Growth work should improve inbound/public/owned surfaces: onboarding, SEO pages, contribution paths, shareable product proof, analytics, and referral loops. Do not add cold DM/email scraping or bulk outreach mechanics. The current growth target is 10 new users/day through trustworthy channels.
+
 ## How to pick work
 
 1. Browse open issues.
@@ -31,7 +35,7 @@ If your change touches a route, include a short curl/example request in the PR d
 
 ## Contribution categories
 
-- **Agent development** — Ora agents, IOO execution, context reasoning, search, recommendation, orchestration.
+- **Agent development** — Aura agents, IOO execution, context reasoning, search, recommendation, orchestration.
 - **Backend/API** — FastAPI routes, data models, auth, integrations, performance, reliability.
 - **Graph/ML** — pgvector, embeddings, IOO ontology, prerequisite inference, ranking models.
 - **DAO/contribution systems** — CP attribution, GitHub webhooks, rewards, leaderboards, governance primitives.
