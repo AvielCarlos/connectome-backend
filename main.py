@@ -163,6 +163,10 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(dao_agent.run_weekly_leaderboard_loop())
     asyncio.create_task(dao_agent.run_monthly_ltv_loop())
     logger.info("✅ DaoAgent evaluation + leaderboard + LTV loops started")
+
+    # Start suggestion integration + CP award automation
+    asyncio.create_task(_suggestion_integration_loop())
+    logger.info("✅ Suggestion integration + CP award automation loop started")
     # Initialize EventDiscoveryAgent (lazy — syncs cities on demand)
     logger.info("✅ EventDiscoveryAgent ready (city syncs on demand)")
 
@@ -403,6 +407,27 @@ async def _pricing_agent_loop(pricing_agent):
         except Exception as e:
             logger.error(f"PricingAgent loop failed: {e}")
         await _asyncio.sleep(24 * 3600)
+
+
+async def _suggestion_integration_loop():
+    """Periodically promote app feedback into actionable suggestions and award adoption CP."""
+    import asyncio as _asyncio
+    initial_delay_seconds = 5 * 60
+    while True:
+        try:
+            await _asyncio.sleep(initial_delay_seconds)
+            initial_delay_seconds = 6 * 3600
+            from api.routes.suggestions import SuggestionAutomationRun, process_suggestion_automation
+
+            result = await process_suggestion_automation(SuggestionAutomationRun(limit=100))
+            logger.info(
+                "SuggestionIntegration: imported=%s queued=%s awards=%s",
+                result.get("imported_count", 0),
+                result.get("queued_count", 0),
+                result.get("awards_count", 0),
+            )
+        except Exception as e:
+            logger.error(f"Suggestion integration loop failed: {e}")
 
 
 async def _daily_self_check_loop():

@@ -137,8 +137,8 @@ class ReporterAgent:
                 """
                 SELECT
                     COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') AS submitted_today,
-                    COUNT(*) FILTER (WHERE status IN ('accepted', 'implemented', 'adopted')) AS accepted_total,
-                    COUNT(*) FILTER (WHERE status IN ('pending', 'new')) AS pending_total
+                    COUNT(*) FILTER (WHERE status IN ('accepted', 'implemented', 'adopted') OR integration_status IN ('queued', 'accepted', 'implemented', 'adopted')) AS accepted_total,
+                    COUNT(*) FILTER (WHERE status IN ('pending', 'new') AND COALESCE(integration_status, 'pending') IN ('pending', 'new')) AS pending_total
                 FROM user_suggestions
                 """
             )

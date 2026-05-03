@@ -1210,6 +1210,22 @@ async def run_migrations():
         await conn.execute("""
             ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS vote_count INTEGER DEFAULT 0
         """)
+        await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'")
+        await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS source_id TEXT")
+        await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS integration_status TEXT DEFAULT 'pending'")
+        await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS integration_reference TEXT")
+        await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS triage_metadata JSONB DEFAULT '{}'::jsonb")
+        await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS adopted_cp_awarded INTEGER DEFAULT 0")
+        await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS adopted_at TIMESTAMPTZ")
+        await conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_user_suggestions_integration_status
+            ON user_suggestions(integration_status)
+        """)
+        await conn.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_user_suggestions_source_unique
+            ON user_suggestions(source, source_id)
+            WHERE source IS NOT NULL AND source_id IS NOT NULL
+        """)
 
         # User CP balance ledger
         await conn.execute("""
