@@ -87,6 +87,9 @@ class CollectionItemAdd(BaseModel):
     card_body: Optional[str] = None
     card_domain: Optional[str] = None
     card_color: Optional[str] = None
+    # Durable IOO graph link, when the saved card originated from an IOO node.
+    # Kept nullable so existing non-IOO and historical saves remain compatible.
+    node_id: Optional[str] = None
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -110,6 +113,15 @@ def xp_for_level(level: int) -> int:
 
 def _tier_multiplier(tier: str) -> float:
     return TIER_MULTIPLIERS.get((tier or "free").lower(), 1.0)
+
+
+def _optional_uuid(value: Optional[str]) -> Optional[UUID]:
+    if not value:
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="node_id must be a valid UUID")
 
 
 def _streak_multiplier(streak: int) -> float:
@@ -647,9 +659,10 @@ async def add_to_collection(
         await execute(
             """
             INSERT INTO collection_items
-                (collection_id, screen_spec_id, card_title, card_body, card_domain, card_color)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (collection_id, screen_spec_id) DO NOTHING
+                (collection_id, screen_spec_id, card_title, card_body, card_domain, card_color, node_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (collection_id, screen_spec_id) DO UPDATE
+            SET node_id = COALESCE(collection_items.node_id, EXCLUDED.node_id)
             """,
             UUID(collection_id),
             body.screen_spec_id[:120],
@@ -657,6 +670,7 @@ async def add_to_collection(
             body.card_body or "",
             (body.card_domain or "")[:60],
             (body.card_color or "#00d4aa")[:20],
+            _optional_uuid(body.node_id),
         )
         await _award_xp(user_id, "card_save", body.screen_spec_id)
         await _check_and_award_badges(user_id)
@@ -702,6 +716,7 @@ async def list_collection_items(
                     "card_body": r["card_body"],
                     "card_domain": r["card_domain"],
                     "card_color": r["card_color"],
+                    "node_id": str(r["node_id"]) if r["node_id"] else None,
                     "saved_at": r["saved_at"].isoformat() if r["saved_at"] else None,
                 }
                 for r in items
@@ -712,6 +727,84 @@ async def list_collection_items(
     except Exception as e:
         logger.error(f"List collection items error: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch collection")
+
+
+@router.get("/analytics/saved-node-conversions")
+async def saved_node_conversions(
+    user_id: str = Depends(get_current_user_id),
+):
+    """
+    Compute the per-user lifecycle bridge from saved IOO cards to progress.
+
+    This keeps collection rendering backward-compatible while giving Aura a
+    direct analytics read on recommendation → save → start/complete/abandon.
+    """
+    try:
+        rows = await fetch(
+            """
+            WITH saved_nodes AS (
+                SELECT
+                    ci.id AS collection_item_id,
+                    c.user_id,
+                    ci.node_id,
+                    COALESCE(n.domain, ci.card_domain, 'unknown') AS domain,
+                    COALESCE(n.generation_source, 'unknown') AS source,
+                    n.neural_state,
+                    n.pruned_at
+                FROM collection_items ci
+                JOIN collections c ON c.id = ci.collection_id
+                LEFT JOIN ioo_nodes n ON n.id = ci.node_id
+                WHERE c.user_id = $1
+                  AND ci.node_id IS NOT NULL
+            ),
+            progress_by_node AS (
+                SELECT
+                    user_id,
+                    node_id,
+                    BOOL_OR(status IN ('started','completed')) AS has_started,
+                    BOOL_OR(status = 'completed') AS has_completed,
+                    BOOL_OR(status = 'abandoned') AS has_abandoned
+                FROM ioo_user_progress
+                WHERE user_id = $1
+                  AND node_id IS NOT NULL
+                GROUP BY user_id, node_id
+            )
+            SELECT
+                s.node_id,
+                MIN(s.domain) AS domain,
+                MIN(s.source) AS source,
+                COUNT(*)::int AS saved_count,
+                COUNT(*) FILTER (WHERE COALESCE(p.has_started, false))::int AS started_count,
+                COUNT(*) FILTER (WHERE COALESCE(p.has_completed, false))::int AS completed_count,
+                COUNT(*) FILTER (WHERE COALESCE(p.has_abandoned, false))::int AS abandoned_count,
+                COUNT(*) FILTER (WHERE s.neural_state = 'pruned' OR s.pruned_at IS NOT NULL)::int AS pruned_count
+            FROM saved_nodes s
+            LEFT JOIN progress_by_node p
+              ON p.user_id = s.user_id
+             AND p.node_id = s.node_id
+            GROUP BY s.node_id
+            ORDER BY saved_count DESC, completed_count DESC
+            """,
+            UUID(user_id),
+        )
+        return {
+            "items": [
+                {
+                    "node_id": str(r["node_id"]),
+                    "domain": r["domain"],
+                    "source": r["source"],
+                    "saved_count": r["saved_count"],
+                    "started_count": r["started_count"],
+                    "completed_count": r["completed_count"],
+                    "abandoned_count": r["abandoned_count"],
+                    "pruned_count": r["pruned_count"],
+                }
+                for r in rows
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Saved-node analytics error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to fetch saved-node analytics")
 
 
 @router.delete("/collections/{collection_id}/items/{item_id}")
@@ -773,9 +866,10 @@ async def quick_save(
         await execute(
             """
             INSERT INTO collection_items
-                (collection_id, screen_spec_id, card_title, card_body, card_domain, card_color)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (collection_id, screen_spec_id) DO NOTHING
+                (collection_id, screen_spec_id, card_title, card_body, card_domain, card_color, node_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            ON CONFLICT (collection_id, screen_spec_id) DO UPDATE
+            SET node_id = COALESCE(collection_items.node_id, EXCLUDED.node_id)
             """,
             collection_id,
             body.screen_spec_id[:120],
@@ -783,6 +877,7 @@ async def quick_save(
             body.card_body or "",
             (body.card_domain or "")[:60],
             (body.card_color or "#00d4aa")[:20],
+            _optional_uuid(body.node_id),
         )
         await _award_xp(user_id, "card_save", body.screen_spec_id)
         await _check_and_award_badges(user_id)
