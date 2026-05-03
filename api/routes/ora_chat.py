@@ -147,11 +147,150 @@ class ConversationTurn(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     conversation_history: List[ConversationTurn] = []
+    route: Optional[str] = None
+    app_context: Optional[Dict[str, Any]] = None
+
+
+class ChatSuggestedAction(BaseModel):
+    label: str
+    prompt: Optional[str] = None
+    action: Optional[str] = None  # create_goal | update_goal | sync_drive | chat_prompt
+    payload: Optional[Dict[str, Any]] = None
 
 
 class ChatResponse(BaseModel):
     reply: str
     aura_state: Dict[str, Any]
+    suggested_actions: List[ChatSuggestedAction] = []
+
+
+_GOALISH_TERMS = (
+    "goal", "goals", "path", "plan", "modify", "change", "suggest", "drive",
+    "document", "docs", "note", "notes", "project", "projects", "based on", "what do you know",
+)
+
+
+async def _build_runtime_chat_context(
+    user_id: str,
+    message: str,
+    route: Optional[str],
+    app_context: Optional[Dict[str, Any]],
+) -> tuple[str, List[ChatSuggestedAction]]:
+    """Build live app/user-source context for Aura chat.
+
+    Privacy: Drive search is user-scoped by DriveAgentV2. We pass short excerpts
+    only, and action chips are suggestions until the user taps them.
+    """
+    lines: list[str] = []
+    actions: list[ChatSuggestedAction] = []
+    route_label = route or "unknown route"
+    lines.append(f"Current route/screen: {route_label}")
+    if app_context:
+        safe_context = {k: v for k, v in app_context.items() if k in {"app", "page", "active_goal_id", "active_goal_title", "visible_card_title", "visible_node_id"}}
+        if safe_context:
+            lines.append(f"Visible app context: {json.dumps(safe_context)[:800]}")
+
+    try:
+        goal_rows = await fetch(
+            """
+            SELECT id, title, description, domain, progress
+            FROM goals
+            WHERE user_id = $1 AND status = 'active'
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT 5
+            """,
+            UUID(user_id),
+        )
+    except Exception as e:
+        logger.debug(f"Aura chat goal context skipped: {e}")
+        goal_rows = []
+
+    goals = [dict(g) for g in goal_rows]
+    if goals:
+        lines.append("Active goals:")
+        for g in goals:
+            lines.append(f"- {g.get('title')} ({g.get('domain') or 'general'}, progress={g.get('progress') or 0})")
+        first_goal = goals[0]
+        actions.append(ChatSuggestedAction(
+            label="Tune my current goal",
+            prompt=f"Use my app context, active goals, and Drive context to suggest a focused improvement to the goal '{first_goal.get('title')}'. Give me 3 choices.",
+            action="chat_prompt",
+            payload={"goal_id": str(first_goal.get("id")), "source": "active_goal"},
+        ))
+    else:
+        lines.append("Active goals: none found")
+
+    low = message.lower()
+    wants_drive = any(term in low for term in _GOALISH_TERMS) or (route or "").startswith("/app/goals")
+    drive_hits: list[dict[str, Any]] = []
+    drive_status: dict[str, Any] = {}
+    if wants_drive:
+        try:
+            from ora.agents.drive_agent_v2 import DriveAgentV2
+            from ora.brain import get_brain
+
+            brain = get_brain()
+            agent = DriveAgentV2(openai_client=getattr(brain, "_openai", None))
+            drive_status = await agent.status(user_id=user_id)
+            lines.append(
+                "Google Drive status: "
+                f"connected={drive_status.get('drive_connected')}, "
+                f"privacy={drive_status.get('drive_privacy_level')}, "
+                f"indexed_documents={drive_status.get('indexed_documents')}"
+            )
+            if drive_status.get("drive_connected") and int(drive_status.get("indexed_documents") or 0) > 0:
+                drive_hits = await agent.semantic_search(
+                    query=message,
+                    user_id=user_id,
+                    limit=4,
+                    min_similarity=0.58,
+                )
+        except Exception as e:
+            logger.debug(f"Aura chat Drive context skipped: {e}")
+
+    if drive_hits:
+        lines.append("Relevant Google Drive excerpts:")
+        for hit in drive_hits[:4]:
+            name = str(hit.get("name") or "Drive note")[:120]
+            excerpt = str(hit.get("excerpt") or "").replace("\n", " ")[:420]
+            lines.append(f"- {name}: {excerpt}")
+            actions.append(ChatSuggestedAction(
+                label=f"Goal from {name[:22]}",
+                action="create_goal",
+                payload={
+                    "title": f"Integrate {name[:70]}",
+                    "description": f"Use the Drive note '{name}' as source material for a practical, trackable next goal.",
+                    "domain": "iVive",
+                    "source": "google_drive",
+                    "drive_id": hit.get("drive_id"),
+                },
+            ))
+        actions.insert(0, ChatSuggestedAction(
+            label="Suggest Drive-based goals",
+            prompt="Read the relevant Drive excerpts in this chat context and give me 3 multiple-choice goal suggestions I can adopt or edit.",
+            action="chat_prompt",
+            payload={"source": "google_drive", "hits": [h.get("drive_id") for h in drive_hits[:4]]},
+        ))
+    elif wants_drive and drive_status:
+        if not drive_status.get("drive_connected"):
+            actions.append(ChatSuggestedAction(label="Connect Google Drive", action="sync_drive", payload={"reason": "drive_not_connected"}))
+            lines.append("No Drive excerpts are available because Drive is not connected for this user.")
+        elif int(drive_status.get("indexed_documents") or 0) == 0:
+            actions.append(ChatSuggestedAction(label="Sync Google Drive", action="sync_drive", payload={"reason": "no_indexed_docs"}))
+            lines.append("Drive is connected but no indexed documents are available yet; suggest a sync before claiming Drive knowledge.")
+
+    # Keep the chip list compact and useful.
+    deduped: list[ChatSuggestedAction] = []
+    seen = set()
+    for action in actions:
+        key = (action.label, action.action)
+        if key not in seen:
+            deduped.append(action)
+            seen.add(key)
+        if len(deduped) >= 4:
+            break
+
+    return "\n".join(lines)[:3200], deduped
 
 
 # ---------------------------------------------------------------------------
@@ -172,10 +311,17 @@ async def chat(
     history = [{"role": t.role, "content": t.content} for t in payload.conversation_history[-10:]]
 
     try:
+        runtime_context, suggested_actions = await _build_runtime_chat_context(
+            user_id=user_id,
+            message=payload.message,
+            route=payload.route,
+            app_context=payload.app_context,
+        )
         reply = await consciousness.converse(
             user_id=user_id,
             message=payload.message,
             conversation_history=history,
+            runtime_context=runtime_context,
         )
     except Exception as e:
         logger.error(f"Ora chat error for user {user_id[:8]}: {e}")
@@ -191,7 +337,7 @@ async def chat(
         "confidence": uncertainty.get("confidence_overall", 0.5),
     }
 
-    return ChatResponse(reply=reply, aura_state=aura_state)
+    return ChatResponse(reply=reply, aura_state=aura_state, suggested_actions=suggested_actions)
 
 
 # ---------------------------------------------------------------------------
