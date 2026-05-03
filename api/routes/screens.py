@@ -1905,11 +1905,11 @@ async def get_screen_batch(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Fetch up to 5 screens at once for TikTok-style prefetching.
+    Fetch a queue of screens for TikTok-style prefetching.
     Each screen goes through the same logic as /next.
     Returns a list of ScreenResponse objects.
     """
-    count = max(1, min(body.count, 5))  # cap at 5
+    count = max(1, min(body.count, 20))  # keep a deep ready queue without unbounded generation
 
     # Check subscription tier once
     user_row = await fetchrow(
