@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-03T18:53:13.922382+00:00",
-  "exported_at": "2026-05-03T18:53:13.922382+00:00",
-  "collected_at": "2026-05-03T18:53:13.922382+00:00",
+  "timestamp": "2026-05-03T19:53:17.145756+00:00",
+  "exported_at": "2026-05-03T19:53:17.145756+00:00",
+  "collected_at": "2026-05-03T19:53:17.145756+00:00",
   "identity": {
-    "total_lessons": 1417,
+    "total_lessons": 1418,
     "lessons": [
+      {
+        "id": "fdbf9ffd-8966-4a25-b8ab-5b500a600318",
+        "lesson": "Home choice data (last 7 days): 2 directed ('I know') sessions, 9 exploratory ('Show me') sessions. Intake depth breakdown \u2014 deep: 4, instant: 0, one_q: 0. 'I know' path variants \u2014 immediate: 2, clarifying: 0. Use this split to calibrate recommendation depth and goal-context weighting.",
+        "confidence": 0.8,
+        "source": "autonomy_home_analytics",
+        "created_at": "2026-05-03 19:00:32.991344"
+      },
       {
         "id": "0fa8a307-9ec1-4153-9b38-85324e224820",
         "lesson": "Home choice data (last 7 days): 2 directed ('I know') sessions, 9 exploratory ('Show me') sessions. Intake depth breakdown \u2014 deep: 4, instant: 0, one_q: 0. 'I know' path variants \u2014 immediate: 2, clarifying: 0. Use this split to calibrate recommendation depth and goal-context weighting.",
@@ -10026,7 +10033,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "7c972729ae7dd3b7"
+    "lessons_hash": "8d35743a93f0ae48"
   },
   "platform_stats": {
     "total_users": 20,
