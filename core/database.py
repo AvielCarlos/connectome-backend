@@ -2146,6 +2146,7 @@ async def run_migrations():
                 id              BIGSERIAL PRIMARY KEY,
                 collection_id   UUID REFERENCES collections(id) ON DELETE CASCADE,
                 screen_spec_id  VARCHAR(120),
+                node_id         UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL,
                 card_title      VARCHAR(255),
                 card_body       TEXT,
                 card_domain     VARCHAR(60),
@@ -2154,7 +2155,9 @@ async def run_migrations():
                 UNIQUE(collection_id, screen_spec_id)
             )
         """)
+        await conn.execute("ALTER TABLE collection_items ADD COLUMN IF NOT EXISTS node_id UUID REFERENCES ioo_nodes(id) ON DELETE SET NULL")
         await conn.execute("CREATE INDEX IF NOT EXISTS collection_items_col_idx ON collection_items(collection_id)")
+        await conn.execute("CREATE INDEX IF NOT EXISTS collection_items_node_idx ON collection_items(node_id)")
 
         # ─── Migration 009: Social Layer — leaderboards, friends, challenges ───
         await conn.execute("""
