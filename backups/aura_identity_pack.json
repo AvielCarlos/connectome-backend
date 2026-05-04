@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-04T19:14:56.850407+00:00",
-  "exported_at": "2026-05-04T19:14:56.850407+00:00",
-  "collected_at": "2026-05-04T19:14:56.850407+00:00",
+  "timestamp": "2026-05-04T19:17:04.380643+00:00",
+  "exported_at": "2026-05-04T19:17:04.380643+00:00",
+  "collected_at": "2026-05-04T19:17:04.380643+00:00",
   "identity": {
-    "total_lessons": 9,
+    "total_lessons": 10,
     "lessons": [
+      {
+        "id": "a1dc23e3-9dd3-4500-862c-804ca20317f1",
+        "lesson": "{\"proposal_id\": \"a1dc23e3-9dd3-4500-862c-804ca20317f1\", \"card_type\": \"momentum_builder\", \"hypothesis\": \"Introducing a Momentum Builder card type will increase user fulfilment by 30%.\", \"description\": \"The Momentum Builder card will dynamically suggest small, achievable tasks tailored to user preferences and past behavior after completing a previous activity. By providing immediate feedback and celebrating small milestones, this card aims to enhance engagement and motivate users to continue interacting with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-04T19:15:06.732274+00:00\", \"expires_at\": \"2026-05-06T19:15:06.732274+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-04 19:15:06.732274"
+      },
       {
         "id": "5ed82110-2d25-462a-b868-f4aa6b448ce0",
         "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
@@ -170,7 +177,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "9a9c3582906015f5"
+    "lessons_hash": "325da49afcc3bbb1"
   },
   "platform_stats": {
     "total_users": 20,
