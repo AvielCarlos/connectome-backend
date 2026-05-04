@@ -19,7 +19,7 @@ Endpoints:
 
 import logging
 import math
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -475,6 +475,7 @@ async def get_gamification_status(user_id: str = Depends(get_current_user_id)):
             "tier_bonus": "2.5x XP" if tier == "sovereign" else "1.5x XP" if tier == "explorer" else None,
         }
 
+
     except Exception as e:
         logger.error(f"Gamification status error: {e}")
         return {
@@ -498,6 +499,100 @@ async def get_gamification_status(user_id: str = Depends(get_current_user_id)):
             "tier_bonus": None,
         }
 
+
+@router.get("/weekly-recap")
+async def get_weekly_recap(user_id: str = Depends(get_current_user_id)):
+    """
+    Seven-day progress recap for the home/goals surface.
+    Aggregates XP, streak, goal movement, saved IOO cards, and journal cadence
+    without requiring new tables.
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=7)
+    try:
+        xp_rows = await fetch(
+            """
+            SELECT reason, COALESCE(SUM(amount), 0) AS amount, COUNT(*) AS count
+            FROM xp_log
+            WHERE user_id = $1 AND created_at >= $2
+            GROUP BY reason
+            ORDER BY amount DESC
+            """,
+            UUID(user_id), since,
+        )
+        total_xp = sum(int(r["amount"] or 0) for r in xp_rows)
+
+        goals_created = await fetchval(
+            "SELECT COUNT(*) FROM goals WHERE user_id = $1 AND created_at >= $2",
+            UUID(user_id), since,
+        ) or 0
+        goals_completed = await fetchval(
+            "SELECT COUNT(*) FROM goals WHERE user_id = $1 AND completed_at >= $2",
+            UUID(user_id), since,
+        ) or 0
+        journal_entries = await fetchval(
+            """
+            SELECT COUNT(*) FROM ora_conversations
+            WHERE user_id = $1 AND role = 'journal_entry' AND created_at >= $2
+            """,
+            UUID(user_id), since,
+        ) or 0
+        saved_nodes = await fetchval(
+            """
+            SELECT COUNT(*) FROM collection_items ci
+            JOIN collections c ON c.id = ci.collection_id
+            WHERE c.user_id = $1 AND ci.created_at >= $2
+            """,
+            UUID(user_id), since,
+        ) or 0
+        streak_row = await fetchrow(
+            "SELECT current_streak, longest_streak FROM user_streaks WHERE user_id = $1",
+            UUID(user_id),
+        )
+        current_streak = int(streak_row["current_streak"] or 0) if streak_row else 0
+
+        highlights = []
+        if total_xp:
+            highlights.append(f"You earned {total_xp} XP this week.")
+        if goals_completed:
+            highlights.append(f"You completed {goals_completed} goal{'s' if goals_completed != 1 else ''}.")
+        if saved_nodes:
+            highlights.append(f"You saved {saved_nodes} IOO node{'s' if saved_nodes != 1 else ''} for later.")
+        if journal_entries:
+            highlights.append(f"You reflected {journal_entries} time{'s' if journal_entries != 1 else ''}.")
+        if current_streak:
+            highlights.append(f"Your current streak is {current_streak} day{'s' if current_streak != 1 else ''}.")
+
+        if not highlights:
+            highlights.append("This is a clean slate week — one tiny action today starts the graph moving.")
+
+        return {
+            "window_days": 7,
+            "since": since.isoformat(),
+            "total_xp": total_xp,
+            "xp_by_reason": [{"reason": r["reason"], "amount": int(r["amount"] or 0), "count": int(r["count"] or 0)} for r in xp_rows],
+            "goals_created": int(goals_created),
+            "goals_completed": int(goals_completed),
+            "journal_entries": int(journal_entries),
+            "saved_nodes": int(saved_nodes),
+            "current_streak": current_streak,
+            "highlights": highlights[:4],
+            "next_prompt": "Choose one node to touch today: a goal step, a journal reflection, or one saved opportunity.",
+        }
+    except Exception as e:
+        logger.error(f"Weekly recap error: {e}")
+        return {
+            "window_days": 7,
+            "since": since.isoformat(),
+            "total_xp": 0,
+            "xp_by_reason": [],
+            "goals_created": 0,
+            "goals_completed": 0,
+            "journal_entries": 0,
+            "saved_nodes": 0,
+            "current_streak": 0,
+            "highlights": ["This is a clean slate week — one tiny action today starts the graph moving."],
+            "next_prompt": "Choose one node to touch today: a goal step, a journal reflection, or one saved opportunity.",
+        }
 
 @router.post("/checkin")
 async def daily_checkin(
