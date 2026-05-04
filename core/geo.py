@@ -4,7 +4,7 @@ IP Geolocation — lightweight, no API key required.
 Uses ip-api.com free tier (45 req/min limit, no key needed).
 Results are cached in Redis for 24 hours per IP to stay well within limits.
 
-What Ora uses this for:
+What Aura uses this for:
 - Local time of day → adjust coaching tone (morning vs night)
 - City/country → surface locally relevant recommendations
 - Timezone → correct "good morning" messages
@@ -217,7 +217,7 @@ async def geocode_location_query(query: str) -> Optional[Dict[str, Any]]:
 
 def geo_to_context_hints(geo: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Convert raw geo data to Ora-usable context hints.
+    Convert raw geo data to Aura-usable context hints.
     Safe to call with None geo (returns empty hints).
     """
     if not geo:

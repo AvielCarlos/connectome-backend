@@ -1,10 +1,10 @@
 """
 Ground Truth Routes
-Safeguard 3: Direct user prompts to anchor Ora's exit classifications.
+Safeguard 3: Direct user prompts to anchor Aura's exit classifications.
 
-POST /api/ground-truth/prompt  — Ask Ora if a clarifying question should be shown
+POST /api/ground-truth/prompt  — Ask Aura if a clarifying question should be shown
 POST /api/ground-truth/answer  — Store user's answer and update classification
-GET  /api/ground-truth/calibration — Calibration stats for Ora's exit predictions
+GET  /api/ground-truth/calibration — Calibration stats for Aura's exit predictions
 """
 
 import logging
@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from api.middleware import get_current_user_id
 from core.database import fetch, fetchrow, execute, fetchval
-from ora.user_model import update_user_embedding
+from aura.user_model import update_user_embedding
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ class GroundTruthAnswerResponse(BaseModel):
 @router.post("/prompt", response_model=GroundTruthPromptResponse)
 async def ground_truth_prompt(body: GroundTruthPromptRequest):
     """
-    Ask Ora whether a clarifying question should be shown to the user.
+    Ask Aura whether a clarifying question should be shown to the user.
 
     Finds the most recent exit_classification where:
       - confidence < 0.7 OR consistency_flagged = true
@@ -219,10 +219,10 @@ async def ground_truth_answer(body: GroundTruthAnswerRequest):
 @router.get("/calibration")
 async def get_calibration(user_id: Optional[str] = None):
     """
-    Return calibration stats comparing Ora's predictions against ground truth.
+    Return calibration stats comparing Aura's predictions against ground truth.
     Optionally scoped to a single user_id query param.
     """
-    from ora.brain import get_brain
+    from aura.brain import get_brain
     brain = get_brain()
     stats = await brain.feedback_analyst.get_calibration_stats(user_id=user_id)
     return stats

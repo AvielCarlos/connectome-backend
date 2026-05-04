@@ -210,7 +210,7 @@ async def admin_insights(
 async def subscription_status(user_id: str = Depends(get_current_user_id)):
     """Get current subscription status and usage for today."""
     from core.config import settings
-    from ora.user_model import get_daily_screen_count
+    from aura.user_model import get_daily_screen_count
 
     row = await fetchrow(
         "SELECT subscription_tier FROM users WHERE id = $1", UUID(user_id)

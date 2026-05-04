@@ -1,9 +1,9 @@
 -- Migration 004: Google Drive Documents
--- Ora's long-term memory from the user's own writing.
+-- Aura's long-term memory from the user's own writing.
 -- Added: 2026-04-27
 --
 -- This table stores indexed Google Drive documents with pgvector embeddings
--- so Ora can do semantic search over personal notes during coaching sessions.
+-- so Aura can do semantic search over personal notes during coaching sessions.
 --
 -- Run via: psql $DATABASE_URL -f migrations/004_drive_documents.sql
 -- (The migration is also baked into core/database.py and runs automatically on startup.)

@@ -55,7 +55,7 @@ def search_hn_who_wants_to_be_hired():
                         "source": "HackerNews who-wants-to-be-hired",
                         "context": "your HackerNews post about your AI engineering background",
                         "role_context": "AI/ML engineering and Python development",
-                        "fit_description": "the Ora agent system and backend architecture",
+                        "fit_description": "the Aura agent system and backend architecture",
                         "raw_text": text[:200],
                     })
     except Exception as e:

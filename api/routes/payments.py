@@ -1,5 +1,5 @@
 """
-Payments API Routes — Ora's monetization layer.
+Payments API Routes — Aura's monetization layer.
 
 # Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET in Railway env vars.
 # Create products at dashboard.stripe.com, then set:
@@ -14,7 +14,7 @@ Endpoints:
   POST /api/payments/checkout              — auth: create Stripe checkout session
   POST /api/payments/portal               — auth: Stripe billing portal
   POST /api/payments/webhook              — public: Stripe webhook handler
-  GET  /api/pricing/proposals             — admin: Ora's tier change proposals
+  GET  /api/pricing/proposals             — admin: Aura's tier change proposals
   POST /api/pricing/proposals/{id}/approve — admin: apply a pricing proposal
 """
 
@@ -31,8 +31,8 @@ from pydantic import BaseModel
 from api.middleware import get_current_user_id
 from api.tier_guard import get_user_tier
 from core.database import execute, fetch, fetchrow, fetchval
-from ora.agents.pricing_agent import get_pricing_agent
-from ora.payments.stripe_client import StripeError, StripeWebhookError, get_stripe_client
+from aura.agents.pricing_agent import get_pricing_agent
+from aura.payments.stripe_client import StripeError, StripeWebhookError, get_stripe_client
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ async def _ensure_subscription_row(user_id: str) -> dict:
 @router.get("/api/payments/tiers")
 async def get_tiers():
     """
-    Return current tier definitions as set by Ora's PricingAgent.
+    Return current tier definitions as set by Aura's PricingAgent.
     Public endpoint — no auth required.
     """
     pricing = get_pricing_agent()
@@ -140,7 +140,7 @@ async def get_subscription(user_id: str = Depends(get_current_user_id)):
 
     return {
         "tier": tier_key,
-        "tier_name": tier_config.get("name", "Ora Free"),
+        "tier_name": tier_config.get("name", "Aura Free"),
         "status": sub.get("status", "active"),
         "stripe_subscription_id": sub.get("stripe_subscription_id"),
         "current_period_end": sub.get("current_period_end"),
@@ -689,7 +689,7 @@ async def _apply_tier_path_limit(user_id: str, tier: str) -> None:
 
 
 def _price_id_to_tier(price_id: str) -> str:
-    """Map a Stripe Price ID to an Ora tier name."""
+    """Map a Stripe Price ID to an Aura tier name."""
     import os
     price_map = {
         os.getenv("STRIPE_PRICE_EXPLORER_MONTHLY", ""): "explorer",
@@ -718,7 +718,7 @@ async def get_pricing_proposals(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Return Ora's pending tier change proposals.
+    Return Aura's pending tier change proposals.
     Admin only — in production, add a role check here.
     """
     pricing = get_pricing_agent()
@@ -736,7 +736,7 @@ async def approve_pricing_proposal(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Apply one of Ora's proposed tier changes to the live config.
+    Apply one of Aura's proposed tier changes to the live config.
     Admin only — in production, add a role check here.
     """
     pricing = get_pricing_agent()
@@ -753,7 +753,7 @@ async def approve_pricing_proposal(
     return {
         "status": "approved",
         "proposal": applied,
-        "message": "Ora's pricing adjustment is now live.",
+        "message": "Aura's pricing adjustment is now live.",
     }
 
 

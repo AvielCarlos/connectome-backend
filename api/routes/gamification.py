@@ -63,7 +63,7 @@ BADGE_DEFS = [
     ("achiever",      "Achiever",         "🏆", "Completed first goal"),
     ("thoughtful",    "Thoughtful",       "📓", "5 journal entries"),
     ("connected",     "Connected",        "🔗", "500+ XP total"),
-    ("ora_friend",    "Ora's Friend",     "◈",  "50 chat messages"),
+    ("aura_friend",    "Aura's Friend",     "◈",  "50 chat messages"),
     ("century",       "Century",          "💯", "100-day streak"),
     ("path_maker",    "Path Maker",       "🗺",  "Mapped IOO graph"),
 ]
@@ -267,7 +267,7 @@ async def _check_and_award_badges(user_id: str) -> List[Dict[str, Any]]:
             "achiever":      goals_completed >= 1,
             "thoughtful":    journal_count >= 5,
             "connected":     total_xp >= 500,
-            "ora_friend":    chat_count >= 50,
+            "aura_friend":    chat_count >= 50,
         }
 
         # Award newly earned
@@ -531,7 +531,7 @@ async def get_weekly_recap(user_id: str = Depends(get_current_user_id)):
         ) or 0
         journal_entries = await fetchval(
             """
-            SELECT COUNT(*) FROM ora_conversations
+            SELECT COUNT(*) FROM aura_conversations
             WHERE user_id = $1 AND role = 'journal_entry' AND created_at >= $2
             """,
             UUID(user_id), since,

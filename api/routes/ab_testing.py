@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from api.middleware import get_current_user_id
 from core.redis_client import get_redis
-from ora.ab_testing import record_ui_event, get_winning_variant, get_ui_variant
+from aura.ab_testing import record_ui_event, get_winning_variant, get_ui_variant
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ab", tags=["ab_testing"])
@@ -28,7 +28,7 @@ EXPERIMENT_REGISTRY = {
     "home_hero_headline": {
         "variants": {
             "A": "The AI that knows what you want",
-            "B": "Your goals. Ora's intelligence.",
+            "B": "Your goals. Aura's intelligence.",
             "C": "What do you actually want to do today?",
             "D": "iDo. Two letters. One life.",
         },
@@ -39,7 +39,7 @@ EXPERIMENT_REGISTRY = {
         "variants": {
             "A": "Get Started Free",
             "B": "Try iDo Free",
-            "C": "Meet Ora",
+            "C": "Meet Aura",
             "D": "Start for Free",
         },
         "metric": "signup_click_rate",
@@ -113,7 +113,7 @@ EXPERIMENT_REGISTRY = {
     },
     "feed_empty_state": {
         "variants": {
-            "A": "Talk to Ora to get more cards",
+            "A": "Talk to Aura to get more cards",
             "B": "You've seen everything for now — come back tomorrow",
             "C": "Add a goal to get personalized cards",
         },
@@ -129,32 +129,32 @@ EXPERIMENT_REGISTRY = {
         "page": "feed",
     },
     # ─── ORA CHAT ───
-    "ora_greeting": {
+    "aura_greeting": {
         "variants": {
-            "A": "Hey! I'm Ora. What do you want to work toward?",
+            "A": "Hey! I'm Aura. What do you want to work toward?",
             "B": "◈ What's on your mind?",
             "C": "Hey [name]. What are we working on today?",
             "D": "I've been thinking about your goals. Want to pick up where we left off?",
         },
         "metric": "conversation_length",
-        "page": "ora",
+        "page": "aura",
     },
-    "ora_response_length": {
+    "aura_response_length": {
         "variants": {
             "A": "concise — 1-3 sentences",
             "B": "standard — 3-5 sentences",
             "C": "rich — with bullet points when helpful",
         },
         "metric": "conversation_rating",
-        "page": "ora",
+        "page": "aura",
     },
-    "ora_proactive_suggestions": {
+    "aura_proactive_suggestions": {
         "variants": {
-            "A": "shown — Ora suggests next steps",
+            "A": "shown — Aura suggests next steps",
             "B": "hidden — pure Q&A",
         },
         "metric": "goal_set_rate",
-        "page": "ora",
+        "page": "aura",
     },
     # ─── GOALS ───
     "goals_input_placeholder": {
@@ -162,7 +162,7 @@ EXPERIMENT_REGISTRY = {
             "A": "I want to…",
             "B": "What do you want?",
             "C": "My goal is to…",
-            "D": "Tell Ora what you want",
+            "D": "Tell Aura what you want",
         },
         "metric": "goal_creation_rate",
         "page": "goals",
@@ -178,7 +178,7 @@ EXPERIMENT_REGISTRY = {
     # ─── UPGRADE / PAYWALL ───
     "upgrade_headline": {
         "variants": {
-            "A": "Unlock the full Ora",
+            "A": "Unlock the full Aura",
             "B": "Go deeper with Explorer",
             "C": "You're using iDo like a power user",
             "D": "Explorer — built for people serious about their goals",
@@ -208,9 +208,9 @@ EXPERIMENT_REGISTRY = {
     # ─── NAVIGATION ───
     "navbar_labels": {
         "variants": {
-            "A": "Feed | Ora ◈ | Goals | DAO | Profile",
+            "A": "Feed | Aura ◈ | Goals | DAO | Profile",
             "B": "Discover | Chat | Goals | Earn | Me",
-            "C": "Home | Ora | Goals | DAO | You",
+            "C": "Home | Aura | Goals | DAO | You",
         },
         "metric": "nav_click_distribution",
         "page": "navbar",
@@ -219,7 +219,7 @@ EXPERIMENT_REGISTRY = {
     "register_headline": {
         "variants": {
             "A": "Create your account",
-            "B": "Meet Ora",
+            "B": "Meet Aura",
             "C": "Start your journey",
             "D": "Join iDo",
         },
@@ -284,7 +284,7 @@ AB_METRICS = {
     "feed_rating_avg": "average card rating",
     "cards_per_session": "cards rated per session",
     "rating_completion_rate": "cards rated / cards shown",
-    "conversation_length": "messages in Ora conversation",
+    "conversation_length": "messages in Aura conversation",
     "goal_set_rate": "users who set a goal / users who saw goals page",
     "goal_creation_rate": "goals created / page visits",
     "day1_retention": "users who return within 24h",
@@ -363,7 +363,7 @@ async def get_variant_endpoint(
     user_id: str = Depends(get_current_user_id),
 ):
     """Get the current A/B variant for a UI surface."""
-    from ora.agents.ui_ab_testing import UI_TESTS
+    from aura.agents.ui_ab_testing import UI_TESTS
 
     cfg = UI_TESTS.get(surface)
     if not cfg:
@@ -773,7 +773,7 @@ async def set_experiment_winner(
 
 # ─── Evolutionary A/B Experiments (DB-backed) ─────────────────────────────────
 
-from ora.agents.experiment_generator import ExperimentGeneratorAgent
+from aura.agents.experiment_generator import ExperimentGeneratorAgent
 from core.database import fetchrow as db_fetchrow, fetch as db_fetch, execute as db_execute
 
 

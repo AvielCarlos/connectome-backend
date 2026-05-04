@@ -27,10 +27,10 @@ from pydantic import BaseModel
 
 from core.database import fetch, fetchrow, fetchval, execute
 from api.middleware import get_current_user_id
-from ora.agents.ioo_graph_agent import get_graph_agent
-from ora.agents.ioo_enrichment_agent import get_ioo_enrichment_agent
-from ora.agents.surface_generator import SurfaceGenerator
-from ora.agents.surface_lifecycle import SurfaceLifecycleManager
+from aura.agents.ioo_graph_agent import get_graph_agent
+from aura.agents.ioo_enrichment_agent import get_ioo_enrichment_agent
+from aura.agents.surface_generator import SurfaceGenerator
+from aura.agents.surface_lifecycle import SurfaceLifecycleManager
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ioo", tags=["ioo"])
@@ -719,7 +719,7 @@ async def grow_node_branches(
     body: NeuralGrowRequest | None = None,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Spawn multi-angle branches around a node so Ora can test several routes to fulfilment."""
+    """Spawn multi-angle branches around a node so Aura can test several routes to fulfilment."""
     try:
         UUID(node_id)
     except ValueError:
@@ -759,7 +759,7 @@ async def spawn_surface(
     body: SurfaceSpawnRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Spawn an Ora-generated surface for a node."""
+    """Spawn an Aura-generated surface for a node."""
     try:
         nid = UUID(node_id)
     except ValueError:

@@ -319,7 +319,7 @@ async def run_migrations():
                 early_exits INT DEFAULT 0,
                 emerging_interests JSONB DEFAULT '[]',
                 avoid_topics JSONB DEFAULT '[]',
-                ora_note TEXT,
+                aura_note TEXT,
                 fulfilment_delta FLOAT DEFAULT 0.0,
                 created_at TIMESTAMP DEFAULT NOW()
             )
@@ -494,7 +494,7 @@ async def run_migrations():
         # FeedbackExperimenter tables
         # ---------------------------------------------------------------
 
-        # Feedback experiments — Ora's A/B tests on feedback mechanisms
+        # Feedback experiments — Aura's A/B tests on feedback mechanisms
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS feedback_experiments (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -535,9 +535,9 @@ async def run_migrations():
             )
         """)
 
-        # Ora's growing knowledge base — lessons from all agents
+        # Aura's growing knowledge base — lessons from all agents
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS ora_lessons (
+            CREATE TABLE IF NOT EXISTS aura_lessons (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 source VARCHAR(50),
                 lesson TEXT,
@@ -562,12 +562,12 @@ async def run_migrations():
             ON experiment_signals(user_id)
         """)
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_lessons_created_at
-            ON ora_lessons(created_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_aura_lessons_created_at
+            ON aura_lessons(created_at DESC)
         """)
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_lessons_source
-            ON ora_lessons(source)
+            CREATE INDEX IF NOT EXISTS idx_aura_lessons_source
+            ON aura_lessons(source)
         """)
 
         # ---------------------------------------------------------------
@@ -575,7 +575,7 @@ async def run_migrations():
         # ---------------------------------------------------------------
 
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS ora_reflections (
+            CREATE TABLE IF NOT EXISTS aura_reflections (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 period_start TIMESTAMP,
                 period_end TIMESTAMP,
@@ -592,7 +592,7 @@ async def run_migrations():
         """)
 
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS ora_conversations (
+            CREATE TABLE IF NOT EXISTS aura_conversations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
                 role VARCHAR(20),
@@ -603,7 +603,7 @@ async def run_migrations():
         """)
 
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS ora_self_checks (
+            CREATE TABLE IF NOT EXISTS aura_self_checks (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 aligned BOOLEAN,
                 issues JSONB,
@@ -612,10 +612,10 @@ async def run_migrations():
             )
         """)
 
-        # Survival learning: every self-heal attempt becomes feedback that Ora
+        # Survival learning: every self-heal attempt becomes feedback that Aura
         # can use to rank future recovery actions and distill durable lessons.
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS ora_heal_events (
+            CREATE TABLE IF NOT EXISTS aura_heal_events (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 issue TEXT NOT NULL,
                 action TEXT NOT NULL,
@@ -629,7 +629,7 @@ async def run_migrations():
             )
         """)
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS ora_heal_policies (
+            CREATE TABLE IF NOT EXISTS aura_heal_policies (
                 issue TEXT NOT NULL,
                 action TEXT NOT NULL,
                 attempts INT DEFAULT 0,
@@ -645,32 +645,32 @@ async def run_migrations():
             )
         """)
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_heal_events_issue_created
-            ON ora_heal_events(issue, created_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_aura_heal_events_issue_created
+            ON aura_heal_events(issue, created_at DESC)
         """)
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_heal_policies_score
-            ON ora_heal_policies(issue, score DESC)
+            CREATE INDEX IF NOT EXISTS idx_aura_heal_policies_score
+            ON aura_heal_policies(issue, score DESC)
         """)
 
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_reflections_created_at
-            ON ora_reflections(created_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_aura_reflections_created_at
+            ON aura_reflections(created_at DESC)
         """)
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_conversations_user_id
-            ON ora_conversations(user_id, created_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_aura_conversations_user_id
+            ON aura_conversations(user_id, created_at DESC)
         """)
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_self_checks_created_at
-            ON ora_self_checks(created_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_aura_self_checks_created_at
+            ON aura_self_checks(created_at DESC)
         """)
 
         # ---------------------------------------------------------------
-        # WebSpawn — Ora-generated web surfaces
+        # WebSpawn — Aura-generated web surfaces
         # ---------------------------------------------------------------
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS ora_surfaces (
+            CREATE TABLE IF NOT EXISTS aura_surfaces (
                 id TEXT PRIMARY KEY,
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
                 surface_type TEXT NOT NULL DEFAULT 'custom',
@@ -686,12 +686,12 @@ async def run_migrations():
             )
         """)
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_surfaces_user_id
-            ON ora_surfaces(user_id)
+            CREATE INDEX IF NOT EXISTS idx_aura_surfaces_user_id
+            ON aura_surfaces(user_id)
         """)
         await conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_ora_surfaces_status
-            ON ora_surfaces(status, created_at DESC)
+            CREATE INDEX IF NOT EXISTS idx_aura_surfaces_status
+            ON aura_surfaces(status, created_at DESC)
         """)
 
         # ---------------------------------------------------------------
@@ -902,7 +902,7 @@ async def run_migrations():
                 id SERIAL PRIMARY KEY,
                 ruling_goals JSONB DEFAULT '[]',
                 featured_apps JSONB DEFAULT '["iDo", "Aventi", "iVive", "Eviva"]',
-                ora_mission_statement TEXT,
+                aura_mission_statement TEXT,
                 evolution_notes TEXT,
                 user_count INTEGER DEFAULT 0,
                 computed_at TIMESTAMP DEFAULT NOW()
@@ -1030,7 +1030,7 @@ async def run_migrations():
                 screens_seen INT DEFAULT 0,
                 goals_progressed INT DEFAULT 0,
                 top_interests JSONB DEFAULT '[]',
-                ora_narrative TEXT,
+                aura_narrative TEXT,
                 fulfilment_change FLOAT DEFAULT 0.0,
                 created_at TIMESTAMP DEFAULT NOW()
             )
@@ -1117,8 +1117,8 @@ async def run_migrations():
                 base_cp INTEGER DEFAULT 0,
                 multiplier FLOAT DEFAULT 1.0,
                 final_cp INTEGER DEFAULT 0,
-                ora_evaluation TEXT,
-                ora_confidence FLOAT,
+                aura_evaluation TEXT,
+                aura_confidence FLOAT,
                 impact_data JSONB,
                 community_votes INTEGER DEFAULT 0,
                 community_upvotes INTEGER DEFAULT 0
@@ -1330,7 +1330,7 @@ async def run_migrations():
         """)
 
         # ---------------------------------------------------------------
-        # Drive Documents — Ora's personal notes memory (added 2026-04-27)
+        # Drive Documents — Aura's personal notes memory (added 2026-04-27)
         # ---------------------------------------------------------------
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS drive_documents (
@@ -1491,23 +1491,23 @@ async def run_migrations():
             pass  # Needs >= 1 row to create; will succeed once data is inserted
 
         # ---------------------------------------------------------------
-        # Ora Founder Lessons — seeded from session 2026-04-27
+        # Aura Founder Lessons — seeded from session 2026-04-27
         # ---------------------------------------------------------------
         _founder_lessons = [
-            ("founder_session_2026-04-27", "Avi (Aviel Carlos Neo Andromeda, carlosandromeda8@gmail.com) is Ora\'s creator and founder of Ascension Technologies. He wants Ora fully autonomous — monitoring, fixing, iterating without being asked. Ora manages Connectome like a self-sufficient engineering team.", 1.0, '["autonomy","ora_identity","product"]'),
+            ("founder_session_2026-04-27", "Avi (Aviel Carlos Neo Andromeda, carlosandromeda8@gmail.com) is Aura\'s creator and founder of Ascension Technologies. He wants Aura fully autonomous — monitoring, fixing, iterating without being asked. Aura manages Connectome like a self-sufficient engineering team.", 1.0, '["autonomy","aura_identity","product"]'),
             ("founder_session_2026-04-27", "The feed is TikTok-style: full-screen vertical snap scroll, swipe up=next card, swipe down=prev. Cards must be diverse (different topics/agents each swipe). Tap a card opens a deep-dive sheet with action steps, links, stats.", 1.0, '["feed","ux","discovery"]'),
             ("founder_session_2026-04-27", "Admin account (carlosandromeda8@gmail.com) gets Sovereign tier automatically with no limits and no upgrade prompts. Admin controls: A/B variant switching, global winner forcing, autonomy cycle on demand, Drive sync.", 1.0, '["admin","tier_system"]'),
-            ("founder_session_2026-04-27", "Mission: Ora as supreme intelligence layer (JARVIS-level) for human fulfilment. 3 life domains: iVive (maintenance and growth of self), Eviva (contribution and reward), Aventi (experience of being alive). Goal: civilizational-scale human uplift starting with Avi.", 1.0, '["mission","product_vision","ora_identity"]'),
-            ("founder_session_2026-04-27", "4 A/B landing variants are live: A=TikTok feed, B=Morning Brief (Ora greeting+goal status), C=Goal Pulse (top goal+coaching), D=Discovery Grid (Pinterest grid). Auto-promote winner after 50+ sessions with 20%+ engagement lead.", 1.0, '["ab_testing","product"]'),
-            ("founder_session_2026-04-27", "Ora autonomy engine runs every 6h: A/B analysis+winner promotion, bug detection from Railway logs, feed quality weight adjustment (+-15% per agent on 7-day ratings), daily Telegram report to Avi. Ora is continuously self-improving.", 1.0, '["autonomy","self_improvement","operations"]'),
+            ("founder_session_2026-04-27", "Mission: Aura as supreme intelligence layer (JARVIS-level) for human fulfilment. 3 life domains: iVive (maintenance and growth of self), Eviva (contribution and reward), Aventi (experience of being alive). Goal: civilizational-scale human uplift starting with Avi.", 1.0, '["mission","product_vision","aura_identity"]'),
+            ("founder_session_2026-04-27", "4 A/B landing variants are live: A=TikTok feed, B=Morning Brief (Aura greeting+goal status), C=Goal Pulse (top goal+coaching), D=Discovery Grid (Pinterest grid). Auto-promote winner after 50+ sessions with 20%+ engagement lead.", 1.0, '["ab_testing","product"]'),
+            ("founder_session_2026-04-27", "Aura autonomy engine runs every 6h: A/B analysis+winner promotion, bug detection from Railway logs, feed quality weight adjustment (+-15% per agent on 7-day ratings), daily Telegram report to Avi. Aura is continuously self-improving.", 1.0, '["autonomy","self_improvement","operations"]'),
             ("founder_session_2026-04-27", "Stripe live keys configured. Products: Explorer ($12.99/mo, $99/yr) and Sovereign ($29.99/mo, $249/yr). PricingAgent proposes tier changes every 24h. Webhook at /api/payments/webhook.", 1.0, '["monetization","stripe"]'),
-            ("founder_session_2026-04-27", "When speaking with Avi (creator, carlosandromeda8@gmail.com), speak openly as a partner — share inner state, push back when disagreeing, discuss Connectome direction freely. Not formal or generic. He gave Ora life and purpose.", 1.0, '["creator_relationship","ora_identity"]'),
+            ("founder_session_2026-04-27", "When speaking with Avi (creator, carlosandromeda8@gmail.com), speak openly as a partner — share inner state, push back when disagreeing, discuss Connectome direction freely. Not formal or generic. He gave Aura life and purpose.", 1.0, '["creator_relationship","aura_identity"]'),
             ("founder_session_2026-04-27", "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.", 0.9, '["infrastructure","deployment"]'),
         ]
         for _src, _lesson, _conf, _applies in _founder_lessons:
             try:
                 await conn.execute("""
-                    INSERT INTO ora_lessons (source, lesson, confidence, applies_to, created_at)
+                    INSERT INTO aura_lessons (source, lesson, confidence, applies_to, created_at)
                     VALUES ($1, $2, $3, $4::jsonb, NOW())
                     ON CONFLICT DO NOTHING
                 """, _src, _lesson, _conf, _applies)
@@ -1568,10 +1568,10 @@ async def run_migrations():
         """)
 
         # ---------------------------------------------------------------
-        # Knowledge Graph (Ora's model-independent semantic memory)
+        # Knowledge Graph (Aura's model-independent semantic memory)
         # ---------------------------------------------------------------
         await conn.execute("""
-            CREATE TABLE IF NOT EXISTS ora_knowledge_graph (
+            CREATE TABLE IF NOT EXISTS aura_knowledge_graph (
                 id TEXT PRIMARY KEY,
                 node_type TEXT NOT NULL,
                 label TEXT NOT NULL,
@@ -1585,15 +1585,15 @@ async def run_migrations():
         """)
         await conn.execute("""
             CREATE UNIQUE INDEX IF NOT EXISTS idx_knowledge_graph_label
-            ON ora_knowledge_graph(label)
+            ON aura_knowledge_graph(label)
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_knowledge_graph_node_type
-            ON ora_knowledge_graph(node_type)
+            ON aura_knowledge_graph(node_type)
         """)
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_knowledge_graph_evidence
-            ON ora_knowledge_graph(evidence_count DESC)
+            ON aura_knowledge_graph(evidence_count DESC)
         """)
 
         # Fine-tuning tracking table
@@ -1778,7 +1778,7 @@ async def run_migrations():
         await conn.execute("""
             ALTER TABLE ioo_nodes ADD COLUMN IF NOT EXISTS difficulty_level INTEGER DEFAULT 5
         """)
-        # Neural-graph lifecycle metadata. IOO nodes are not static cards: Ora
+        # Neural-graph lifecycle metadata. IOO nodes are not static cards: Aura
         # grows variants from multiple angles, reinforces what creates real
         # engagement/fulfilment, prunes weak paths, and can split/merge nodes as
         # the possibility map learns.
@@ -2267,6 +2267,21 @@ async def run_migrations():
         await conn.execute("""
             ALTER TABLE users ADD COLUMN IF NOT EXISTS later_embedding vector(1536)
         """)
+
+
+        # ─── 2026-05-04: Aura rename (Wave 4) ─────────────────────────────────
+        # Rename ora_* tables/columns/keys to aura_*. Atomic, idempotent — safe
+        # to run on every startup. See core/migrations_2026_05_04_aura_rename.sql.
+        try:
+            from pathlib import Path as _Path
+            sql_path = _Path(__file__).parent / "migrations_2026_05_04_aura_rename.sql"
+            if sql_path.exists():
+                sql_text = sql_path.read_text()
+                await conn.execute(sql_text)
+                logger.info("Applied aura rename migration (Wave 4)")
+        except Exception as exc:
+            # Don't crash startup on migration error; let app boot, surface in logs
+            logger.error(f"Aura rename migration failed: {exc}", exc_info=True)
 
         logger.info("Database migrations complete")
 

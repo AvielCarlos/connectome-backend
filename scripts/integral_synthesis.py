@@ -1,4 +1,4 @@
-"""Run Ora's Integral Synthesis Agent once."""
+"""Run Aura's Integral Synthesis Agent once."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import logging
 
 from core.database import close_pool, get_pool
-from ora.agents.integral_synthesis_agent import run_integral_synthesis
+from aura.agents.integral_synthesis_agent import run_integral_synthesis
 
 logging.basicConfig(level=logging.INFO)
 

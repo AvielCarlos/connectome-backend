@@ -13,8 +13,8 @@ from pydantic import BaseModel
 
 from core.database import fetch
 from api.middleware import get_current_user_id
-from ora.brain import get_brain
-from ora.user_model import update_aura_memory
+from aura.brain import get_brain
+from aura.user_model import update_aura_memory
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ async def end_session(
         logger.error(f"Session summary generation failed: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate session summary")
 
-    # Update Ora's persistent memory for this user (non-blocking)
+    # Update Aura's persistent memory for this user (non-blocking)
     try:
         openai_client = getattr(brain, '_openai', None)
         await update_aura_memory(
@@ -87,7 +87,7 @@ async def end_session(
             openai_client=openai_client,
         )
     except Exception as e:
-        logger.warning(f"ora_memory update failed (non-fatal): {e}")
+        logger.warning(f"aura_memory update failed (non-fatal): {e}")
 
     # Schedule re-engagement notification (non-blocking — failure doesn't fail the request)
     reengagement = None
@@ -125,7 +125,7 @@ async def get_last_session_summary(
     row = await fetchrow(
         """
         SELECT screens_shown, highly_rated, early_exits,
-               emerging_interests, avoid_topics, ora_note,
+               emerging_interests, avoid_topics, aura_note,
                fulfilment_delta, session_started_at, session_ended_at
         FROM session_summaries
         WHERE user_id = $1
@@ -150,7 +150,7 @@ async def get_last_session_summary(
         "highly_rated": row["highly_rated"],
         "early_exits": row["early_exits"],
         "emerging_interests": emerging or [],
-        "ora_note": row["ora_note"],
+        "aura_note": row["aura_note"],
         "fulfilment_delta": float(row["fulfilment_delta"] or 0.0),
         "session_started_at": row["session_started_at"].isoformat() if row["session_started_at"] else None,
         "session_ended_at": row["session_ended_at"].isoformat() if row["session_ended_at"] else None,

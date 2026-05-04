@@ -19,8 +19,8 @@ from pydantic import BaseModel, Field
 
 from api.middleware import get_current_user_id
 from core.database import execute, fetchrow
-from ora.agents.ioo_execution_agent import build_execution_protocol
-from ora.agents.evolution_engine import record_action_evidence, run_background_evolution
+from aura.agents.ioo_execution_agent import build_execution_protocol
+from aura.agents.evolution_engine import record_action_evidence, run_background_evolution
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/ioo", tags=["ioo-execution"])

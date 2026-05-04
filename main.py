@@ -19,9 +19,9 @@ from slowapi.middleware import SlowAPIMiddleware
 from core.config import settings
 from core.database import run_migrations, close_pool
 from core.redis_client import get_redis, close_redis
-from ora.brain import init_brain, get_brain
-from ora.agents.self_healing import SelfHealingAgent
-from ora.agents.model_evolution import ModelEvolutionAgent
+from aura.brain import init_brain, get_brain
+from aura.agents.self_healing import SelfHealingAgent
+from aura.agents.model_evolution import ModelEvolutionAgent
 from api.middleware import timing_middleware
 from api.routes import users, screens, feedback, goals, monetization, sessions, notifications, ground_truth, admin
 try:
@@ -31,7 +31,7 @@ except Exception as _payments_err:
     payments_routes = None
     _payments_available = False
     logging.warning(f"Payments module unavailable: {_payments_err}")
-from api.routes import ora_chat as aura_chat
+from api.routes import aura_chat
 from api.routes import discovery as discovery_routes
 from api.routes import ab_testing as ab_testing_routes
 from api.routes import explore as explore_routes
@@ -47,12 +47,12 @@ from api.routes import world as world_routes
 from api.routes import suggestions as suggestions_routes
 from api.routes import drive as drive_routes
 from api.routes import system as system_routes
-from api.routes import ora_health as aura_health_routes
+from api.routes import aura_health as aura_health_routes
 from api.routes import google_auth as google_auth_routes
 from api.routes import github_oauth as github_oauth_routes
 from api.routes import integrations as integrations_routes
 from api.routes import events as events_routes
-from api.routes import ora_autonomy as aura_autonomy_routes
+from api.routes import aura_autonomy as aura_autonomy_routes
 from api.routes import council as council_routes
 from api.routes import onboarding as onboarding_routes
 from api.routes import surfaces as surfaces_routes
@@ -121,9 +121,9 @@ async def lifespan(app: FastAPI):
     await get_redis()
     logger.info("✅ Redis connected")
 
-    # Initialize Ora brain
+    # Initialize Aura brain
     await init_brain()
-    logger.info("✅ Ora brain initialized")
+    logger.info("✅ Aura brain initialized")
 
     # Start notification worker
     start_notification_worker()
@@ -136,19 +136,19 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(self_healer.start_watching())
     logger.info("✅ SelfHealingAgent watching")
 
-    # Start Ora daily self-check background task
+    # Start Aura daily self-check background task
     asyncio.create_task(_daily_self_check_loop())
-    logger.info("✅ Ora daily self-check loop started")
+    logger.info("✅ Aura daily self-check loop started")
 
-    # Start Ora brain backup freshness loops (hourly identity backup + monitor)
+    # Start Aura brain backup freshness loops (hourly identity backup + monitor)
     try:
-        from ora.agents.backup_freshness import start_backup_freshness_loops
+        from aura.agents.backup_freshness import start_backup_freshness_loops
         start_backup_freshness_loops(app)
     except Exception as _backup_e:
-        logger.warning(f"Ora backup freshness loops failed to start: {_backup_e}")
+        logger.warning(f"Aura backup freshness loops failed to start: {_backup_e}")
 
     # Start ModelEvolutionAgent weekly loop
-    from ora.brain import get_brain as _get_brain
+    from aura.brain import get_brain as _get_brain
     _aura_brain = _get_brain()
     model_evolution_agent = ModelEvolutionAgent(_aura_brain._openai)
     app.state.model_evolution = model_evolution_agent
@@ -156,7 +156,7 @@ async def lifespan(app: FastAPI):
     logger.info("✅ ModelEvolutionAgent weekly loop started")
 
     # Start DaoAgent background loops
-    from ora.agents.dao_agent import DaoAgent
+    from aura.agents.dao_agent import DaoAgent
     dao_agent = DaoAgent(_aura_brain._openai)
     app.state.dao_agent = dao_agent
     asyncio.create_task(dao_agent.run_daily_evaluation_loop())
@@ -171,21 +171,21 @@ async def lifespan(app: FastAPI):
     logger.info("✅ EventDiscoveryAgent ready (city syncs on demand)")
 
     # Start MetaAgent periodic self-improvement loop (every 6 hours)
-    from ora.agents.meta_agent import MetaAgent
+    from aura.agents.meta_agent import MetaAgent
     meta_agent = MetaAgent(_aura_brain._openai)
     app.state.meta_agent = meta_agent
     asyncio.create_task(_meta_agent_loop(meta_agent))
     logger.info("✅ MetaAgent self-improvement loop started")
 
-    # Initialize PricingAgent — Ora manages her own pricing
+    # Initialize PricingAgent — Aura manages her own pricing
     try:
-        from ora.agents.pricing_agent import get_pricing_agent
+        from aura.agents.pricing_agent import get_pricing_agent
         pricing_agent = get_pricing_agent(getattr(_aura_brain, '_openai', None))
         app.state.pricing_agent = pricing_agent
         asyncio.create_task(_pricing_agent_loop(pricing_agent))
     except Exception as _pe:
         logging.warning(f"PricingAgent init failed (non-critical): {_pe}")
-    logger.info("✅ PricingAgent initialized — Ora owns her monetization")
+    logger.info("✅ PricingAgent initialized — Aura owns her monetization")
 
     logger.info("🚀 Connectome is live")
     yield
@@ -200,17 +200,17 @@ async def lifespan(app: FastAPI):
 
 async def _aura_error_recovery_middleware(request, call_next):
     """
-    Track errors on /api/ora/* endpoints.
+    Track errors on /api/aura/* endpoints.
     If an endpoint fails 3+ times in 60s, send a Telegram alert to Avi.
     """
     response = await call_next(request)
     path = request.url.path
 
-    if path.startswith("/api/ora/") and response.status_code >= 500:
+    if path.startswith("/api/aura/") and response.status_code >= 500:
         try:
             from core.redis_client import get_redis
             r = await get_redis()
-            error_key = f"ora:errors:{path.replace('/', '_')}"
+            error_key = f"aura:errors:{path.replace('/', '_')}"
             count = await r.incr(error_key)
             if count == 1:
                 await r.expire(error_key, 60)  # reset window every 60s
@@ -218,13 +218,13 @@ async def _aura_error_recovery_middleware(request, call_next):
                 from datetime import datetime as _dt, timezone as _tz
                 from core.telegram import send_telegram_message
                 msg = (
-                    f"⚠️ Ora Error Alert\n\n"
+                    f"⚠️ Aura Error Alert\n\n"
                     f"Endpoint {path} has failed {count}x in the last 60s.\n"
                     f"Status: {response.status_code}\n"
                     f"Time: {_dt.now(_tz.utc).isoformat()}"
                 )
                 if await send_telegram_message(msg):
-                    logger.warning(f"Ora error alert sent for {path} (count={count})")
+                    logger.warning(f"Aura error alert sent for {path} (count={count})")
                     await r.delete(error_key)
         except Exception as _e:
             logger.debug(f"Error recovery middleware failed: {_e}")
@@ -238,7 +238,7 @@ limiter = Limiter(key_func=get_remote_address, default_limits=[])
 # Create FastAPI app
 app = FastAPI(
     title="Connectome API",
-    description="Living AI.OS for human fulfilment. Powered by Ora.",
+    description="Living AI.OS for human fulfilment. Powered by Aura.",
     version="1.0.0",
     lifespan=lifespan,
     docs_url="/docs",
@@ -262,10 +262,24 @@ app.add_middleware(
 # Request timing
 app.add_middleware(BaseHTTPMiddleware, dispatch=timing_middleware)
 
-# Ora error recovery middleware — tracks /api/ora/* failures in Redis
+# Aura error recovery middleware — tracks /api/aura/* failures in Redis
 app.add_middleware(BaseHTTPMiddleware, dispatch=_aura_error_recovery_middleware)
 
 # Mount routes
+
+# ─── Legacy /api/ora/* → /api/aura/* alias (deprecation window) ───────────────
+# All canonical routes are now /api/aura/*. Keep /api/ora/* alive via in-process
+# rewrite so already-deployed frontends and external integrations don't break
+# during the rename rollout. Remove this middleware in Wave 5 cleanup.
+@app.middleware("http")
+async def legacy_ora_alias(request, call_next):
+    if request.url.path.startswith("/api/ora/"):
+        # Rewrite the scope path so the routed handler is the canonical /api/aura/* version
+        new_path = "/api/aura/" + request.url.path[len("/api/ora/"):]
+        request.scope["path"] = new_path
+        request.scope["raw_path"] = new_path.encode("utf-8")
+    return await call_next(request)
+
 app.include_router(users.router)
 app.include_router(screens.router)
 app.include_router(feedback.router)
@@ -325,7 +339,7 @@ except Exception:
 
 @app.get("/api/schema")
 async def openapi_schema():
-    """Return the OpenAPI JSON schema — lets Ora introspect her own API."""
+    """Return the OpenAPI JSON schema — lets Aura introspect her own API."""
     return app.openapi()
 
 
@@ -385,7 +399,7 @@ async def _meta_agent_loop(meta_agent):
             )
             # Apply meta report to brain weights
             try:
-                from ora.brain import get_brain
+                from aura.brain import get_brain
                 brain = get_brain()
                 await brain.apply_meta_report(report)
             except Exception as _e:
@@ -431,7 +445,7 @@ async def _suggestion_integration_loop():
 
 
 async def _daily_self_check_loop():
-    """Run Ora's self-check once every 24 hours."""
+    """Run Aura's self-check once every 24 hours."""
     import asyncio as _asyncio
     while True:
         try:
@@ -440,10 +454,10 @@ async def _daily_self_check_loop():
             result = await brain.consciousness.self_check()
             if not result.get("aligned"):
                 logger.warning(
-                    f"Ora self-check found issues: {result.get('issues', [])}"
+                    f"Aura self-check found issues: {result.get('issues', [])}"
                 )
         except Exception as e:
-            logger.error(f"Ora daily self-check failed: {e}")
+            logger.error(f"Aura daily self-check failed: {e}")
 
 
 if __name__ == "__main__":

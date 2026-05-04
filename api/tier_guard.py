@@ -1,5 +1,5 @@
 """
-Tier Guard — Ora enforces her own subscription limits.
+Tier Guard — Aura enforces her own subscription limits.
 
 Usage:
     from api.tier_guard import check_tier_limit, TierLimitExceeded
@@ -11,7 +11,7 @@ Usage:
 Resources:
     "daily_screens"             — discovery cards per day
     "goals"                     — active goals count
-    "chat_messages_daily"       — Ora chat messages per day
+    "chat_messages_daily"       — Aura chat messages per day
     "journal_entries_monthly"   — journal entries per month
     "drive_docs_indexed"        — Drive docs indexed
     "event_recommendations_weekly" — event recs per week
@@ -24,7 +24,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from core.database import fetchrow, fetchval
-from ora.agents.pricing_agent import get_pricing_agent
+from aura.agents.pricing_agent import get_pricing_agent
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +82,7 @@ async def get_current_usage(user_id: str, resource: str) -> int:
     """
     try:
         if resource == "daily_screens":
-            from ora.user_model import get_daily_screen_count
+            from aura.user_model import get_daily_screen_count
             return await get_daily_screen_count(user_id)
 
         elif resource == "goals":
@@ -97,7 +97,7 @@ async def get_current_usage(user_id: str, resource: str) -> int:
                 """
                 SELECT COUNT(*) FROM interactions
                 WHERE user_id = $1
-                  AND interaction_type = 'ora_chat'
+                  AND interaction_type = 'aura_chat'
                   AND created_at > NOW() - INTERVAL '24 hours'
                 """,
                 str(user_id),
@@ -217,39 +217,39 @@ async def check_tier_limit(
 
 def _build_upgrade_message(resource: str, limit: int, current_tier: str) -> str:
     """
-    Ora writes her own upgrade messages — warm, not pushy.
+    Aura writes her own upgrade messages — warm, not pushy.
     """
     messages = {
         "daily_screens": (
             f"You've explored {limit} ideas today ✦\n\n"
             "Want to go deeper? Explorer unlocks unlimited discovery, "
-            "full Ora chat, and your personal Drive connection. "
+            "full Aura chat, and your personal Drive connection. "
             "$12.99/mo — or join as a Founding Member."
         ),
         "goals": (
-            f"You've got {limit} active goals — Ora's keeping you focused ✦\n\n"
+            f"You've got {limit} active goals — Aura's keeping you focused ✦\n\n"
             "Explorer removes all limits, adds AI step generation, and connects "
             "your Google Drive to your goals. $12.99/mo."
         ),
         "chat_messages_daily": (
-            f"You've had {limit} Ora conversations today ✦\n\n"
-            "Explorer unlocks unlimited Ora chat — she's ready to think with you "
+            f"You've had {limit} Aura conversations today ✦\n\n"
+            "Explorer unlocks unlimited Aura chat — she's ready to think with you "
             "as long as you need. $12.99/mo."
         ),
         "journal_entries_monthly": (
             "You've journaled deeply this month ✦\n\n"
-            "Explorer gives you unlimited journal entries with Ora reflections "
+            "Explorer gives you unlimited journal entries with Aura reflections "
             "after each one. $12.99/mo."
         ),
         "drive_docs_indexed": (
             "Your Drive knowledge limit is reached ✦\n\n"
             "Explorer indexes up to 50 Drive docs. Sovereign unlocks everything — "
-            "Ora reads your entire Drive to inform your journey. $29.99/mo."
+            "Aura reads your entire Drive to inform your journey. $29.99/mo."
         ),
         "event_recommendations_weekly": (
             "You've seen all this week's local events ✦\n\n"
             "Explorer gives you unlimited personalized event recommendations — "
-            "Ora finds what matters in your city. $12.99/mo."
+            "Aura finds what matters in your city. $12.99/mo."
         ),
     }
 
@@ -257,7 +257,7 @@ def _build_upgrade_message(resource: str, limit: int, current_tier: str) -> str:
         resource,
         (
             "You've reached your plan limit ✦\n\n"
-            "Explorer unlocks the full Ora experience — unlimited discovery, "
+            "Explorer unlocks the full Aura experience — unlimited discovery, "
             "goals, and coaching. $12.99/mo."
         ),
     )
@@ -265,14 +265,14 @@ def _build_upgrade_message(resource: str, limit: int, current_tier: str) -> str:
 
 async def build_upgrade_card(resource: str, limit: int, tier: str) -> dict:
     """
-    Generate a special Ora upgrade card for the discovery feed.
+    Generate a special Aura upgrade card for the discovery feed.
     Called when free users hit the daily screen limit.
     Returns a screen-spec-like dict that can be returned directly.
     """
     message = _build_upgrade_message(resource, limit, tier)
 
     return {
-        "type": "ora_message",
+        "type": "aura_message",
         "layout": "single",
         "is_upgrade_card": True,
         "components": [

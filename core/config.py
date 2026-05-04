@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379"
 
-    # OpenAI — if empty, Ora falls back to intelligent mock
+    # OpenAI — if empty, Aura falls back to intelligent mock
     OPENAI_API_KEY: str = ""
 
     # Anthropic — enables Claude model benchmarking and switching
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     GITHUB_CLIENT_SECRET: str = ""
     GITHUB_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/github/callback"
 
-    # Ora brain backup freshness
+    # Aura brain backup freshness
     ORA_BACKUP_SCHEDULER_ENABLED: bool = True
     ORA_IDENTITY_BACKUP_INTERVAL_SECONDS: int = 3600       # hourly identity pack
     ORA_BACKUP_FRESHNESS_CHECK_SECONDS: int = 1800         # 30-minute monitor

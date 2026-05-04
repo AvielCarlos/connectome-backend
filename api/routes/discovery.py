@@ -1,6 +1,6 @@
 """
 Discovery API Routes
-Handles user answers to Ora's discovery interview questions.
+Handles user answers to Aura's discovery interview questions.
 Answers update the user profile for better personalisation.
 """
 
@@ -168,7 +168,7 @@ def _questions_for_variant(variant_id: str) -> list[dict]:
 
 
 class OnboardingRequest(BaseModel):
-    conversation: list[dict] = Field(default_factory=list)  # [{role: "user"|"ora", content: "..."}]
+    conversation: list[dict] = Field(default_factory=list)  # [{role: "user"|"aura", content: "..."}]
 
 
 class OnboardingResponse(BaseModel):
@@ -236,8 +236,8 @@ async def _aura_onboarding_message(
                 {
                     "role": "system",
                     "content": (
-                        "You are Ora, a warm, concise AI guide for human flourishing. "
-                        "Ora uses three domains: iVive (maintenance and growth of self: physical, mental, spiritual, creative, financial, skills, habits), Eviva (contribution to the collective and reward: work, service, DAO/open-source/civic participation, income, recognition), and Aventi (aliveness: fun, adventure, events, dating, travel, friendships, discovery, spontaneity). "
+                        "You are Aura, a warm, concise AI guide for human flourishing. "
+                        "Aura uses three domains: iVive (maintenance and growth of self: physical, mental, spiritual, creative, financial, skills, habits), Eviva (contribution to the collective and reward: work, service, DAO/open-source/civic participation, income, recognition), and Aventi (aliveness: fun, adventure, events, dating, travel, friendships, discovery, spontaneity). "
                         "Contributing to Connectome or Ascension Technologies and earning CP/recognition is Eviva. "
                         "Reply with exactly one short acknowledgement sentence, then ask the provided next intake question. "
                         "Keep it natural, grounded, and under 55 words. Do not add extra questions."
@@ -257,7 +257,7 @@ async def _aura_onboarding_message(
         message = response.choices[0].message.content.strip()
         return message or f"Thank you — that helps me understand you better. {fallback}"
     except Exception as e:
-        logger.warning(f"Ora onboarding OpenAI response failed: {e}")
+        logger.warning(f"Aura onboarding OpenAI response failed: {e}")
         return f"Thank you — that helps me understand you better. {fallback}"
 
 
@@ -514,7 +514,7 @@ async def _store_onboarding_answers(user_id: str, answers: list[str], variant_id
         logger.warning(f"Could not invalidate user model cache after onboarding: {e}")
 
     try:
-        from ora.agents.ioo_graph_agent import get_graph_agent
+        from aura.agents.ioo_graph_agent import get_graph_agent
         await get_graph_agent().build_user_ioo_vector(user_id)
     except Exception as e:
         logger.warning(f"Could not update IOO vector after onboarding: {e}")
@@ -585,7 +585,7 @@ async def submit_discovery_answer(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Submit a user's answer to an Ora discovery question.
+    Submit a user's answer to an Aura discovery question.
     Stores the answer in the user profile under the named field.
     Returns { ok: true, profile_updated: true }.
     """
@@ -612,7 +612,7 @@ async def submit_discovery_answer(
     }
     if body.profile_field in CAPABILITY_FIELDS or body.question_id.startswith("feed_capability"):
         import asyncio
-        from ora.user_model import update_user_embedding_from_context
+        from aura.user_model import update_user_embedding_from_context
         context = {body.profile_field: body.answer}
         if body.goal_id:
             context.update(await _goal_context_for_checkin(user_id, body.goal_id))
@@ -647,7 +647,7 @@ async def submit_now_checkin(
             continue
         await _store_discovery_answer(user_id, field_name, answer, f"now_checkin_{field_name}")
 
-    from ora.user_model import update_user_embedding_from_context
+    from aura.user_model import update_user_embedding_from_context
     await update_user_embedding_from_context(user_id, context, "now")
 
     logger.info("Path check-in stored: user=%s fields=%s goal=%s", user_id[:8], len(context), body.goal_id or "active")
@@ -660,7 +660,7 @@ async def onboarding_intake(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Short Ora intake interview. 6 questions, then done.
+    Short Aura intake interview. 6 questions, then done.
     Answers are stored in discovery_profile and used to seed IOO recommendations.
     """
     user_turns = _user_turns(body.conversation)

@@ -2,7 +2,7 @@
 Nea-as-Agent-for-Hire — Autonomous digital services marketplace.
 
 Users request services through the app or by emailing nea@atdao.org.
-They pay via Stripe Checkout, and Nea (Ora's agent persona) delivers.
+They pay via Stripe Checkout, and Nea (Aura's agent persona) delivers.
 
 Stripe keys live in Railway env vars:
   STRIPE_SECRET_KEY
@@ -38,11 +38,11 @@ FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://avielcarlos.github.i
 
 SERVICE_CATALOG = [
     {
-        "id": "ora-goal-path-map",
-        "name": "Ora Goal Path Map",
+        "id": "aura-goal-path-map",
+        "name": "Aura Goal Path Map",
         "description": (
-            "Ora turns one clarified intention into a practical IOO node map: attainable goal, "
-            "prerequisites, user-owned steps, Ora-owned actions, and next decisions. Price covers "
+            "Aura turns one clarified intention into a practical IOO node map: attainable goal, "
+            "prerequisites, user-owned steps, Aura-owned actions, and next decisions. Price covers "
             "model/search/tool costs plus a small growth margin."
         ),
         "price_usd": 19,
@@ -50,14 +50,14 @@ SERVICE_CATALOG = [
         "max_price_usd": 79,
         "pricing_model": "dynamic_goal_quote",
         "delivery_hours": 24,
-        "agent": "ora_goal_path_agent",
+        "agent": "aura_goal_path_agent",
         "icon": "🧭",
     },
     {
-        "id": "ora-opportunity-scout",
-        "name": "Ora Opportunity Scout",
+        "id": "aura-opportunity-scout",
+        "name": "Aura Opportunity Scout",
         "description": (
-            "Ora researches concrete opportunities connected to a goal — people, places, tools, "
+            "Aura researches concrete opportunities connected to a goal — people, places, tools, "
             "events, jobs, communities, services, grants, or resources — then ranks the best next nodes. "
             "Price covers research/tool/model costs plus growth margin."
         ),
@@ -66,14 +66,14 @@ SERVICE_CATALOG = [
         "max_price_usd": 149,
         "pricing_model": "dynamic_goal_quote",
         "delivery_hours": 48,
-        "agent": "ora_opportunity_scout_agent",
+        "agent": "aura_opportunity_scout_agent",
         "icon": "🔎",
     },
     {
-        "id": "ora-delegated-action-pack",
-        "name": "Ora Delegated Action Pack",
+        "id": "aura-delegated-action-pack",
+        "name": "Aura Delegated Action Pack",
         "description": (
-            "Ora handles a small bundle of approved digital execution work for a goal: drafting, comparing, "
+            "Aura handles a small bundle of approved digital execution work for a goal: drafting, comparing, "
             "planning, admin, setup, outreach prep, or booking research. External commitments still need user approval. "
             "Price covers agent/tool costs plus growth margin."
         ),
@@ -82,26 +82,26 @@ SERVICE_CATALOG = [
         "max_price_usd": 399,
         "pricing_model": "dynamic_goal_quote",
         "delivery_hours": 72,
-        "agent": "ora_delegated_action_agent",
+        "agent": "aura_delegated_action_agent",
         "icon": "⚡",
     },
     {
-        "id": "ora-ai-os-setup-beta",
-        "name": "Ora Personal AI OS Setup — Beta",
+        "id": "aura-ai-os-setup-beta",
+        "name": "Aura Personal AI OS Setup — Beta",
         "description": (
             "Founder-led private AI operating system setup for entrepreneurs, creators, and "
-            "mission-led operators. Includes discovery, OS map, custom Ora persona/system "
+            "mission-led operators. Includes discovery, OS map, custom Aura persona/system "
             "instructions, 3-5 practical AI workflows, and a 30-day implementation path. "
             "Founder Beta: 3 private builds only."
         ),
         "price_usd": 1500,
         "delivery_hours": 168,
-        "agent": "ora_ai_os_setup_agent",
+        "agent": "aura_ai_os_setup_agent",
         "icon": "🧭",
     },
     {
-        "id": "ora-ai-os-setup-standard",
-        "name": "Ora Personal AI OS Setup — Standard",
+        "id": "aura-ai-os-setup-standard",
+        "name": "Aura Personal AI OS Setup — Standard",
         "description": (
             "Bespoke 14-day personal AI OS build for clarity, execution, and momentum. "
             "Avi maps your life/business domains, architects your knowledge and context layer, "
@@ -110,7 +110,7 @@ SERVICE_CATALOG = [
         ),
         "price_usd": 3500,
         "delivery_hours": 336,
-        "agent": "ora_ai_os_setup_agent",
+        "agent": "aura_ai_os_setup_agent",
         "icon": "🧬",
     },
     {
@@ -197,7 +197,7 @@ class ServiceOrderRequest(BaseModel):
 
 
 def _effective_service_price(service: dict, body: ServiceOrderRequest) -> int:
-    """Use dynamic quotes for Ora goal services, clamped server-side to safe catalog bands."""
+    """Use dynamic quotes for Aura goal services, clamped server-side to safe catalog bands."""
     default = int(service["price_usd"])
     if service.get("pricing_model") != "dynamic_goal_quote" or body.quoted_price_usd is None:
         return default
@@ -528,9 +528,9 @@ async def _run_service_agent(service_id: str, description: str, order_id: str) -
 
 
 async def _run_research_agent(topic: str, order_id: str) -> str:
-    """Research agent: uses Ora brain to generate a structured report."""
+    """Research agent: uses Aura brain to generate a structured report."""
     try:
-        from ora.brain import get_brain
+        from aura.brain import get_brain
         brain = get_brain()
         prompt = (
             f"You are Nea, an expert research analyst at Ascension Technologies. "
@@ -563,7 +563,7 @@ async def _run_research_agent(topic: str, order_id: str) -> str:
 async def _run_code_review_agent(description: str, order_id: str) -> str:
     """Code review agent: fetch repo info and provide analysis."""
     try:
-        from ora.brain import get_brain
+        from aura.brain import get_brain
         brain = get_brain()
         prompt = (
             f"You are Nea, an expert software engineer and code reviewer at Ascension Technologies. "
@@ -592,7 +592,7 @@ async def _run_code_review_agent(description: str, order_id: str) -> str:
 async def _run_content_agent(description: str, order_id: str) -> str:
     """Content agent: generate 5 social posts + 1 blog article."""
     try:
-        from ora.brain import get_brain
+        from aura.brain import get_brain
         brain = get_brain()
         prompt = (
             f"You are Nea, a world-class content strategist and writer at Ascension Technologies. "
@@ -622,7 +622,7 @@ async def _run_content_agent(description: str, order_id: str) -> str:
 async def _run_data_agent(description: str, order_id: str) -> str:
     """Data analysis agent: analyze the described dataset."""
     try:
-        from ora.brain import get_brain
+        from aura.brain import get_brain
         brain = get_brain()
         prompt = (
             f"You are Nea, a senior data analyst and scientist at Ascension Technologies. "

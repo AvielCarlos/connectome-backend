@@ -19,8 +19,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from api.middleware import get_current_user_id
 from core.database import fetchrow
-from ora.brain import get_brain
-from ora.agents.drive_agent_v2 import DriveAgentV2
+from aura.brain import get_brain
+from aura.agents.drive_agent_v2 import DriveAgentV2
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/drive", tags=["drive"])
@@ -73,7 +73,7 @@ async def sync_drive(
     if agent is None:
         raise HTTPException(
             status_code=503,
-            detail="Drive agent not available — Ora brain may not be initialized",
+            detail="Drive agent not available — Aura brain may not be initialized",
         )
 
     try:

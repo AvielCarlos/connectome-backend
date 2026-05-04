@@ -197,7 +197,7 @@ async def get_contributions(
     limit: int = 50,
     offset: int = 0,
 ):
-    """List contributions with Ora evaluations."""
+    """List contributions with Aura evaluations."""
     rows = await fetch(
         """
         SELECT
@@ -211,8 +211,8 @@ async def get_contributions(
             c.base_cp,
             c.multiplier,
             c.final_cp,
-            c.ora_evaluation,
-            c.ora_confidence,
+            c.aura_evaluation,
+            c.aura_confidence,
             c.impact_data,
             c.community_upvotes,
             co.github_username,
@@ -298,7 +298,7 @@ async def submit_contribution(
     body: SubmitContributionRequest,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Submit a contribution for Ora's review without requiring GitHub registration."""
+    """Submit a contribution for Aura's review without requiring GitHub registration."""
     if body.contribution_type not in VALID_CONTRIBUTION_TYPES:
         raise HTTPException(
             status_code=400,
@@ -379,7 +379,7 @@ async def submit_contribution(
 
     return {
         "contribution": _serialize(_record_to_dict(row)),
-        "message": "Contribution submitted! Ora will review within 24h.",
+        "message": "Contribution submitted! Aura will review within 24h.",
     }
 
 
@@ -509,7 +509,7 @@ async def approve_contribution(
     await execute(
         """
         UPDATE contributions
-        SET status = 'approved', base_cp = $2, final_cp = $2, ora_evaluation = $3
+        SET status = 'approved', base_cp = $2, final_cp = $2, aura_evaluation = $3
         WHERE id = $1::uuid
         """,
         contribution_id, cp_amount, body.admin_note,
@@ -595,7 +595,7 @@ async def submit_contribution_for_user(
     logger.info(f"DAO: contribution submitted by {github_username}: '{body.title}'")
     return {
         "contribution": _serialize(_record_to_dict(row)),
-        "message": "Contribution submitted. Ora will evaluate it within 24 hours.",
+        "message": "Contribution submitted. Aura will evaluate it within 24 hours.",
     }
 
 
@@ -626,7 +626,7 @@ async def get_contributor_profile(github_username: str):
     contributions = await fetch(
         """
         SELECT id, contribution_type, title, submitted_at, status,
-               base_cp, multiplier, final_cp, ora_evaluation, community_upvotes
+               base_cp, multiplier, final_cp, aura_evaluation, community_upvotes
         FROM contributions
         WHERE contributor_id = $1::uuid
         ORDER BY submitted_at DESC
@@ -1058,11 +1058,11 @@ async def get_dao_stats():
 HARDCODED_TASKS = [
     {
         "id": "task-001",
-        "title": "Add a new Ora coaching module",
+        "title": "Add a new Aura coaching module",
         "cp_reward": 500,
         "difficulty": "medium",
         "skills": ["python", "fastapi"],
-        "description": "Build a new coaching agent module in ora/agents/",
+        "description": "Build a new coaching agent module in aura/agents/",
         "source": "internal",
     },
     {
@@ -1197,7 +1197,7 @@ async def submit_task(
         f"**Submitted by:** user:{user_id}\n"
         f"**Notes:** {body.notes or 'N/A'}\n\n"
         "_This issue was automatically created by the DAO submission system. "
-        "Ora will review and award final CP on merge._"
+        "Aura will review and award final CP on merge._"
     )
     try:
         subprocess.run(

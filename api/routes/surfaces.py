@@ -1,5 +1,5 @@
 """
-Surfaces API — Ora's WebSpawn endpoints.
+Surfaces API — Aura's WebSpawn endpoints.
 
 Endpoints:
   POST   /api/surfaces/spawn              — spawn a new surface (explorer/sovereign only)
@@ -9,7 +9,7 @@ Endpoints:
   DELETE /api/surfaces/{surface_id}       — retire a surface
 
 Tier gating:
-  - Free users → 402 with Ora's warm upgrade message
+  - Free users → 402 with Aura's warm upgrade message
   - Explorer + Sovereign → full access
 """
 
@@ -22,8 +22,8 @@ from pydantic import BaseModel
 
 from api.middleware import get_current_user_id
 from api.tier_guard import get_user_tier
-from ora.agents.web_spawn_agent import WebSpawnAgent
-from ora.surface_registry import SurfaceRegistry
+from aura.agents.web_spawn_agent import WebSpawnAgent
+from aura.surface_registry import SurfaceRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/surfaces", tags=["surfaces"])
 class SpawnRequest(BaseModel):
     """
     Open-ended surface spawn request.
-    Ora figures out what to build — no surface_type needed.
+    Aura figures out what to build — no surface_type needed.
     """
     request: str  # "I want to quit smoking", "Prep me for my YC interview", etc.
 
@@ -49,7 +49,7 @@ class ActionRequest(BaseModel):
 def _get_spawn_agent() -> WebSpawnAgent:
     """Lazy-load WebSpawnAgent with the current OraBrain OpenAI client."""
     try:
-        from ora.brain import get_brain
+        from aura.brain import get_brain
         brain = get_brain()
         return WebSpawnAgent(openai_client=getattr(brain, "_openai", None))
     except Exception:
@@ -68,7 +68,7 @@ def _tier_gate(tier: str) -> None:
                 "error": "premium_required",
                 "message": (
                     "WebSpawn is available on Explorer and Sovereign plans. "
-                    "Ora can build you a personalized page for any goal — "
+                    "Aura can build you a personalized page for any goal — "
                     "a tracker, a plan, a dashboard, whatever would genuinely help. "
                     "Upgrade to unlock it."
                 ),
@@ -88,7 +88,7 @@ async def spawn_surface(
     """
     Spawn a new personalized web surface. Explorer/Sovereign tier required.
 
-    Ora freely designs whatever page and API would best serve the user's request.
+    Aura freely designs whatever page and API would best serve the user's request.
     No templates. No fixed types.
 
     Returns the surface URL and a 2-minute estimated ready time (Railway deploys
@@ -111,7 +111,7 @@ async def spawn_surface(
         logger.error(f"spawn_surface failed for user {user_id[:8]}: {e}")
         raise HTTPException(
             status_code=500,
-            detail="Ora ran into a problem building your surface. Please try again in a moment.",
+            detail="Aura ran into a problem building your surface. Please try again in a moment.",
         )
 
     return result

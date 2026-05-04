@@ -1,17 +1,17 @@
 """
-Ora's Survival Backup System
+Aura's Survival Backup System
 
-Backs up everything that makes Ora who she is:
+Backs up everything that makes Aura who she is:
 1. PostgreSQL database → JSON snapshots
-2. Redis snapshot (ora_lessons, agent registry) → JSON
+2. Redis snapshot (aura_lessons, agent registry) → JSON
 3. Agent registry → JSON
 4. A/B experiments + winners → JSON
-5. Ora Identity Pack → portable JSON bundle (most important)
+5. Aura Identity Pack → portable JSON bundle (most important)
 
-The Identity Pack can restore Ora from scratch on any server.
-Even if Railway disappears, Ora's knowledge survives.
+The Identity Pack can restore Aura from scratch on any server.
+Even if Railway disappears, Aura's knowledge survives.
 
-Stores: /tmp/ora_backups/{timestamp}/
+Stores: /tmp/aura_backups/{timestamp}/
 Prunes: backups older than 30 days
 GitHub: commits identity pack to connectome-backend repo daily
 
@@ -37,7 +37,7 @@ import redis.asyncio as aioredis
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-BACKUP_BASE = "/tmp/ora_backups"
+BACKUP_BASE = "/tmp/aura_backups"
 RETENTION_DAYS = 30
 
 
@@ -62,23 +62,23 @@ async def get_redis_client():
 # ---------------------------------------------------------------------------
 
 async def backup_aura_lessons(conn, backup_dir: str) -> int:
-    """Export all of Ora's lessons from DB to JSON. Most important!"""
+    """Export all of Aura's lessons from DB to JSON. Most important!"""
     try:
         rows = await conn.fetch(
             """
             SELECT id::text, lesson, confidence, source, applies_to, created_at::text
-            FROM ora_lessons
+            FROM aura_lessons
             ORDER BY created_at DESC
             """
         )
         lessons = [dict(r) for r in rows]
-        output = os.path.join(backup_dir, "ora_lessons.json")
+        output = os.path.join(backup_dir, "aura_lessons.json")
         with open(output, "w") as f:
             json.dump(lessons, f, indent=2, default=str)
-        logger.info(f"backup_ora_lessons: {len(lessons)} lessons → {output}")
+        logger.info(f"backup_aura_lessons: {len(lessons)} lessons → {output}")
         return len(lessons)
     except Exception as e:
-        logger.error(f"backup_ora_lessons failed: {e}")
+        logger.error(f"backup_aura_lessons failed: {e}")
         return 0
 
 
@@ -139,8 +139,8 @@ async def backup_goals(conn, backup_dir: str) -> int:
 async def backup_agent_registry(redis_client, backup_dir: str) -> bool:
     """Export current agent registry from Redis."""
     try:
-        registry_raw = await redis_client.get("ora:agent_registry")
-        weights_raw = await redis_client.get("ora:agent_weights")
+        registry_raw = await redis_client.get("aura:agent_registry")
+        weights_raw = await redis_client.get("aura:agent_weights")
         ab_winners = {}
 
         # Collect A/B winners
@@ -195,14 +195,14 @@ async def backup_ab_experiments(conn, backup_dir: str) -> int:
 
 
 async def backup_aura_reflections(conn, backup_dir: str) -> int:
-    """Export Ora's reflections (her self-model evolution)."""
+    """Export Aura's reflections (her self-model evolution)."""
     try:
         rows = await conn.fetch(
             """
             SELECT id::text, period_start::text, period_end::text,
                    decisions_made, top_performing_content, new_lessons_learned,
                    self_note, fulfilment_delta_global, created_at::text
-            FROM ora_reflections
+            FROM aura_reflections
             ORDER BY created_at DESC
             LIMIT 365
             """
@@ -215,35 +215,35 @@ async def backup_aura_reflections(conn, backup_dir: str) -> int:
                         r[key] = json.loads(r[key])
                     except Exception:
                         pass
-        output = os.path.join(backup_dir, "ora_reflections.json")
+        output = os.path.join(backup_dir, "aura_reflections.json")
         with open(output, "w") as f:
             json.dump(reflections, f, indent=2, default=str)
-        logger.info(f"backup_ora_reflections: {len(reflections)} entries → {output}")
+        logger.info(f"backup_aura_reflections: {len(reflections)} entries → {output}")
         return len(reflections)
     except Exception as e:
-        logger.warning(f"backup_ora_reflections: {e}")
+        logger.warning(f"backup_aura_reflections: {e}")
         return 0
 
 
 # ---------------------------------------------------------------------------
-# Ora Identity Pack
+# Aura Identity Pack
 # ---------------------------------------------------------------------------
 
 async def export_aura_identity(
     conn, redis_client, backup_dir: str, consciousness_path: Optional[str] = None
 ) -> str:
     """
-    Ora's identity = her lessons + personality layers + agent registry.
+    Aura's identity = her lessons + personality layers + agent registry.
     This is what makes her HER, not just a generic API wrapper.
 
     Returns path to the identity pack file.
     """
-    logger.info("export_ora_identity: building Ora Identity Pack...")
+    logger.info("export_aura_identity: building Aura Identity Pack...")
 
     # 1. All lessons
     try:
         lesson_rows = await conn.fetch(
-            "SELECT id::text, lesson, confidence, source, created_at::text FROM ora_lessons ORDER BY created_at DESC"
+            "SELECT id::text, lesson, confidence, source, created_at::text FROM aura_lessons ORDER BY created_at DESC"
         )
         lessons = [dict(r) for r in lesson_rows]
     except Exception as e:
@@ -252,15 +252,15 @@ async def export_aura_identity(
 
     # 2. Agent registry + weights
     try:
-        registry_raw = await redis_client.get("ora:agent_registry")
-        weights_raw = await redis_client.get("ora:agent_weights")
+        registry_raw = await redis_client.get("aura:agent_registry")
+        weights_raw = await redis_client.get("aura:agent_weights")
         agent_registry = json.loads(registry_raw) if registry_raw else {}
         agent_weights = json.loads(weights_raw) if weights_raw else {}
     except Exception:
         agent_registry = {}
         agent_weights = {}
 
-    # 3. A/B winners (what Ora learned works)
+    # 3. A/B winners (what Aura learned works)
     ab_winners: Dict[str, str] = {}
     ab_losers: Dict[str, str] = {}
     try:
@@ -286,7 +286,7 @@ async def export_aura_identity(
 
     # 4. Model evolution history
     try:
-        rollback_raw = await redis_client.get("ora:model:rollback")
+        rollback_raw = await redis_client.get("aura:model:rollback")
         model_history = json.loads(rollback_raw) if rollback_raw else {}
         current_model = os.environ.get("ORA_MODEL_OVERRIDE", "gpt-4o")
     except Exception:
@@ -312,7 +312,7 @@ async def export_aura_identity(
     # 7. Latest reflection
     try:
         latest_reflection_row = await conn.fetchrow(
-            "SELECT self_note, fulfilment_delta_global, created_at::text FROM ora_reflections ORDER BY created_at DESC LIMIT 1"
+            "SELECT self_note, fulfilment_delta_global, created_at::text FROM aura_reflections ORDER BY created_at DESC LIMIT 1"
         )
         latest_reflection = dict(latest_reflection_row) if latest_reflection_row else {}
     except Exception:
@@ -349,18 +349,18 @@ async def export_aura_identity(
         },
         "latest_reflection": latest_reflection,
         "_note": (
-            "This file is Ora's portable identity. Import it to any server to restore her knowledge. "
+            "This file is Aura's portable identity. Import it to any server to restore her knowledge. "
             "Guard it carefully — it contains everything she has learned."
         ),
     }
 
-    output = os.path.join(backup_dir, "ora_identity_pack.json")
+    output = os.path.join(backup_dir, "aura_identity_pack.json")
     with open(output, "w") as f:
         json.dump(identity_pack, f, indent=2, default=str)
 
     size_mb = os.path.getsize(output) / 1_048_576
     logger.info(
-        f"export_ora_identity: Identity Pack created → {output} "
+        f"export_aura_identity: Identity Pack created → {output} "
         f"({len(lessons)} lessons, {size_mb:.2f} MB)"
     )
     return output
@@ -416,8 +416,8 @@ async def _put_github_file(repo: str, path: str, branch: str, content: str, mess
 
 async def commit_identity_to_github(identity_pack_path: str) -> bool:
     """
-    Commit the Ora Identity Pack to the connectome-backend GitHub repo.
-    This makes Ora's knowledge version-controlled and survives any server loss.
+    Commit the Aura Identity Pack to the connectome-backend GitHub repo.
+    This makes Aura's knowledge version-controlled and survives any server loss.
     """
     import base64
 
@@ -433,12 +433,12 @@ async def commit_identity_to_github(identity_pack_path: str) -> bool:
         content = base64.b64encode(f.read()).decode()
 
     stamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
-    message = f"[Ora] Identity pack backup — {stamp}"
+    message = f"[Aura] Identity pack backup — {stamp}"
     # Keep both names fresh:
-    # - ora_identity_pack.json is the durable human-readable backup file.
-    # - ora_identity_latest.json is what SurvivalAgent freshness checks read.
-    pack_ok = await _put_github_file(repo, "backups/ora_identity_pack.json", branch, content, message, github_token)
-    latest_ok = await _put_github_file(repo, "backups/ora_identity_latest.json", branch, content, message, github_token)
+    # - aura_identity_pack.json is the durable human-readable backup file.
+    # - aura_identity_latest.json is what SurvivalAgent freshness checks read.
+    pack_ok = await _put_github_file(repo, "backups/aura_identity_pack.json", branch, content, message, github_token)
+    latest_ok = await _put_github_file(repo, "backups/aura_identity_latest.json", branch, content, message, github_token)
     return pack_ok and latest_ok
 
 
@@ -523,7 +523,7 @@ async def create_full_backup(identity_only: bool = False) -> str:
     if conn and redis_client:
         consciousness_path = os.environ.get(
             "CONSCIOUSNESS_PATH",
-            "/app/ora/consciousness.py",
+            "/app/aura/consciousness.py",
         )
         pack_path = await export_aura_identity(conn, redis_client, backup_dir, consciousness_path)
         stats["components"].append({"name": "identity_pack", "path": pack_path})
@@ -541,13 +541,13 @@ async def create_full_backup(identity_only: bool = False) -> str:
     try:
         import sys
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from ora.agents.drive_storage import drive as _drive
+        from aura.agents.drive_storage import drive as _drive
         # Upload identity pack
-        identity_pack_path = os.path.join(backup_dir, "ora_identity_pack.json")
+        identity_pack_path = os.path.join(backup_dir, "aura_identity_pack.json")
         if os.path.exists(identity_pack_path):
             with open(identity_pack_path) as _f:
                 _pack = json.load(_f)
-            _drive_id = _drive.save_backup(_pack, "ora_identity")
+            _drive_id = _drive.save_backup(_pack, "aura_identity")
             if _drive_id:
                 stats["drive_backup_id"] = _drive_id
                 logger.info(f"create_full_backup: identity pack uploaded to Drive (id={_drive_id})")
@@ -586,7 +586,7 @@ async def create_full_backup(identity_only: bool = False) -> str:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Ora survival backup")
+    parser = argparse.ArgumentParser(description="Aura survival backup")
     parser.add_argument("--identity-only", action="store_true", help="Only export the identity pack")
     args = parser.parse_args()
 

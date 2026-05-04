@@ -11,7 +11,7 @@ from typing import Any, Dict
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from ora.agents.agent_memory import AgentInsight, agent_memory_bus
+from aura.agents.agent_memory import AgentInsight, agent_memory_bus
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])

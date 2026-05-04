@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from ora.agents.ux_selection_agent import UXSelectionInput, select_ux_options
+from aura.agents.ux_selection_agent import UXSelectionInput, select_ux_options
 
 
 EXAMPLE_INPUT = UXSelectionInput(

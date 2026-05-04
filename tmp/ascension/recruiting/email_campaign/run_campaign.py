@@ -26,7 +26,7 @@ SUBJECT_LINES = [
     "Building an AI that helps people live better — want in?",
     "Open source AI + DAO rewards — Ascension Technologies",
     "You'd be a great fit for what we're building at Connectome",
-    "We're building Ora — an AI OS for human fulfilment. Join us.",
+    "We're building Aura — an AI OS for human fulfilment. Join us.",
     "DAO contributor opportunity — AI project your skills fit perfectly",
 ]
 
@@ -34,13 +34,13 @@ EMAIL_TEMPLATE = """Hi {name},
 
 I came across your work on {context} and wanted to reach out directly.
 
-I'm Aviel, founder of Ascension Technologies. We're building Connectome — an AI operating system for human fulfilment, powered by Ora, a multi-agent intelligence layer that learns from its users and adapts to the real world.
+I'm Aviel, founder of Ascension Technologies. We're building Connectome — an AI operating system for human fulfilment, powered by Aura, a multi-agent intelligence layer that learns from its users and adapts to the real world.
 
 Here's what makes it different:
 
-• Server-driven UI — Ora generates the entire interface dynamically as JSON, rendered on-device
+• Server-driven UI — Aura generates the entire interface dynamically as JSON, rendered on-device
 • Multi-agent architecture — Discovery, Coaching, Exploration, DAO, and World agents working in parallel
-• Real-world awareness — Ora reads live weather, moon phases, trending topics, and history to generate personalized life suggestions
+• Real-world awareness — Aura reads live weather, moon phases, trending topics, and history to generate personalized life suggestions
 • DAO contribution model — contributors (including users) earn CP that compounds over time with longevity multipliers
 • Founding Steward program — first 10 contributors to 3,000 CP get permanent governance seats
 
@@ -73,7 +73,7 @@ CANDIDATE_POOL = [
         "role": "FastAPI + LangGraph Engineer",
         "context": "your fastapi-langgraph-agent-production-ready-template (2,200+ stars)",
         "role_context": "production FastAPI and LangGraph agent systems",
-        "fit_description": "the Ora agent orchestration layer and backend API architecture",
+        "fit_description": "the Aura agent orchestration layer and backend API architecture",
     },
     {
         "name": "Developer",
@@ -82,7 +82,7 @@ CANDIDATE_POOL = [
         "role": "AI Memory Systems Engineer",
         "context": "Octopoda-OS — your AI agent memory and persistence system",
         "role_context": "AI agent memory, persistence, and observability",
-        "fit_description": "Ora's cross-agent memory consolidation and context persistence layer",
+        "fit_description": "Aura's cross-agent memory consolidation and context persistence layer",
     },
     {
         "name": "Developer",
@@ -91,7 +91,7 @@ CANDIDATE_POOL = [
         "role": "Python AI Framework Engineer",
         "context": "agentica — your async-first Python agent framework",
         "role_context": "Python async agent frameworks with tool calling and RAG",
-        "fit_description": "Ora's async agent execution layer and tool-use patterns",
+        "fit_description": "Aura's async agent execution layer and tool-use patterns",
     },
     {
         "name": "Developer",
@@ -100,7 +100,7 @@ CANDIDATE_POOL = [
         "role": "Agentic AI Pipeline Engineer",
         "context": "your Agentic-AI-Pipeline project with tool chaining and RAG",
         "role_context": "agentic AI pipelines, Docker deployments, and AWS",
-        "fit_description": "Ora's production deployment pipeline and agent tool-chaining architecture",
+        "fit_description": "Aura's production deployment pipeline and agent tool-chaining architecture",
     },
     {
         "name": "Developer",
@@ -109,7 +109,7 @@ CANDIDATE_POOL = [
         "role": "RAG + FastAPI Engineer",
         "context": "your LangChain-RAG-FastAPI-Service — we already had a great conversation on GitHub",
         "role_context": "production RAG pipelines with LangChain and FastAPI",
-        "fit_description": "Ora's ContextAgent and cross-agent memory retrieval system",
+        "fit_description": "Aura's ContextAgent and cross-agent memory retrieval system",
     },
     {
         "name": "Developer",
@@ -118,7 +118,7 @@ CANDIDATE_POOL = [
         "role": "Agent Runtime Engineer",
         "context": "agentscope-runtime — your production agent execution framework",
         "role_context": "production agent runtimes, sandboxing, and observability",
-        "fit_description": "Ora's agent sandboxing and runtime execution layer",
+        "fit_description": "Aura's agent sandboxing and runtime execution layer",
     },
 ]
 

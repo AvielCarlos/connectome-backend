@@ -1,10 +1,10 @@
 """
 Connectome Executive Council API routes.
 
-POST /api/ora/council/consult — ask council members for decision advice
-GET  /api/ora/council/members — council member bios
-GET  /api/ora/council/last-brief — latest weekly brief
-POST /api/ora/council/run-weekly-brief — cron/admin trigger for weekly brief
+POST /api/aura/council/consult — ask council members for decision advice
+GET  /api/aura/council/members — council member bios
+GET  /api/aura/council/last-brief — latest weekly brief
+POST /api/aura/council/run-weekly-brief — cron/admin trigger for weekly brief
 """
 
 import logging
@@ -21,7 +21,7 @@ from core.database import fetchrow
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/ora/council", tags=["ora_council"])
+router = APIRouter(prefix="/api/aura/council", tags=["aura_council"])
 
 ADMIN_EMAILS = {"avi@atdao.org", "nea@atdao.org", "carlosandromeda8@gmail.com"}
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN") or os.environ.get("ADMIN_SECRET", "")
@@ -67,8 +67,8 @@ async def consult(
 ) -> Dict[str, Any]:
     """Get one or more council members' perspectives on a proposal."""
     try:
-        from ora.agents.executive_council import consult_council
-        from ora.brain import get_brain
+        from aura.agents.executive_council import consult_council
+        from aura.brain import get_brain
 
         brain = get_brain()
         perspectives = await consult_council(
@@ -91,7 +91,7 @@ async def consult(
 @router.get("/members")
 async def members() -> Dict[str, Any]:
     """Return council member bios."""
-    from ora.agents.executive_council import get_council_members
+    from aura.agents.executive_council import get_council_members
 
     return {"members": get_council_members()}
 
@@ -101,7 +101,7 @@ async def last_brief(
     _: str = Depends(_require_admin),
 ) -> Dict[str, Any]:
     """Return the most recent generated weekly council brief."""
-    from ora.agents.executive_council import load_last_council_brief
+    from aura.agents.executive_council import load_last_council_brief
 
     return await load_last_council_brief()
 
@@ -112,8 +112,8 @@ async def run_weekly_brief(
 ) -> Dict[str, Any]:
     """Cron/admin trigger for the weekly council brief."""
     try:
-        from ora.agents.executive_council import run_weekly_council_brief
-        from ora.brain import get_brain
+        from aura.agents.executive_council import run_weekly_council_brief
+        from aura.brain import get_brain
 
         brief = await run_weekly_council_brief(brain=get_brain())
         latest = await _load_latest_brief_metadata()
@@ -148,6 +148,6 @@ async def _summarize_perspectives(proposal: str, perspectives: Dict[str, str], b
 
 
 async def _load_latest_brief_metadata() -> Dict[str, Any]:
-    from ora.agents.executive_council import load_last_council_brief
+    from aura.agents.executive_council import load_last_council_brief
 
     return await load_last_council_brief()
