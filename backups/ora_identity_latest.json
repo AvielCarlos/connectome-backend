@@ -1,11 +1,46 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-04T05:53:48.478677+00:00",
-  "exported_at": "2026-05-04T05:53:48.478677+00:00",
-  "collected_at": "2026-05-04T05:53:48.478677+00:00",
+  "timestamp": "2026-05-04T06:53:51.743846+00:00",
+  "exported_at": "2026-05-04T06:53:51.743846+00:00",
+  "collected_at": "2026-05-04T06:53:51.743846+00:00",
   "identity": {
-    "total_lessons": 1419,
+    "total_lessons": 1424,
     "lessons": [
+      {
+        "id": "cb923a02-3525-4559-90bd-2a94e1ecb88e",
+        "lesson": "Growth for Connectome should target 10 new users per day through no-spam, owned, public, and inbound channels. Autonomous growth work is approved for safe assets such as docs, GitHub, site/SEO pages, changelog/launch assets, and clear opt-in submissions, but cold direct outreach, scraped lists, repetitive promotion, and CP cash/token/equity implications require separate approval or are prohibited.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-03",
+        "created_at": "2026-05-04 06:00:55.41942"
+      },
+      {
+        "id": "a5d6ea3f-abb2-4b78-9918-551f2c888045",
+        "lesson": "The Path Feed should feel abundant and continuous, like TikTok: it should keep many nodes, events, activities, and experiences ready ahead of the user instead of feeling like one card at a time. Free-tier limits should be real and enforced before generation, but false limiter states must not interrupt available cards.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-03",
+        "created_at": "2026-05-04 06:00:55.268153"
+      },
+      {
+        "id": "a82fa29a-f946-4a8c-99b8-1775347c78b0",
+        "lesson": "Aura chat should be app-aware and context-aware: it should understand the current route/surface, use active goals and user-scoped Google Drive context where available, and offer actionable multiple-choice chips such as suggested goal creation or modification rather than only free-text responses.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-03",
+        "created_at": "2026-05-04 06:00:55.12151"
+      },
+      {
+        "id": "1d89816c-4a16-457e-a5c0-23573922f429",
+        "lesson": "Rest is not a separate fourth Connectome domain; rest and recovery belong inside iVive as an aspect, tag, metadata field, or sub-mode. Legacy Rest domain values should be normalized to iVive while preserving rest/recovery meaning.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-03",
+        "created_at": "2026-05-04 06:00:54.977738"
+      },
+      {
+        "id": "f9135f65-45b6-416d-9cc7-9c3eda90100c",
+        "lesson": "IOO/Connectome nodes should evolve at the component level, not only as whole cards: framing, intent, difficulty/energy, timing/context, modality, reward/feedback, prerequisite/bridge links, visual treatment, and completion/recovery prompts should each support variant tracking and outcome-based promotion, mutation, or retirement, with guardrails against manipulative engagement optimisation.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-03",
+        "created_at": "2026-05-04 06:00:54.802701"
+      },
       {
         "id": "aba27479-38f1-4c04-b88f-354886e31cc6",
         "lesson": "{\"proposal_id\": \"aba27479-38f1-4c04-b88f-354886e31cc6\", \"card_type\": \"personalized_action_recommendation\", \"hypothesis\": \"Implementing personalized action recommendation cards will improve user engagement by 25%.\", \"description\": \"These cards will analyze past user interactions and preferences to suggest tailored next steps or actions that align with their goals. By providing users with curated recommendations, the cards will enhance the sense of personal connection and relevance, encouraging users to engage more with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-03T23:51:03.215793+00:00\", \"expires_at\": \"2026-05-05T23:51:03.215793+00:00\", \"result\": null}",
@@ -10040,7 +10075,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "bb52d69dc5f5cdc4"
+    "lessons_hash": "78b496d992166007"
   },
   "platform_stats": {
     "total_users": 20,
