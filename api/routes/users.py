@@ -333,7 +333,7 @@ async def update_profile(
     if getattr(body, "now_vector_prompt", None) is not None or getattr(body, "later_vector_prompt", None) is not None:
         try:
             import asyncio
-            from ora.user_model import update_user_embedding_from_context
+            from aura.user_model import update_user_embedding_from_context
             if getattr(body, "now_vector_prompt", None) is not None:
                 asyncio.ensure_future(update_user_embedding_from_context(user_id, {"now_vector_prompt": profile.get("now_vector_prompt")}, "now"))
             if getattr(body, "later_vector_prompt", None) is not None:
@@ -507,11 +507,11 @@ async def get_fulfilment_forecast(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Ora generates a weekly fulfilment forecast based on recent interactions and goals.
+    Aura generates a weekly fulfilment forecast based on recent interactions and goals.
     """
     import json
     from datetime import datetime, timezone, timedelta
-    from ora.brain import get_brain
+    from aura.brain import get_brain
     from core.database import fetch
 
     uid = UUID(user_id)
@@ -587,7 +587,7 @@ async def get_fulfilment_forecast(
         neglected = min(domain_interactions, key=domain_interactions.get)
 
         system = (
-            "You are Ora, a personal AI focused on human fulfilment. "
+            "You are Aura, a personal AI focused on human fulfilment. "
             "Generate a weekly forecast based on the user's recent engagement data. "
             "Be specific, warm, and insightful. Return JSON only."
         )
@@ -695,7 +695,7 @@ async def get_weekly_summary(user_id: str = Depends(get_current_user_id)):
     row = await db_fetchrow(
         """
         SELECT week_start, week_end, screens_seen, goals_progressed,
-               top_interests, ora_narrative, fulfilment_change, created_at
+               top_interests, aura_narrative, fulfilment_change, created_at
         FROM weekly_summaries
         WHERE user_id = $1
         ORDER BY created_at DESC
@@ -720,7 +720,7 @@ async def get_weekly_summary(user_id: str = Depends(get_current_user_id)):
         "screens_seen": row["screens_seen"] or 0,
         "goals_progressed": row["goals_progressed"] or 0,
         "top_interests": top_interests or [],
-        "ora_narrative": row["ora_narrative"] or "",
+        "aura_narrative": row["aura_narrative"] or "",
         "fulfilment_change": row["fulfilment_change"] or 0.0,
     }
 
@@ -739,11 +739,11 @@ async def update_privacy_level(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Update the user's privacy level for Ora's memory system.
+    Update the user's privacy level for Aura's memory system.
 
-    - standard: Ora uses all context (default)
-    - sensitive: Ora uses goals + ratings only, never repeats back sensitive content
-    - minimal: Ora uses no personal context, fresh each conversation
+    - standard: Aura uses all context (default)
+    - sensitive: Aura uses goals + ratings only, never repeats back sensitive content
+    - minimal: Aura uses no personal context, fresh each conversation
     """
     allowed = {"standard", "sensitive", "minimal"}
     if payload.privacy_level not in allowed:

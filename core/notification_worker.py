@@ -116,7 +116,7 @@ async def _process_due_notifications() -> int:
     for row in pending_rows:
         push_token = row.get("push_token")
         notif_id = str(row["id"])
-        message = row.get("message") or "Ora has something for you."
+        message = row.get("message") or "Aura has something for you."
 
         # Extract display_name for personalisation
         import json as _json
@@ -127,7 +127,7 @@ async def _process_due_notifications() -> int:
             except Exception:
                 profile = {}
         display_name = profile.get("display_name", "")
-        title = f"Hey {display_name} ✦" if display_name else "Ora ✦"
+        title = f"Hey {display_name} ✦" if display_name else "Aura ✦"
 
         if push_token and push_token.startswith("ExponentPushToken["):
             expo_messages.append({
@@ -257,7 +257,7 @@ async def _schedule_notification(
 
 async def _generate_daily_checkin_message(user_id, profile: dict, goals: list) -> str:
     """
-    Generate a personalised morning check-in message from Ora.
+    Generate a personalised morning check-in message from Aura.
     Falls back to a mock if OpenAI unavailable.
     """
     from core.config import settings
@@ -283,7 +283,7 @@ async def _generate_daily_checkin_message(user_id, profile: dict, goals: list) -
         try:
             from openai import AsyncOpenAI
             client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            prompt = f"""You are Ora, a warm AI coach. Write a 1-2 sentence morning check-in message.
+            prompt = f"""You are Aura, a warm AI coach. Write a 1-2 sentence morning check-in message.
 User goal: "{top_goal.get('title', 'their goal')}" ({pct}% done)
 Name: "{display_name or 'the user'}"
 Be specific to the goal. No generic motivational phrases. Be brief and warm."""
@@ -309,7 +309,7 @@ async def _generate_weekly_summary(
     user_id, profile: dict, screens_seen: int, goals_progressed: int, top_interests: list
 ) -> str:
     """
-    Ora writes a brief personal week-in-review.
+    Aura writes a brief personal week-in-review.
     """
     from core.config import settings
 
@@ -322,7 +322,7 @@ async def _generate_weekly_summary(
         try:
             from openai import AsyncOpenAI
             client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
-            prompt = f"""You are Ora, a thoughtful AI coach. Write a brief 3-4 sentence personal week-in-review.
+            prompt = f"""You are Aura, a thoughtful AI coach. Write a brief 3-4 sentence personal week-in-review.
 User data (this week):
 - Screens engaged with: {screens_seen}
 - Goals with new progress: {goals_progressed}
@@ -416,7 +416,7 @@ async def run_daily_checkins():
 async def run_weekly_summaries():
     """
     Send weekly summaries on Sunday evening (17:00-19:00 UTC).
-    Covers screens, goals, and Ora's narrative for the week.
+    Covers screens, goals, and Aura's narrative for the week.
     """
     now = datetime.now(timezone.utc)
     # Sunday = 6 in Python weekday()
@@ -494,7 +494,7 @@ async def run_weekly_summaries():
             await execute(
                 """
                 INSERT INTO weekly_summaries
-                    (user_id, week_start, week_end, screens_seen, goals_progressed, top_interests, ora_narrative)
+                    (user_id, week_start, week_end, screens_seen, goals_progressed, top_interests, aura_narrative)
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
                 """,
                 user_id,
@@ -526,7 +526,7 @@ async def run_weekly_summaries():
 async def run_reengagement_notifications():
     """
     Send re-engagement pushes to users who haven't been back in 2, 5, or 10 days.
-    Each tier gets a different Ora message tone.
+    Each tier gets a different Aura message tone.
     """
     now = datetime.now(timezone.utc)
     # Only run once per day (morning UTC)
@@ -536,7 +536,7 @@ async def run_reengagement_notifications():
     tiers = [
         (2, "You haven’t been back in a couple days"),
         (5, "It’s been a few days since you opened Connectome"),
-        (10, "It’s been 10 days — Ora hasn’t forgotten you"),
+        (10, "It’s been 10 days — Aura hasn’t forgotten you"),
     ]
 
     for days_away, context_phrase in tiers:
@@ -585,7 +585,7 @@ async def run_reengagement_notifications():
                     )
                 else:
                     message = (
-                        f"{context_phrase}{name_part}. Ora has new things waiting for you."
+                        f"{context_phrase}{name_part}. Aura has new things waiting for you."
                     )
 
                 await _schedule_notification(user_id, message, notif_type="reengagement")

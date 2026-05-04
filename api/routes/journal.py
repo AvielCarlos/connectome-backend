@@ -2,11 +2,11 @@
 Journal API Routes
 
 Endpoints:
-  GET  /api/journal/prompt    — get today's Ora-generated journal prompt
-  POST /api/journal/entry     — submit a journal entry, get Ora's reflection
+  GET  /api/journal/prompt    — get today's Aura-generated journal prompt
+  POST /api/journal/entry     — submit a journal entry, get Aura's reflection
   GET  /api/journal/entries   — list past entries (newest first, paginated)
 
-Storage: uses ora_conversations table with role='journal_prompt' / role='journal_entry'
+Storage: uses aura_conversations table with role='journal_prompt' / role='journal_entry'
 to avoid schema changes.
 """
 
@@ -21,8 +21,8 @@ from pydantic import BaseModel
 
 from api.middleware import get_current_user_id
 from core.database import fetchrow, fetch, execute
-from ora.brain import get_brain
-from ora.user_model import load_user_model
+from aura.brain import get_brain
+from aura.user_model import load_user_model
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/journal", tags=["journal"])
@@ -46,7 +46,7 @@ import random
 
 
 async def _generate_prompt(user_context: Dict[str, Any], openai_client=None) -> str:
-    """Generate a personalised journal prompt using Ora."""
+    """Generate a personalised journal prompt using Aura."""
     if not openai_client:
         return random.choice(FALLBACK_PROMPTS)
 
@@ -60,7 +60,7 @@ async def _generate_prompt(user_context: Dict[str, Any], openai_client=None) -> 
             mood_note = f"The user is currently feeling {moods[int(mood_index)]}."
 
         system = (
-            "You are Ora, a wise and caring personal intelligence. "
+            "You are Aura, a wise and caring personal intelligence. "
             "Generate a single, thoughtful journal prompt for the user. "
             "It should be introspective, specific (not generic), and 1-2 sentences max. "
             "No preamble — just the question."
@@ -90,13 +90,13 @@ async def _generate_prompt(user_context: Dict[str, Any], openai_client=None) -> 
 async def _generate_reflection(
     prompt: str, response: str, openai_client=None
 ) -> str:
-    """Generate Ora's reflection on the user's journal entry."""
+    """Generate Aura's reflection on the user's journal entry."""
     if not openai_client:
         return "Thank you for sharing that. Sitting with what you've written is itself a form of growth. ✦"
 
     try:
         system = (
-            "You are Ora, a wise and empathetic guide. "
+            "You are Aura, a wise and empathetic guide. "
             "The user has just written a journal entry in response to a prompt. "
             "Write a short, warm, insightful reflection (2-3 sentences). "
             "Don't just repeat what they said — add depth, a gentle insight, or an affirmation. "
@@ -133,7 +133,7 @@ async def get_journal_prompt(
     # Check if we already generated a prompt today
     row = await fetchrow(
         """
-        SELECT id, message, context FROM ora_conversations
+        SELECT id, message, context FROM aura_conversations
         WHERE user_id = $1
           AND role = 'journal_prompt'
           AND context::jsonb->>'date' = $2
@@ -156,7 +156,7 @@ async def get_journal_prompt(
 
     await execute(
         """
-        INSERT INTO ora_conversations (id, user_id, role, message, context)
+        INSERT INTO aura_conversations (id, user_id, role, message, context)
         VALUES ($1, $2, 'journal_prompt', $3, $4)
         """,
         prompt_id,
@@ -179,11 +179,11 @@ async def submit_journal_entry(
     user_id: str = Depends(get_current_user_id),
 ) -> Dict[str, Any]:
     """
-    Submit a journal entry. Ora writes a reflection and stores everything.
+    Submit a journal entry. Aura writes a reflection and stores everything.
     """
     # Fetch the prompt
     prompt_row = await fetchrow(
-        "SELECT message FROM ora_conversations WHERE id = $1 AND user_id = $2",
+        "SELECT message FROM aura_conversations WHERE id = $1 AND user_id = $2",
         uuid.UUID(body.prompt_id), uuid.UUID(user_id)
     )
     prompt_text = prompt_row["message"] if prompt_row else "Today's reflection"
@@ -197,7 +197,7 @@ async def submit_journal_entry(
     # Store the user entry
     await execute(
         """
-        INSERT INTO ora_conversations (id, user_id, role, message, context)
+        INSERT INTO aura_conversations (id, user_id, role, message, context)
         VALUES ($1, $2, 'journal_entry', $3, $4)
         """,
         entry_id,
@@ -206,12 +206,12 @@ async def submit_journal_entry(
         json.dumps({
             "prompt_id": body.prompt_id,
             "prompt_text": prompt_text,
-            "ora_reflection": reflection,
+            "aura_reflection": reflection,
             "created_at": now.isoformat(),
         }),
     )
 
-    return {"ora_reflection": reflection, "entry_id": str(entry_id)}
+    return {"aura_reflection": reflection, "entry_id": str(entry_id)}
 
 
 @router.get("/entries")
@@ -226,7 +226,7 @@ async def get_journal_entries(
     rows = await fetch(
         """
         SELECT id, message, context, created_at
-        FROM ora_conversations
+        FROM aura_conversations
         WHERE user_id = $1 AND role = 'journal_entry'
         ORDER BY created_at DESC
         LIMIT $2 OFFSET $3
@@ -250,7 +250,7 @@ async def get_journal_entries(
             "id": str(row["id"]),
             "prompt": meta.get("prompt_text", ""),
             "response": row["message"],
-            "ora_reflection": meta.get("ora_reflection", ""),
+            "aura_reflection": meta.get("aura_reflection", ""),
             "created_at": row["created_at"].isoformat() if row["created_at"] else "",
         })
 

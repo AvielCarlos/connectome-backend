@@ -1,4 +1,4 @@
--- Migration 007: Ora's Subscription System
+-- Migration 007: Aura's Subscription System
 -- Creates the subscriptions table for Stripe-backed tier management.
 -- Run after 006_google_oauth.sql
 
@@ -47,4 +47,4 @@ CREATE INDEX IF NOT EXISTS journal_user_created_idx
 
 -- Done.
 COMMENT ON TABLE subscriptions IS
-    'Ora subscription records. Tier managed by PricingAgent + Stripe webhooks.';
+    'Aura subscription records. Tier managed by PricingAgent + Stripe webhooks.';

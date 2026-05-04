@@ -6,7 +6,7 @@ import json
 import logging
 
 from core.database import close_pool, run_migrations
-from ora.agents.ioo_enrichment_agent import get_ioo_enrichment_agent
+from aura.agents.ioo_enrichment_agent import get_ioo_enrichment_agent
 
 logging.basicConfig(level=logging.INFO)
 

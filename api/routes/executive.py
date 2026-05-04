@@ -50,7 +50,7 @@ async def _get_redis_report(agent_name: str) -> Optional[str]:
     try:
         from core.redis_client import get_redis
         redis = await get_redis()
-        return await redis.get(f"ora:executive:last_report:{agent_name}")
+        return await redis.get(f"aura:executive:last_report:{agent_name}")
     except Exception:
         return None
 
@@ -263,15 +263,15 @@ async def run_agent(
     _require_admin(x_admin_token)
 
     valid_agents = {
-        "cfo": "ora.agents.cfo_agent.CFOAgent",
-        "cgo": "ora.agents.cgo_agent.CGOAgent",
-        "cmo": "ora.agents.cmo_agent.CMOAgent",
-        "cpo": "ora.agents.cpo_agent.CPOAgent",
-        "cto": "ora.agents.cto_agent.CTOAgent",
-        "coo": "ora.agents.coo_agent.COOAgent",
-        "community": "ora.agents.community_agent.CommunityAgent",
-        "strategy": "ora.agents.strategy_agent.StrategyAgent",
-        "executive_council": "ora.agents.executive_council.ExecutiveCouncil",
+        "cfo": "aura.agents.cfo_agent.CFOAgent",
+        "cgo": "aura.agents.cgo_agent.CGOAgent",
+        "cmo": "aura.agents.cmo_agent.CMOAgent",
+        "cpo": "aura.agents.cpo_agent.CPOAgent",
+        "cto": "aura.agents.cto_agent.CTOAgent",
+        "coo": "aura.agents.coo_agent.COOAgent",
+        "community": "aura.agents.community_agent.CommunityAgent",
+        "strategy": "aura.agents.strategy_agent.StrategyAgent",
+        "executive_council": "aura.agents.executive_council.ExecutiveCouncil",
     }
 
     if agent_name not in valid_agents:
@@ -310,7 +310,7 @@ async def quick_health_check() -> Dict[str, Any]:
     Quick CTO health check — no auth required (used by monitoring).
     """
     try:
-        from ora.agents.cto_agent import CTOAgent
+        from aura.agents.cto_agent import CTOAgent
         cto = CTOAgent()
         result = await cto.run_health_check()
         return result

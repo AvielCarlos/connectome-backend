@@ -91,11 +91,11 @@ async def github_webhook(request: Request):
             await _send_telegram(msg)
             logger.warning(f"GitHub: build failure alerted for {repo}")
 
-            # Feed to Ora knowledge base
+            # Feed to Aura knowledge base
             try:
                 from core.database import execute
                 await execute(
-                    "INSERT INTO ora_knowledge (content, confidence, source, created_at) "
+                    "INSERT INTO aura_knowledge (content, confidence, source, created_at) "
                     "VALUES ($1, 0.9, 'github_webhook', NOW()) ON CONFLICT DO NOTHING",
                     f"Build failure on {repo} branch {branch}: {name} workflow failed. URL: {url}"
                 )

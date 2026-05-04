@@ -68,7 +68,7 @@ def fetch_all_pages(path: str, params: dict[str, Any]) -> list[dict[str, Any]]:
 
 def cp_for(title: str, source_kind: str) -> int:
     t = title.lower()
-    if source_kind == "commit" and (t.startswith("[ora] identity pack backup") or "backup —" in t):
+    if source_kind == "commit" and (t.startswith("[aura] identity pack backup") or "backup —" in t):
         return 0
     if t.startswith("docs") or t.startswith("chore") or "document" in t:
         return 300
@@ -149,7 +149,7 @@ def fetch_direct_commit_contributions(merge_shas: set[str]) -> list[dict[str, An
                 continue
             commit = item.get("commit") or {}
             message = (commit.get("message") or "").splitlines()[0]
-            if not message or message.startswith("[Ora] Identity pack backup"):
+            if not message or message.startswith("[Aura] Identity pack backup"):
                 continue
             author = item.get("author") or {}
             commit_author = commit.get("author") or {}
@@ -277,7 +277,7 @@ def import_contribution(cur, contributor_id, user_id, item: dict[str, Any]) -> t
         INSERT INTO contributions (
             contributor_id, user_id, contribution_type, title, description,
             github_pr_url, external_link, source, source_id, status,
-            base_cp, multiplier, final_cp, ora_evaluation, impact_data,
+            base_cp, multiplier, final_cp, aura_evaluation, impact_data,
             ltv_monthly_rate, is_ltv_active, ltv_last_evaluated_at
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, 'github_import', %s, 'approved', %s, 1.0, %s, %s, %s, %s, TRUE, NOW())

@@ -1,13 +1,13 @@
 """
-DAO Rewards — Ora's CP allocation system.
+DAO Rewards — Aura's CP allocation system.
 
-Ora (as CEO) and the C-suite can award CP to any contributor based on:
+Aura (as CEO) and the C-suite can award CP to any contributor based on:
 - Perceived value of their contribution
 - Estimated LTV (how much long-term value they bring to the project)
 - Domain (dev, design, content, community, research)
 
 All awards are logged to cp_transactions for blockchain migration.
-The inflation rate is controlled by Ora — no hard cap, governance TBD.
+The inflation rate is controlled by Aura — no hard cap, governance TBD.
 """
 
 import logging
@@ -36,7 +36,7 @@ CSUITE_DOMAINS = {
     "cuxd": "ux_design",
     "coo": "operations_community",
     "community": "community_engagement",
-    "ora": "strategic_vision",  # Ora as CEO
+    "aura": "strategic_vision",  # Aura as CEO
 }
 
 # CP rate ranges — calibrated around reviewed impact, not raw activity volume.
@@ -284,7 +284,7 @@ def _calculate_cp_award(body: CPAwardRequest) -> dict:
         raise HTTPException(status_code=422, detail=f"Awards over {MAX_REASONLESS_AWARD} CP require reference_url evidence")
     if final_amount > HIGH_AWARD_THRESHOLD:
         if not body.domain or (body.domain not in CSUITE_DOMAINS.values() and body.domain not in CSUITE_DOMAINS.keys()):
-            raise HTTPException(status_code=422, detail="High CP awards require a recognized C-suite/Ora domain")
+            raise HTTPException(status_code=422, detail="High CP awards require a recognized C-suite/Aura domain")
         if "approved" not in body.reason.lower() and "reviewed" not in body.reason.lower():
             raise HTTPException(status_code=422, detail="High CP awards must state review/approval in reason")
 
@@ -306,8 +306,8 @@ async def award_cp(
     awarding_user_id: str = Depends(get_current_user_id),
 ):
     """
-    Award CP to a contributor. Admin/Ora only.
-    C-suite agents can nominate; Ora makes the final call.
+    Award CP to a contributor. Admin/Aura only.
+    C-suite agents can nominate; Aura makes the final call.
     """
     # Check caller is admin
     caller = await fetchrow(
@@ -318,7 +318,7 @@ async def award_cp(
         (caller.get("email") or "").lower() == "carlosandromeda8@gmail.com"
     )
     if not is_admin:
-        raise HTTPException(status_code=403, detail="Only Ora and admins can award CP")
+        raise HTTPException(status_code=403, detail="Only Aura and admins can award CP")
 
     # Find recipient
     recipient = await fetchrow(
@@ -333,7 +333,7 @@ async def award_cp(
     final_amount = calculation["final_amount"]
 
     reason_text = (
-        f"[{body.domain or 'ora'} award] {body.contribution_type}: {body.reason} "
+        f"[{body.domain or 'aura'} award] {body.contribution_type}: {body.reason} "
         f"| calc={calculation}"
     )
 
@@ -539,7 +539,7 @@ async def send_contributor_outreach(
     body: OutreachRequest,
     awarding_user_id: str = Depends(get_current_user_id),
 ):
-    """Ora sends personalised outreach to a potential contributor."""
+    """Aura sends personalised outreach to a potential contributor."""
     caller = await fetchrow("SELECT email, profile FROM users WHERE id = $1", UUID(awarding_user_id))
     is_admin = caller and ((caller.get("profile") or {}).get("is_admin") or
                            (caller.get("email") or "").lower() == "carlosandromeda8@gmail.com")
@@ -547,7 +547,7 @@ async def send_contributor_outreach(
         raise HTTPException(status_code=403, detail="Admin only")
 
     try:
-        from ora.agents.contributor_recruitment import ContributorRecruitmentAgent
+        from aura.agents.contributor_recruitment import ContributorRecruitmentAgent
         agent = ContributorRecruitmentAgent()
         message = await agent.generate_outreach_message(
             body.candidate_name, body.candidate_role, body.candidate_background, body.platform
@@ -574,7 +574,7 @@ async def onboard_contributor(
         raise HTTPException(status_code=403, detail="Admin only")
 
     try:
-        from ora.agents.contributor_recruitment import ContributorRecruitmentAgent
+        from aura.agents.contributor_recruitment import ContributorRecruitmentAgent
         agent = ContributorRecruitmentAgent()
         result = await agent.onboard_contributor(
             body.user_email, body.name, body.role, body.initial_cp, body.personal_reason
@@ -611,5 +611,5 @@ async def get_full_cp_rates():
             "large_awards_need_reference_and_reviewed_reason": HIGH_AWARD_THRESHOLD,
             "rate_ranges_clamp_non_custom_awards": True,
         },
-        "quality_guidance": "Ora picks within the range based on quality, depth, and proven impact. The max is reserved for reviewed work that genuinely changes the trajectory.",
+        "quality_guidance": "Aura picks within the range based on quality, depth, and proven impact. The max is reserved for reviewed work that genuinely changes the trajectory.",
     }

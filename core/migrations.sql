@@ -158,7 +158,7 @@ CREATE INDEX IF NOT EXISTS idx_exit_classifications_user_id
     ON exit_classifications(user_id);
 
 -- 2. Session-End Summary
---    Ora's internal summary of what happened in a session.
+--    Aura's internal summary of what happened in a session.
 CREATE TABLE IF NOT EXISTS session_summaries (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS session_summaries (
     early_exits INT DEFAULT 0,
     emerging_interests JSONB DEFAULT '[]',
     avoid_topics JSONB DEFAULT '[]',
-    ora_note TEXT,
+    aura_note TEXT,
     fulfilment_delta FLOAT DEFAULT 0.0,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -178,7 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_session_summaries_user_id
     ON session_summaries(user_id);
 
 -- 3. Re-engagement Push Notification Scheduler
---    Scheduled notifications Ora sends when a user exits mid-goal.
+--    Scheduled notifications Aura sends when a user exits mid-goal.
 CREATE TABLE IF NOT EXISTS scheduled_notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -262,7 +262,7 @@ CREATE INDEX IF NOT EXISTS idx_world_signals_source
 -- FeedbackExperimenter: Meta-learning feedback A/B system
 -- ============================================================
 
--- feedback_experiments: Ora's A/B tests on feedback collection methods
+-- feedback_experiments: Aura's A/B tests on feedback collection methods
 CREATE TABLE IF NOT EXISTS feedback_experiments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     hypothesis TEXT,
@@ -308,8 +308,8 @@ CREATE INDEX IF NOT EXISTS idx_experiment_signals_experiment_id
 CREATE INDEX IF NOT EXISTS idx_experiment_signals_user_id
     ON experiment_signals(user_id);
 
--- ora_lessons: Ora's growing knowledge base, written by all agents
-CREATE TABLE IF NOT EXISTS ora_lessons (
+-- aura_lessons: Aura's growing knowledge base, written by all agents
+CREATE TABLE IF NOT EXISTS aura_lessons (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source VARCHAR(50),           -- 'feedback_experiment' | 'exit_analysis' | 'session_summary' | 'world_agent'
     lesson TEXT,
@@ -319,11 +319,11 @@ CREATE TABLE IF NOT EXISTS ora_lessons (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_ora_lessons_created_at
-    ON ora_lessons(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_aura_lessons_created_at
+    ON aura_lessons(created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_ora_lessons_source
-    ON ora_lessons(source);
+CREATE INDEX IF NOT EXISTS idx_aura_lessons_source
+    ON aura_lessons(source);
 
 -- Seed first experiment
 INSERT INTO feedback_experiments
@@ -341,7 +341,7 @@ ON CONFLICT DO NOTHING;
 -- OraConsciousness tables (added 2026-04-25)
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS ora_reflections (
+CREATE TABLE IF NOT EXISTS aura_reflections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     period_start TIMESTAMP,
     period_end TIMESTAMP,
@@ -356,16 +356,16 @@ CREATE TABLE IF NOT EXISTS ora_reflections (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS ora_conversations (
+CREATE TABLE IF NOT EXISTS aura_conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    role VARCHAR(20),  -- 'user' | 'ora'
+    role VARCHAR(20),  -- 'user' | 'aura'
     message TEXT,
     context JSONB,     -- user state at time of message
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS ora_self_checks (
+CREATE TABLE IF NOT EXISTS aura_self_checks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     aligned BOOLEAN,
     issues JSONB,
@@ -373,18 +373,18 @@ CREATE TABLE IF NOT EXISTS ora_self_checks (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_ora_reflections_created_at
-    ON ora_reflections(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_aura_reflections_created_at
+    ON aura_reflections(created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_ora_conversations_user_id
-    ON ora_conversations(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_aura_conversations_user_id
+    ON aura_conversations(user_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_ora_self_checks_created_at
-    ON ora_self_checks(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_aura_self_checks_created_at
+    ON aura_self_checks(created_at DESC);
 
--- ora_memory is stored in users.profile JSONB (no separate table needed).
+-- aura_memory is stored in users.profile JSONB (no separate table needed).
 -- Format: plain prose paragraph, max 500 chars.
--- Key: users.profile['ora_memory']
+-- Key: users.profile['aura_memory']
 
 -- ============================================================
 -- Model Evolution System (Part 5)
@@ -404,7 +404,7 @@ CREATE TABLE IF NOT EXISTS model_candidates (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_model_candidates_model_provider
     ON model_candidates(model_id, provider);
 
--- system_config: key/value store for dynamic Ora configuration
+-- system_config: key/value store for dynamic Aura configuration
 CREATE TABLE IF NOT EXISTS system_config (
     key VARCHAR(100) PRIMARY KEY,
     value TEXT,
@@ -541,7 +541,7 @@ CREATE TABLE IF NOT EXISTS weekly_summaries (
     screens_seen INT DEFAULT 0,
     goals_progressed INT DEFAULT 0,
     top_interests JSONB DEFAULT '[]',
-    ora_narrative TEXT,
+    aura_narrative TEXT,
     fulfilment_change FLOAT DEFAULT 0.0,
     created_at TIMESTAMP DEFAULT NOW()
 );
@@ -580,12 +580,12 @@ CREATE TABLE IF NOT EXISTS contributions (
     description TEXT,
     github_pr_url TEXT,
     submitted_at TIMESTAMPTZ DEFAULT NOW(),
-    status TEXT DEFAULT 'pending',  -- pending, ora_review, accepted, rejected
+    status TEXT DEFAULT 'pending',  -- pending, aura_review, accepted, rejected
     base_cp INTEGER DEFAULT 0,
     multiplier FLOAT DEFAULT 1.0,
     final_cp INTEGER DEFAULT 0,
-    ora_evaluation TEXT,
-    ora_confidence FLOAT,
+    aura_evaluation TEXT,
+    aura_confidence FLOAT,
     impact_data JSONB,
     community_votes INTEGER DEFAULT 0,
     community_upvotes INTEGER DEFAULT 0

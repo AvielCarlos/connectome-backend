@@ -1,7 +1,7 @@
 """
 Goals API Routes
 Full CRUD for user goals with step management.
-Includes AI-powered goal breakdown and per-step coaching via Ora.
+Includes AI-powered goal breakdown and per-step coaching via Aura.
 """
 
 import logging
@@ -54,8 +54,8 @@ async def _drive_goal_context(user_id: str, goal_title: str, conversation: List[
             query_parts.append(text[:300])
     query = " ".join(query_parts).strip() or "goals values projects"
     try:
-        from ora.agents.drive_agent_v2 import DriveAgentV2
-        from ora.brain import get_brain
+        from aura.agents.drive_agent_v2 import DriveAgentV2
+        from aura.brain import get_brain
 
         brain = get_brain()
         agent = DriveAgentV2(openai_client=getattr(brain, "_openai", None))
@@ -224,7 +224,7 @@ def _generate_smart_mock_steps(title: str, description: Optional[str] = None) ->
             "resources": t[2] if len(t) > 2 else [],
             "completed": False,
             "order": i,
-            "ora_note": None,
+            "aura_note": None,
         }
         for i, t in enumerate(templates)
     ]
@@ -232,7 +232,7 @@ def _generate_smart_mock_steps(title: str, description: Optional[str] = None) ->
 
 async def _ai_breakdown(title: str, description: Optional[str], openai_client) -> Optional[List[Dict[str, Any]]]:
     """Call OpenAI to generate structured steps. Returns None on failure."""
-    prompt = f"""You are Ora, an AI coach. Break this goal into 5-8 specific, actionable sub-steps.
+    prompt = f"""You are Aura, an AI coach. Break this goal into 5-8 specific, actionable sub-steps.
 Goal: "{title}"
 Description: "{description or 'No description provided'}"
 
@@ -245,7 +245,7 @@ Return JSON: {{
       "resources": [{{"label": "resource name", "url": "https://..."}}],
       "completed": false,
       "order": 0,
-      "ora_note": null
+      "aura_note": null
     }}
   ]
 }}
@@ -277,7 +277,7 @@ Rules:
                 "resources": s.get("resources") or [],
                 "completed": False,
                 "order": s.get("order", i),
-                "ora_note": s.get("ora_note"),
+                "aura_note": s.get("aura_note"),
             })
         return steps
     except Exception as e:
@@ -415,7 +415,7 @@ def _extract_json_object(content: str) -> Optional[Dict[str, Any]]:
 
 def _fallback_structured_goal(title: str, conversation: List[Dict[str, str]]) -> Dict[str, Any]:
     user_bits = [m.get("content", "") for m in conversation if m.get("role") == "user"]
-    specifics = " ".join(user_bits).strip() or "Clarified through conversation with Ora."
+    specifics = " ".join(user_bits).strip() or "Clarified through conversation with Aura."
     return {
         "title": title,
         "why": "To create meaningful momentum toward this goal.",
@@ -432,16 +432,16 @@ def _fallback_clarify_question(goal_title: str, turn_count: int) -> str:
     questions = [
         f"What would make {goal_title} feel genuinely achieved in real life — what would be different, visible, or measurable?",
         "What constraints should I design around first: time, money, location, energy, skills, confidence, or access?",
-        "Which parts do you want to do yourself, and which parts would you happily let Ora handle if the cost was covered?",
+        "Which parts do you want to do yourself, and which parts would you happily let Aura handle if the cost was covered?",
         "What timeline feels ambitious but still attainable?",
     ]
     return questions[min(turn_count, len(questions) - 1)]
 
 
 ORA_SERVICE_PRICE_BANDS = {
-    "ora-goal-path-map": (9, 79),
-    "ora-opportunity-scout": (19, 149),
-    "ora-delegated-action-pack": (39, 399),
+    "aura-goal-path-map": (9, 79),
+    "aura-opportunity-scout": (19, 149),
+    "aura-delegated-action-pack": (39, 399),
 }
 
 
@@ -470,12 +470,12 @@ def _goal_complexity(structured_goal: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _quote_aura_service(service_id: str, structured_goal: Dict[str, Any], work_units: int = 1) -> Dict[str, Any]:
-    """Dynamic quote based on goal extensivity, present-state gap, and Ora-side work."""
+    """Dynamic quote based on goal extensivity, present-state gap, and Aura-side work."""
     min_price, max_price = ORA_SERVICE_PRICE_BANDS.get(service_id, (19, 199))
     base = {
-        "ora-goal-path-map": 9,
-        "ora-opportunity-scout": 19,
-        "ora-delegated-action-pack": 39,
+        "aura-goal-path-map": 9,
+        "aura-opportunity-scout": 19,
+        "aura-delegated-action-pack": 39,
     }.get(service_id, min_price)
     complexity = _goal_complexity(structured_goal)
     multiplier = 1 + ((complexity["difficulty"] - 1) * 0.11) + ((complexity["present_state_gap"] - 1) * 0.22) + max(0, work_units - 1) * 0.18
@@ -486,7 +486,7 @@ def _quote_aura_service(service_id: str, structured_goal: Dict[str, Any], work_u
         "pricing_level": complexity["level"],
         "difficulty": complexity["difficulty"],
         "present_state_gap": complexity["present_state_gap"],
-        "pricing_note": f"Quoted from goal complexity ({complexity['level']}), present-state gap, urgency, and Ora-side work; covers costs plus growth margin.",
+        "pricing_note": f"Quoted from goal complexity ({complexity['level']}), present-state gap, urgency, and Aura-side work; covers costs plus growth margin.",
     }
 
 
@@ -495,9 +495,9 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
     goal = structured_goal.get("measurable_outcome") or structured_goal.get("specifics") or structured_goal.get("title") or title
     timeline = structured_goal.get("timeline") or "30-90 days"
     constraints = structured_goal.get("constraints") or "unknown constraints"
-    map_quote = _quote_aura_service("ora-goal-path-map", structured_goal, 1)
-    scout_quote = _quote_aura_service("ora-opportunity-scout", structured_goal, 2)
-    delegate_quote = _quote_aura_service("ora-delegated-action-pack", structured_goal, 3)
+    map_quote = _quote_aura_service("aura-goal-path-map", structured_goal, 1)
+    scout_quote = _quote_aura_service("aura-opportunity-scout", structured_goal, 2)
+    delegate_quote = _quote_aura_service("aura-delegated-action-pack", structured_goal, 3)
     return [
         {
             "id": f"clarify-{uuid.uuid4()}",
@@ -506,9 +506,9 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
             "domain": structured_goal.get("domain") or "iVive",
             "node_type": "clarification",
             "owner": "user",
-            "ora_can_do": False,
+            "aura_can_do": False,
             "user_action": "Confirm or edit the exact outcome, metric, and deadline.",
-            "ora_action": "Ora narrows the intention into a goal that can be mapped and tracked.",
+            "aura_action": "Aura narrows the intention into a goal that can be mapped and tracked.",
             "prerequisites": ["Honest desired outcome", "Realistic timeline"],
         },
         {
@@ -517,11 +517,11 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
             "description": f"Identify what must be true before this goal is easy: skills, money, time, location, people, tools, and constraints ({constraints}).",
             "domain": structured_goal.get("domain") or "iVive",
             "node_type": "graph_mapping",
-            "owner": "ora",
-            "ora_can_do": True,
+            "owner": "aura",
+            "aura_can_do": True,
             "user_action": "Answer any missing constraint questions.",
-            "ora_action": "Ora builds the IOO node map, prerequisite chain, and first executable route.",
-            "service_id": "ora-goal-path-map",
+            "aura_action": "Aura builds the IOO node map, prerequisite chain, and first executable route.",
+            "service_id": "aura-goal-path-map",
             **map_quote,
             "requires_payment": True,
         },
@@ -531,11 +531,11 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
             "description": "Search for concrete people, places, tools, offers, events, services, grants, jobs, communities, or resources connected to this path.",
             "domain": structured_goal.get("domain") or "Aventi",
             "node_type": "opportunity_search",
-            "owner": "ora",
-            "ora_can_do": True,
+            "owner": "aura",
+            "aura_can_do": True,
             "user_action": "Choose which opportunities feel aligned.",
-            "ora_action": "Ora researches and ranks options, then turns the best ones into next nodes.",
-            "service_id": "ora-opportunity-scout",
+            "aura_action": "Aura researches and ranks options, then turns the best ones into next nodes.",
+            "service_id": "aura-opportunity-scout",
             **scout_quote,
             "requires_payment": True,
         },
@@ -546,21 +546,21 @@ def _fallback_execution_path(title: str, structured_goal: Dict[str, Any]) -> Lis
             "domain": structured_goal.get("domain") or "iVive",
             "node_type": "physical_or_digital_step",
             "owner": "user",
-            "ora_can_do": False,
+            "aura_can_do": False,
             "user_action": "Complete the first concrete step and mark it done.",
-            "ora_action": "Ora tracks completion and adapts the next node.",
+            "aura_action": "Aura tracks completion and adapts the next node.",
         },
         {
             "id": f"delegate-{uuid.uuid4()}",
-            "title": "Delegate execution support to Ora",
-            "description": "When the path needs calls, drafting, booking, comparison, admin, setup, or deeper planning, Ora can execute the agentic work after payment unlocks the required tools/time.",
+            "title": "Delegate execution support to Aura",
+            "description": "When the path needs calls, drafting, booking, comparison, admin, setup, or deeper planning, Aura can execute the agentic work after payment unlocks the required tools/time.",
             "domain": structured_goal.get("domain") or "Eviva",
             "node_type": "delegated_execution",
-            "owner": "ora",
-            "ora_can_do": True,
-            "user_action": "Approve the action and any external commitments before Ora executes.",
-            "ora_action": "Ora performs the delegated digital work and reports back with outcomes.",
-            "service_id": "ora-delegated-action-pack",
+            "owner": "aura",
+            "aura_can_do": True,
+            "user_action": "Approve the action and any external commitments before Aura executes.",
+            "aura_action": "Aura performs the delegated digital work and reports back with outcomes.",
+            "service_id": "aura-delegated-action-pack",
             **delegate_quote,
             "requires_payment": True,
         },
@@ -641,7 +641,7 @@ async def create_goal(
     body: GoalCreate,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Create a new goal. Automatically generates AI-powered steps via Ora."""
+    """Create a new goal. Automatically generates AI-powered steps via Aura."""
     # Enforce path limit gate
     active_count_row = await fetchrow(
         "SELECT COUNT(*) AS cnt FROM goals WHERE user_id = $1 AND status = 'active'",
@@ -724,21 +724,21 @@ async def clarify_goal(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Interactive goal clarification conversation with Ora.
+    Interactive goal clarification conversation with Aura.
     Each call advances the conversation one step.
     After 3-5 exchanges, returns a structured goal + IOO path.
     """
     conversation = body.conversation or []
     turn_count = len([m for m in conversation if m.get("role") == "user"])
 
-    system = """You are Ora, the interface to the IOO neural graph.
+    system = """You are Aura, the interface to the IOO neural graph.
 Your job is NOT to produce generic productivity steps. Your job is to clarify an intention into an attainable, measurable goal, then map the first graph connections.
 
 Ask ONE focused clarifying question per turn. Be warm, concise, direct, and specific.
 Clarify in this order:
 1) What real-world outcome would prove the intention is achieved?
 2) What constraints matter most: time, money, location, energy, skills, confidence, access, relationships?
-3) Which parts should the user do themselves vs which parts would they pay Ora to handle?
+3) Which parts should the user do themselves vs which parts would they pay Aura to handle?
 4) What timeline/target is ambitious but attainable?
 
 When you have enough information, respond with ONLY valid JSON:
@@ -761,15 +761,15 @@ When you have enough information, respond with ONLY valid JSON:
       "title": "node title",
       "description": "what this node unlocks",
       "node_type": "clarification|prerequisite|opportunity_search|physical_step|digital_step|delegated_execution",
-      "owner": "user|ora",
+      "owner": "user|aura",
       "user_action": "what the user does",
-      "ora_action": "what Ora can do",
-      "ora_can_do": true,
+      "aura_action": "what Aura can do",
+      "aura_can_do": true,
       "requires_payment": true,
-      "service_id": "ora-goal-path-map|ora-opportunity-scout|ora-delegated-action-pack|null",
+      "service_id": "aura-goal-path-map|aura-opportunity-scout|aura-delegated-action-pack|null",
       "price_usd": 19,
       "pricing_level": "light|standard|deep",
-      "pricing_note": "dynamic quote based on goal extensivity, present-state gap, urgency, and Ora-side work; covers model/search/tool costs plus growth margin",
+      "pricing_note": "dynamic quote based on goal extensivity, present-state gap, urgency, and Aura-side work; covers model/search/tool costs plus growth margin",
       "prerequisites": ["node or condition"]
     }
   ]
@@ -777,8 +777,8 @@ When you have enough information, respond with ONLY valid JSON:
 
 Rules:
 - The first node should usually be goal confirmation/measurement.
-- Include both user-owned nodes and Ora-owned nodes.
-- Paid Ora nodes are allowed only for work Ora can actually perform digitally/research/admin/planning; user approval is still required before external commitments.
+- Include both user-owned nodes and Aura-owned nodes.
+- Paid Aura nodes are allowed only for work Aura can actually perform digitally/research/admin/planning; user approval is still required before external commitments.
 - Do not promise guaranteed life outcomes, money, dating success, medical outcomes, or token rewards.
 - Before complete, do not output JSON; just ask the next question."""
 
@@ -794,7 +794,7 @@ Rules:
         })
     messages.append({"role": "user", "content": f"I want to: {body.goal_title}"})
     for turn in conversation[-10:]:
-        role = "assistant" if turn.get("role") == "ora" else "user"
+        role = "assistant" if turn.get("role") == "aura" else "user"
         content = (turn.get("content") or "").strip()
         if content:
             messages.append({"role": role, "content": content})
@@ -854,8 +854,8 @@ Rules:
                     "goal_category": node.get("goal_category"),
                     "owner": node.get("owner") or "user",
                     "user_action": node.get("user_action"),
-                    "ora_action": node.get("ora_action"),
-                    "ora_can_do": bool(node.get("ora_can_do")),
+                    "aura_action": node.get("aura_action"),
+                    "aura_can_do": bool(node.get("aura_can_do")),
                     "requires_payment": bool(node.get("requires_payment")),
                     "service_id": service_id,
                     "price_usd": quote.get("price_usd") or node.get("price_usd"),
@@ -868,7 +868,7 @@ Rules:
             suggested_path = _fallback_execution_path(body.goal_title, structured_goal)
 
         try:
-            from ora.agents.ioo_graph_agent import get_graph_agent
+            from aura.agents.ioo_graph_agent import get_graph_agent
             agent = get_graph_agent()
             nodes = await agent.vector_recommend(
                 user_id=str(user_id),
@@ -886,8 +886,8 @@ Rules:
                     "goal_category": n.get("goal_category"),
                     "owner": "user",
                     "user_action": n.get("description") or n.get("title", "Complete this node."),
-                    "ora_action": "Ora uses this node to refine the next route.",
-                    "ora_can_do": False,
+                    "aura_action": "Aura uses this node to refine the next route.",
+                    "aura_can_do": False,
                     "requires_payment": False,
                 }
                 for n in (nodes or [])[:5]
@@ -1022,11 +1022,11 @@ async def complete_goal(
     """
     Mark a goal as completed.
     - Sets status to 'completed', progress to 1.0, records completed_at.
-    - Triggers Ora's celebration message.
+    - Triggers Aura's celebration message.
     - CoachingAgent suggests a next goal if the user has other active goals
       that are at 80%+ progress.
 
-    Returns: { goal, ora_celebration, next_goal_suggestion }
+    Returns: { goal, aura_celebration, next_goal_suggestion }
     """
     row = await fetchrow(
         "SELECT * FROM goals WHERE id = $1 AND user_id = $2",
@@ -1038,7 +1038,7 @@ async def complete_goal(
     if row["status"] == "completed":
         return {
             "goal": _build_goal_out(row),
-            "ora_celebration": "You already completed this goal! Keep going.",
+            "aura_celebration": "You already completed this goal! Keep going.",
             "next_goal_suggestion": None,
         }
 
@@ -1069,17 +1069,17 @@ async def complete_goal(
 
     return {
         "goal": _build_goal_out(updated),
-        "ora_celebration": aura_celebration,
+        "aura_celebration": aura_celebration,
         "next_goal_suggestion": next_goal_suggestion,
     }
 
 
 async def _generate_celebration(goal_title: str, user_id: str) -> str:
-    """Ora's celebration message for completing a goal."""
+    """Aura's celebration message for completing a goal."""
     openai_client = _get_openai()
     if openai_client:
         try:
-            prompt = f"""You are Ora, a direct and warm AI coach. Someone just completed their goal: "{goal_title}".
+            prompt = f"""You are Aura, a direct and warm AI coach. Someone just completed their goal: "{goal_title}".
 
 Write a short celebration message (2-3 sentences). Be specific to the goal title. Be genuine, warm, and forward-looking.
 Avoid generic phrases. Start with what they achieved, then nudge toward momentum.
@@ -1146,7 +1146,7 @@ async def breakdown_goal(
     goal_id: str,
     user_id: str = Depends(get_current_user_id),
 ):
-    """Ask Ora to (re)generate AI-powered steps for an existing goal."""
+    """Ask Aura to (re)generate AI-powered steps for an existing goal."""
     row = await fetchrow(
         "SELECT * FROM goals WHERE id = $1 AND user_id = $2",
         UUID(goal_id),
@@ -1177,7 +1177,7 @@ async def ask_about_step(
     user_id: str = Depends(get_current_user_id),
     body: Dict[str, Any] = Body(default={}),
 ):
-    """Ask Ora for help with a specific goal step."""
+    """Ask Aura for help with a specific goal step."""
     row = await fetchrow(
         "SELECT * FROM goals WHERE id = $1 AND user_id = $2",
         UUID(goal_id),
@@ -1199,7 +1199,7 @@ async def ask_about_step(
 
     openai_client = _get_openai()
     if openai_client:
-        prompt = f"""You are Ora, an AI coach helping someone with a specific goal step.
+        prompt = f"""You are Aura, an AI coach helping someone with a specific goal step.
 Goal: "{row['title']}"
 Step: "{step.get('text', '')}"
 Step detail: "{step.get('detail', 'No detail provided')}"

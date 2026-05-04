@@ -30,8 +30,8 @@ from core.models import (
 )
 from core.config import settings
 from api.middleware import get_current_user_id
-from ora.brain import get_brain
-from ora.user_model import get_daily_screen_count, increment_daily_screen_count
+from aura.brain import get_brain
+from aura.user_model import get_daily_screen_count, increment_daily_screen_count
 from core.database import fetch, fetchrow, execute
 from core.geo import get_location_for_ip, geo_to_context_hints
 from uuid import UUID
@@ -148,7 +148,7 @@ def _ioo_pattern_components(node: dict, pattern: str) -> list[dict]:
             ]},
             {"type": "timeline_steps", "items": [
                 {"title": "Check fit", "body": "Time, budget, location, energy."},
-                {"title": "Find option", "body": "Ora can scout real places/events."},
+                {"title": "Find option", "body": "Aura can scout real places/events."},
                 {"title": "Commit", "body": "Book, invite, or schedule."},
             ]},
         ]
@@ -168,7 +168,7 @@ def _ioo_pattern_components(node: dict, pattern: str) -> list[dict]:
             {"type": "timeline_steps", "items": [
                 {"title": "Regulate", "body": "Lower friction first."},
                 {"title": "Tiny action", "body": "Do the minimum viable version."},
-                {"title": "Record signal", "body": "Ora updates your current state."},
+                {"title": "Record signal", "body": "Aura updates your current state."},
             ]},
         ]
     elif pattern == "skill_sprint":
@@ -177,7 +177,7 @@ def _ioo_pattern_components(node: dict, pattern: str) -> list[dict]:
             {"type": "timeline_steps", "items": [
                 {"title": "Target", "body": "Define the proof of skill."},
                 {"title": "Practice loop", "body": "One focused repetition."},
-                {"title": "Feedback", "body": "Ora or a human critiques output."},
+                {"title": "Feedback", "body": "Aura or a human critiques output."},
                 {"title": "Ship", "body": "Make one result real."},
             ]},
         ]
@@ -187,7 +187,7 @@ def _ioo_pattern_components(node: dict, pattern: str) -> list[dict]:
             {"type": "question_stack", "items": [
                 "What would prove this worked?",
                 "What constraint matters most?",
-                "What can Ora do vs what must you do?",
+                "What can Aura do vs what must you do?",
             ]},
         ]
     else:
@@ -195,7 +195,7 @@ def _ioo_pattern_components(node: dict, pattern: str) -> list[dict]:
             {"type": "section_header", "text": "Bridge node" if pattern == "bridge_node" else "Adaptive path"},
             {"type": "split_actions", "items": [
                 {"owner": "You", "text": "Confirm reality: time, energy, money, access."},
-                {"owner": "Ora", "text": "Map prerequisites, options, and next interface."},
+                {"owner": "Aura", "text": "Map prerequisites, options, and next interface."},
             ]},
         ]
 
@@ -281,7 +281,7 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
     # only as disposable UI JSON. Existing IOO cards link to their node; real
     # action/fallback cards become screen_card/world-signal IOO nodes.
     try:
-        from ora.agents.ioo_graph_agent import get_graph_agent
+        from aura.agents.ioo_graph_agent import get_graph_agent
 
         await get_graph_agent().integrate_screen_spec(
             spec=spec_dict,
@@ -298,7 +298,7 @@ async def _store_ioo_screen_spec(spec_dict: dict) -> str:
     # between neighbouring generated screens and execution runs.
     if node_uuid:
         try:
-            from ora.agents.screen_graph_agent import create_screen_edge
+            from aura.agents.screen_graph_agent import create_screen_edge
 
             await create_screen_edge(
                 from_screen_id=db_id,
@@ -1199,7 +1199,7 @@ async def _try_live_event_action(user_id: str, tier: str, daily_limit: int) -> O
     public event metadata.
     """
     try:
-        from ora.agents.event_agent import EventAgent
+        from aura.agents.event_agent import EventAgent
 
         agent = EventAgent()
         city = await _user_city(user_id)
@@ -1496,7 +1496,7 @@ _STATIC_FALLBACK_CARDS = [
             "Save one thing you noticed as a possible future experience.",
         ],
         "needs": ["10 minutes", "safe place to walk", "curiosity"],
-        "result": "Ora learns what kinds of places and experiences make you feel more alive.",
+        "result": "Aura learns what kinds of places and experiences make you feel more alive.",
     },
     {
         "title": "Reset your system with iVive",
@@ -1512,7 +1512,7 @@ _STATIC_FALLBACK_CARDS = [
             "Take five slow breaths, then ask: what is the smallest next step?",
         ],
         "needs": ["1–3 minutes", "water if available", "somewhere to pause"],
-        "result": "Ora learns whether you need restoration before action.",
+        "result": "Aura learns whether you need restoration before action.",
     },
     {
         "title": "Send one Eviva spark",
@@ -1528,7 +1528,7 @@ _STATIC_FALLBACK_CARDS = [
             "Send it, or save it if now is not socially appropriate.",
         ],
         "needs": ["one person", "one sentence", "phone or messaging app"],
-        "result": "Ora learns which relationships and contribution channels are alive for you.",
+        "result": "Aura learns which relationships and contribution channels are alive for you.",
     },
     {
         "title": "Choose Rest on purpose",
@@ -1545,7 +1545,7 @@ _STATIC_FALLBACK_CARDS = [
             "After three minutes, choose whether to continue resting or return to action.",
         ],
         "needs": ["3 minutes", "quiet enough space", "permission to pause"],
-        "result": "Ora learns when your next best step is recovery, not more input.",
+        "result": "Aura learns when your next best step is recovery, not more input.",
     },
 ]
 
@@ -1675,7 +1675,7 @@ async def _try_ioo_card(
     Returns a ScreenResponse on success, None if the graph has nothing to offer.
     """
     try:
-        from ora.agents.ioo_graph_agent import get_graph_agent as _get_ioo
+        from aura.agents.ioo_graph_agent import get_graph_agent as _get_ioo
         _ioo = _get_ioo()
         if goal_id:
             # Goal-specific: recommend nodes aligned to that goal
@@ -1780,14 +1780,14 @@ async def get_next_screen(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Request the next screen from Ora.
+    Request the next screen from Aura.
     Request the next screen from Aura.
     Enforces the PricingAgent daily screen limit before generating, so free
     users keep a real daily cap without false limiter cards in the queue.
     """
     # Check subscription tier via PricingAgent-backed tier guard
     from api.tier_guard import get_user_tier, build_upgrade_card
-    from ora.agents.pricing_agent import get_pricing_agent
+    from aura.agents.pricing_agent import get_pricing_agent
 
     tier = await get_user_tier(user_id)
     pricing_agent = get_pricing_agent()
@@ -1799,7 +1799,7 @@ async def get_next_screen(
     current_count = await get_daily_screen_count(user_id)
 
     if daily_limit != -1 and current_count >= daily_limit:
-        # Return Ora's warm upgrade card instead of a cold 402
+        # Return Aura's warm upgrade card instead of a cold 402
         upgrade_card = await build_upgrade_card("daily_screens", daily_limit, tier)
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -1950,7 +1950,7 @@ async def get_screen_batch(
         raise HTTPException(status_code=404, detail="User not found")
 
     from api.tier_guard import get_user_tier, build_upgrade_card
-    from ora.agents.pricing_agent import get_pricing_agent
+    from aura.agents.pricing_agent import get_pricing_agent
 
     tier = await get_user_tier(user_id)
     pricing_agent = get_pricing_agent()
@@ -2103,7 +2103,7 @@ async def save_screen_for_later(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Bookmark a screen so Ora resurfaces it in ~24 hours.
+    Bookmark a screen so Aura resurfaces it in ~24 hours.
     Upserts an interaction row with saved=true.
     """
     # TODO(ScreenGraph): treat this as the explicit "Do Later" graph-learning
@@ -2130,7 +2130,7 @@ async def save_screen_for_later(
         logger.error(f"Save screen error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Failed to save screen")
 
-    return {"ok": True, "message": "Saved! Ora will resurface this in 24h."}
+    return {"ok": True, "message": "Saved! Aura will resurface this in 24h."}
 
 
 # ---------------------------------------------------------------------------

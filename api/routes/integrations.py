@@ -150,8 +150,8 @@ async def sync_drive(
 
     # Run Drive sync using DriveAgentV2
     try:
-        from ora.agents.drive_agent_v2 import DriveAgentV2
-        from ora.brain import get_brain
+        from aura.agents.drive_agent_v2 import DriveAgentV2
+        from aura.brain import get_brain
 
         brain = get_brain()
         agent = DriveAgentV2(openai_client=brain._openai)
@@ -203,8 +203,8 @@ async def ingest_twitter(
 
     async def _run_ingestion():
         try:
-            from ora.brain import get_brain
-            from ora.agents.twitter_agent import TwitterSignalAgent
+            from aura.brain import get_brain
+            from aura.agents.twitter_agent import TwitterSignalAgent
             brain = get_brain()
             agent = TwitterSignalAgent(openai_client=brain._openai)
             await agent.ingest_twitter_signals(user_id=user_id, twitter_handle=handle)

@@ -3,7 +3,7 @@ Mood API Routes
 
 Endpoints:
   POST /api/mood/check — receive mood index (0-4) and store it
-  POST /api/mood/daily-checkin — 30-second Ora momentum check-in
+  POST /api/mood/daily-checkin — 30-second Aura momentum check-in
 """
 
 import logging
@@ -91,7 +91,7 @@ async def daily_checkin(
     """
     Capture a lightweight morning momentum check-in.
     Stores the signal in interactions.exit_point as JSON to avoid schema churn,
-    awards engagement XP when available, and returns a concrete Ora focus line.
+    awards engagement XP when available, and returns a concrete Aura focus line.
     """
     mood_label = MOOD_LABELS[body.mood_index]
     payload = {
@@ -139,5 +139,5 @@ async def daily_checkin(
         "mood": mood_label,
         "xp_awarded": xp_awarded,
         "active_goal": active_goal,
-        "ora_focus": _focus_prompt(mood_label, body.capacity, body.focus, body.blocker),
+        "aura_focus": _focus_prompt(mood_label, body.capacity, body.focus, body.blocker),
     }

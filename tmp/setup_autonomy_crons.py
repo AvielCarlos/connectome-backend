@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-setup_autonomy_crons.py — Set up OpenClaw crons for Ora Autonomy
+setup_autonomy_crons.py — Set up OpenClaw crons for Aura Autonomy
 
 This script prints the instructions and curl commands to create OpenClaw crons
 that POST to the Railway Autonomy endpoint every 6 hours.
@@ -12,7 +12,7 @@ The autonomy endpoint requires an admin JWT token. You can get one by logging
 in with an admin account and storing the token. The script shows how to use
 an environment variable or hard-coded token.
 
-NOTE: The /api/ora/autonomy/run endpoint requires admin auth (avi@atdao.org).
+NOTE: The /api/aura/autonomy/run endpoint requires admin auth (avi@atdao.org).
 You'll need a valid JWT bearer token. To get one:
 
     curl -X POST https://connectome-api-production.up.railway.app/api/users/login \\
@@ -29,7 +29,7 @@ import subprocess
 import sys
 
 RAILWAY_API = "https://connectome-api-production.up.railway.app"
-AUTONOMY_ENDPOINT = f"{RAILWAY_API}/api/ora/autonomy/run"
+AUTONOMY_ENDPOINT = f"{RAILWAY_API}/api/aura/autonomy/run"
 
 # ── OpenClaw Gateway URL ──────────────────────────────────────────────────────
 # The OpenClaw gateway is typically at http://localhost:4444 or the configured URL.
@@ -43,11 +43,11 @@ ADMIN_TOKEN = os.environ.get("CONNECTOME_ADMIN_TOKEN", "YOUR_ADMIN_JWT_TOKEN_HER
 def print_instructions():
     print("""
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║              Ora Autonomy Cron Setup — OpenClaw Instructions                ║
+║              Aura Autonomy Cron Setup — OpenClaw Instructions                ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 
 WHAT THIS DOES:
-  Creates 1 OpenClaw cron that POSTs to the Ora Autonomy endpoint every 6 hours.
+  Creates 1 OpenClaw cron that POSTs to the Aura Autonomy endpoint every 6 hours.
   The autonomy agent does everything in one shot:
     ✦ A/B test auto-promotion
     ✦ Bug detection & fix suggestions
@@ -75,8 +75,8 @@ Try this first (OpenClaw standard cron API):
 """)
 
     cron_payload = {
-        "name": "ora-autonomy-6h",
-        "description": "Ora autonomous improvement cycle — A/B, bugs, weights, report",
+        "name": "aura-autonomy-6h",
+        "description": "Aura autonomous improvement cycle — A/B, bugs, weights, report",
         "schedule": "0 */6 * * *",  # every 6 hours at minute 0
         "action": {
             "type": "http",
@@ -113,11 +113,11 @@ ALTERNATIVE: Cron via system crontab (if OpenClaw cron API is unavailable)
 ────────────────────────────────────────────────────────────────────────────
 Add to crontab (crontab -e):
 
-    # Ora Autonomy — every 6 hours
+    # Aura Autonomy — every 6 hours
     0 */6 * * * curl -s -X POST {endpoint} \\
         -H "Authorization: Bearer YOUR_TOKEN" \\
         -H "Content-Type: application/json" \\
-        >> /tmp/ora-autonomy-cron.log 2>&1
+        >> /tmp/aura-autonomy-cron.log 2>&1
 
 """.format(
         gateway=OPENCLAW_GATEWAY,
@@ -137,8 +137,8 @@ def try_create_cron():
         return
 
     cron_payload = {
-        "name": "ora-autonomy-6h",
-        "description": "Ora autonomous improvement cycle — A/B, bugs, weights, report",
+        "name": "aura-autonomy-6h",
+        "description": "Aura autonomous improvement cycle — A/B, bugs, weights, report",
         "schedule": "0 */6 * * *",
         "action": {
             "type": "http",
@@ -181,5 +181,5 @@ def try_create_cron():
 
 
 if __name__ == "__main__":
-    print("\n🤖 Ora Autonomy Cron Setup\n")
+    print("\n🤖 Aura Autonomy Cron Setup\n")
     try_create_cron()

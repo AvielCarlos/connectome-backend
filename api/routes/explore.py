@@ -13,8 +13,8 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from api.middleware import get_current_user_id
-from ora.brain import get_brain
-from ora.user_model import load_user_model
+from aura.brain import get_brain
+from aura.user_model import load_user_model
 from core.geo import get_location_for_ip, geo_to_context_hints
 
 logger = logging.getLogger(__name__)

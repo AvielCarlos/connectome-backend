@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 
 from api.middleware import get_current_user_id
 from core.database import execute, fetch, fetchrow
-from ora.agents.event_agent import EventAgent, SERVE_WINDOW_DAYS, MAX_SERVE_WINDOW_DAYS
+from aura.agents.event_agent import EventAgent, SERVE_WINDOW_DAYS, MAX_SERVE_WINDOW_DAYS
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["events"])
@@ -318,7 +318,7 @@ async def update_user_location(
             }),
         )
         try:
-            from ora.user_model import update_user_embedding_from_context
+            from aura.user_model import update_user_embedding_from_context
             location_context = {
                 "location_city": body.city,
                 "location_country": country or None,
@@ -437,12 +437,12 @@ async def update_user_live_location(
             }),
         )
         try:
-            from ora.agents.ioo_graph_agent import get_graph_agent
+            from aura.agents.ioo_graph_agent import get_graph_agent
             await get_graph_agent().build_user_ioo_vector(str(user_id))
         except Exception as e:
             logger.debug(f"Live location IOO vector refresh skipped for {user_id[:8]}: {e}")
         try:
-            from ora.user_model import update_user_embedding_from_context
+            from aura.user_model import update_user_embedding_from_context
             location_context = {
                 "location_city": city,
                 "location_country": country or None,

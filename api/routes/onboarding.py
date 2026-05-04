@@ -26,7 +26,7 @@ async def get_onboarding_variant(
     Once a winner is promoted it is returned for all users.
     """
     try:
-        from ora.agents.onboarding_agent_v2 import OnboardingOptimizationAgent
+        from aura.agents.onboarding_agent_v2 import OnboardingOptimizationAgent
         agent = OnboardingOptimizationAgent()
         variant = await agent.assign_onboarding_variant(user_id)
         name = OnboardingOptimizationAgent.ONBOARDING_VARIANTS[variant]

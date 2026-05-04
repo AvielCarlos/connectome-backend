@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
 from api.middleware import get_current_user_id
-from ora.agents.cgo_agent import run_cgo_growth_analysis
-from ora.payments.growth_billing import (
+from aura.agents.cgo_agent import run_cgo_growth_analysis
+from aura.payments.growth_billing import (
     API_ACCESS_PLANS,
     ORA_SESSION_TYPES,
     GrowthBillingError,
@@ -138,16 +138,16 @@ async def billing_corporate_post(
         raise _translate_billing_error(exc)
 
 
-@router.post("/billing/ora-session")
+@router.post("/billing/aura-session")
 async def billing_aura_session(
     body: AuraSessionCheckoutRequest,
     user_id: str = Depends(get_current_user_id),
 ) -> Dict[str, Any]:
-    """Create a one-off Stripe Checkout Session for a premium Ora Session."""
+    """Create a one-off Stripe Checkout Session for a premium Aura Session."""
     try:
         checkout = await create_aura_session_payment(user_id=user_id, session_type=body.session_type)
         return {
-            "stream": "ora_session",
+            "stream": "aura_session",
             "session_type": body.session_type,
             "available_session_types": ORA_SESSION_TYPES,
             **checkout,

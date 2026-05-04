@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 from core.models import FeedbackSubmit, FeedbackResponse
 from api.middleware import get_current_user_id
-from ora.brain import get_brain
+from aura.brain import get_brain
 from core.database import execute, fetchrow
 from openai import AsyncOpenAI
 
@@ -484,7 +484,7 @@ async def _handle_global_feedback(body: FeedbackSubmit, user_id: str) -> Feedbac
             """,
             contributor["id"] if contributor else None,
             user_uuid,
-            f"{category} feedback on {body.route or 'Ora'}",
+            f"{category} feedback on {body.route or 'Aura'}",
             message,
             GLOBAL_FEEDBACK_CP,
             message,
@@ -577,7 +577,7 @@ async def _record_ioo_outcome_if_applicable(
         if meta.get("source") != "ioo_graph" or not meta.get("node_id"):
             return
         node_id = meta["node_id"]
-        from ora.agents.ioo_graph_agent import get_graph_agent as _get_ioo
+        from aura.agents.ioo_graph_agent import get_graph_agent as _get_ioo
         await _get_ioo().record_node_outcome(
             user_id=str(user_id),
             node_id=str(node_id),
@@ -638,9 +638,9 @@ async def submit_feedback(
     delta = insight.get("fulfilment_delta", 0.0)
 
     if signal == "positive":
-        msg = "Great! Ora will show you more like this."
+        msg = "Great! Aura will show you more like this."
     elif signal == "negative":
-        msg = "Noted. Ora will adjust your feed."
+        msg = "Noted. Aura will adjust your feed."
     else:
         msg = "Thanks for the feedback."
 
@@ -781,11 +781,11 @@ async def submit_action_feedback(
     user_id: str = Depends(get_current_user_id),
 ):
     """
-    Record that an Ora action tool was successfully executed.
+    Record that an Aura action tool was successfully executed.
     Stored as an interaction with a special exit_point so the
     feedback analyst can learn which tools drive real-world behaviour.
     """
-    exit_point = f"ora_action:{body.tool_name}"
+    exit_point = f"aura_action:{body.tool_name}"
 
     try:
         # Insert a lightweight interaction row (no screen_spec required)

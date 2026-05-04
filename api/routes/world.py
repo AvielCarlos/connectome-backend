@@ -11,8 +11,8 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from ora.agents.world_signal_agent import get_world_signal_agent
-from ora.agents.world_discovery_agent import WorldDiscoveryAgent
+from aura.agents.world_signal_agent import get_world_signal_agent
+from aura.agents.world_discovery_agent import WorldDiscoveryAgent
 from core.config import settings
 
 logger = logging.getLogger(__name__)

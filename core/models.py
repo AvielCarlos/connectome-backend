@@ -123,7 +123,7 @@ class ScreenSpec(BaseModel):
 
 
 class ScreenRequest(BaseModel):
-    context: Optional[str] = None  # hint to Ora about what kind of screen
+    context: Optional[str] = None  # hint to Aura about what kind of screen
     goal_id: Optional[str] = None
     domain: Optional[DomainType] = None  # optional domain filter
     feed_mode: Optional[Literal["now", "future", "path"]] = "path"
@@ -175,11 +175,11 @@ class FeedbackResponse(BaseModel):
 class GoalStep(BaseModel):
     id: str
     text: str
-    detail: Optional[str] = None          # Ora's explanation of why/how
+    detail: Optional[str] = None          # Aura's explanation of why/how
     resources: Optional[List[dict]] = []   # [{"label": str, "url": str}]
     completed: bool = False
     order: int = 0
-    aura_note: Optional[str] = None         # Ora's note after user completes it
+    aura_note: Optional[str] = None         # Aura's note after user completes it
 
 
 class GoalCreate(BaseModel):

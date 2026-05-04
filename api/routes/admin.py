@@ -167,7 +167,7 @@ async def get_experiments(
 ) -> Dict[str, Any]:
     """
     Return all feedback experiments with stats.
-    This shows what Ora is currently testing.
+    This shows what Aura is currently testing.
     """
     _require_admin(x_admin_token)
 
@@ -241,8 +241,8 @@ async def get_aura_lessons(
     x_admin_token: str = Header(default=""),
 ) -> Dict[str, Any]:
     """
-    Return ora_lessons ordered by created_at DESC.
-    This is Ora's mind — what she currently knows.
+    Return aura_lessons ordered by created_at DESC.
+    This is Aura's mind — what she currently knows.
     """
     _require_admin(x_admin_token)
 
@@ -250,7 +250,7 @@ async def get_aura_lessons(
         rows = await fetch(
             """
             SELECT id, source, lesson, confidence, applied, applies_to, created_at
-            FROM ora_lessons
+            FROM aura_lessons
             WHERE source = $1
             ORDER BY created_at DESC
             LIMIT $2
@@ -262,7 +262,7 @@ async def get_aura_lessons(
         rows = await fetch(
             """
             SELECT id, source, lesson, confidence, applied, applies_to, created_at
-            FROM ora_lessons
+            FROM aura_lessons
             ORDER BY created_at DESC
             LIMIT $1
             """,
@@ -347,10 +347,10 @@ async def get_collective_insights(
     x_admin_token: str = Header(default=""),
 ) -> Dict[str, Any]:
     """
-    Return Ora's collective intelligence state:
+    Return Aura's collective intelligence state:
     - Latest collective_wisdom entry (what humanity is reaching for right now)
     - Active suppressions (agent+domain combos being suppressed globally)
-    - collective_voice (Ora's synthesis of the collective signal)
+    - collective_voice (Aura's synthesis of the collective signal)
 
     This endpoint is powered by CollectiveIntelligenceAgent.
     All data is aggregate — no individual user data ever appears here.
@@ -467,9 +467,9 @@ async def get_growth_metrics(
     x_admin_token: str = Header(default=""),
 ) -> Dict[str, Any]:
     """
-    Ora's admin growth metrics endpoint.
-    Used by ora_outreach/sales_optimizer.py to measure app growth
-    and inform Ora's self-improvement loop.
+    Aura's admin growth metrics endpoint.
+    Used by aura_outreach/sales_optimizer.py to measure app growth
+    and inform Aura's self-improvement loop.
 
     Returns:
     - new_users_7d: count of signups in last 7 days

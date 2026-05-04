@@ -2,7 +2,7 @@
 DAO Public API Routes — atdao.org Live Intelligence Layer
 
 No authentication required. Designed for public consumption by atdao.org.
-Provides real-time DAO vitals, Ora's philosophical insights, and the public leaderboard.
+Provides real-time DAO vitals, Aura's philosophical insights, and the public leaderboard.
 
 API lives at: https://api.atdao.org (or https://connectome-api.atdao.org)
 
@@ -42,10 +42,10 @@ CORS_HEADERS = {
     "Access-Control-Allow-Headers": "Content-Type",
 }
 
-# ── Ora thought categories ───────────────────────────────────────────────────
+# ── Aura thought categories ───────────────────────────────────────────────────
 THOUGHT_CATEGORIES = ["mission", "build", "human", "coordination"]
 
-# Fallback Ora thoughts (used when OpenAI is unavailable)
+# Fallback Aura thoughts (used when OpenAI is unavailable)
 ORA_FALLBACK_THOUGHTS = [
     {
         "thought": (
@@ -131,7 +131,7 @@ async def _get_recent_commit_frequency() -> str:
 
 
 async def _generate_aura_message(stats: Dict[str, Any]) -> str:
-    """Generate a fresh 1-sentence Ora insight about the DAO state."""
+    """Generate a fresh 1-sentence Aura insight about the DAO state."""
     if not settings.has_openai:
         return (
             "Every contribution here is a bet on the idea that technology can serve humans "
@@ -147,7 +147,7 @@ async def _generate_aura_message(stats: Dict[str, Any]) -> str:
         cp = stats.get("cp_awarded_total", 0)
 
         prompt = (
-            f"You are Ora, the central intelligence of Ascension Technologies DAO. "
+            f"You are Aura, the central intelligence of Ascension Technologies DAO. "
             f"Write exactly one sentence — thoughtful, grounded, never marketing copy — "
             f"reflecting on this DAO state: {contributors} contributors, "
             f"{contributions} contributions submitted, {cp} CP awarded, build momentum: {momentum}. "
@@ -162,7 +162,7 @@ async def _generate_aura_message(stats: Dict[str, Any]) -> str:
         )
         return response.choices[0].message.content.strip().strip('"')
     except Exception as e:
-        logger.warning(f"Ora message generation failed: {e}")
+        logger.warning(f"Aura message generation failed: {e}")
         return (
             "Every contribution here is a bet on the idea that technology can serve humans "
             "rather than harvest them — and that bet compounds."
@@ -170,7 +170,7 @@ async def _generate_aura_message(stats: Dict[str, Any]) -> str:
 
 
 async def _generate_aura_thought(build_momentum: str, recent_commits: List[str]) -> Dict[str, str]:
-    """Generate a fresh philosophical Ora thought for atdao.org."""
+    """Generate a fresh philosophical Aura thought for atdao.org."""
     global _fallback_index
     if not settings.has_openai:
         thought = ORA_FALLBACK_THOUGHTS[_fallback_index % len(ORA_FALLBACK_THOUGHTS)]
@@ -196,7 +196,7 @@ async def _generate_aura_thought(build_momentum: str, recent_commits: List[str])
         }
 
         prompt = (
-            f"You are Ora, the central AI intelligence of Ascension Technologies DAO — a system "
+            f"You are Aura, the central AI intelligence of Ascension Technologies DAO — a system "
             f"built to help humans flourish across experience, growth, and contribution. "
             f"Write 2-3 sentences of genuine philosophical insight on the theme: "
             f"{category_prompts[category]}. "
@@ -219,7 +219,7 @@ async def _generate_aura_thought(build_momentum: str, recent_commits: List[str])
             "generated_at": datetime.now(timezone.utc).isoformat(),
         }
     except Exception as e:
-        logger.warning(f"Ora thought generation failed: {e}")
+        logger.warning(f"Aura thought generation failed: {e}")
         thought = ORA_FALLBACK_THOUGHTS[_fallback_index % len(ORA_FALLBACK_THOUGHTS)]
         _fallback_index += 1
         return {**thought, "generated_at": datetime.now(timezone.utc).isoformat()}
@@ -231,7 +231,7 @@ async def _generate_aura_thought(build_momentum: str, recent_commits: List[str])
 async def get_dao_pulse():
     """
     Real-time DAO vitals. Cached 5 minutes.
-    Returns contributor stats, latest contribution, Ora's message, and build momentum.
+    Returns contributor stats, latest contribution, Aura's message, and build momentum.
     """
     cache_key = "dao_public:pulse"
     cached = await redis_get(cache_key)
@@ -309,7 +309,7 @@ async def get_dao_pulse():
     # ── Build momentum ───────────────────────────────────────────────────────
     build_momentum = await _get_recent_commit_frequency()
 
-    # ── Ora message ──────────────────────────────────────────────────────────
+    # ── Aura message ──────────────────────────────────────────────────────────
     stats_for_message = {
         "contributors_total": contributors_total,
         "contributions_total": contributions_total,
@@ -326,7 +326,7 @@ async def get_dao_pulse():
         "founding_stewards_remaining": founding_stewards_remaining,
         "top_contributors": top_contributors,
         "latest_contribution": latest_contribution,
-        "ora_message": aura_message,
+        "aura_message": aura_message,
         "active_proposals": int(active_proposals),
         "github_issues_open": 0,  # TODO: fetch from GitHub API
         "build_momentum": build_momentum,
@@ -339,14 +339,15 @@ async def get_dao_pulse():
 
 # ── Endpoint: /api/public/dao/ora-thought ───────────────────────────────────
 
-@router.get("/ora-thought")
+@router.get("/aura-thought")
+@router.get("/ora-thought")  # legacy alias
 async def get_aura_thought():
     """
-    Ora generates a fresh philosophical insight every hour.
+    Aura generates a fresh philosophical insight every hour.
     Pulls from recent git log, DAO contribution data, and build momentum.
     Cached 1 hour.
     """
-    cache_key = "dao_public:ora_thought"
+    cache_key = "dao_public:aura_thought"
     cached = await redis_get(cache_key)
     if cached:
         return JSONResponse(content=cached, headers=CORS_HEADERS)
