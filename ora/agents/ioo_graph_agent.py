@@ -27,6 +27,33 @@ from ora.agents.recommendation_engine import (
 logger = logging.getLogger(__name__)
 
 
+def _world_signal_freshness_sql(alias: str = "n") -> str:
+    """
+    Guard feed/path ranking against stale live-context cards.
+
+    Weather and date/day-sensitive world nodes are only useful when the backing
+    signal has been refreshed recently. We use the node's updated_at timestamp
+    because upsert_world_signal_node refreshes it whenever the live source is
+    ingested, and this avoids trusting optional/malformed provider timestamps.
+    """
+    a = alias
+    signal_type = f"lower(COALESCE({a}.requirements->>'world_signal_type', {a}.goal_category, ''))"
+    title_text = f"lower(COALESCE({a}.title, '') || ' ' || COALESCE({a}.description, ''))"
+    return f"""
+              AND NOT (
+                  {signal_type} IN ('weather', 'forecast')
+                  AND {a}.updated_at < NOW() - INTERVAL '6 hours'
+              )
+              AND NOT (
+                  (
+                      {signal_type} IN ('daily', 'date', 'today')
+                      OR {title_text} ~ '(today|tonight|this morning|this afternoon|this evening|weather|forecast)'
+                  )
+                  AND {a}.updated_at < NOW() - INTERVAL '24 hours'
+              )
+    """
+
+
 def _parse_pgvector(raw) -> List[float]:
     """Convert asyncpg/pgvector/string values into a Python vector."""
     if raw is None:
@@ -203,7 +230,29 @@ class IOOGraphAgent:
         """
         # Fetch user state
         user_state = await fetchrow(
-            "SELECT * FROM ioo_user_state WHERE user_id = $1",
+            """
+            SELECT
+                s.finances_monthly_budget_usd,
+                s.fitness_level,
+                COALESCE(
+                    NULLIF(s.location_city, ''),
+                    NULLIF(u.city, ''),
+                    NULLIF(u.profile->>'travel_city', ''),
+                    NULLIF(u.profile->>'travel_location_city', ''),
+                    NULLIF(u.profile->>'location_city', ''),
+                    NULLIF(u.profile->>'city', '')
+                ) AS location_city,
+                COALESCE(
+                    NULLIF(s.location_country, ''),
+                    NULLIF(u.profile->>'travel_country', ''),
+                    NULLIF(u.profile->>'travel_location_country', ''),
+                    NULLIF(u.profile->>'location_country', ''),
+                    NULLIF(u.profile->>'country', '')
+                ) AS location_country
+            FROM users u
+            LEFT JOIN ioo_user_state s ON s.user_id = u.id
+            WHERE u.id = $1::uuid
+            """,
             str(user_id),
         )
 
@@ -276,6 +325,7 @@ class IOOGraphAgent:
               {finance_filter}
               {fitness_filter}
               {location_filter}
+              {_world_signal_freshness_sql('n')}
             ORDER BY n.id, (COALESCE(e.weight, 0.5) * 0.6 + 
                             CASE WHEN n.attempt_count > 0
                                  THEN n.success_count::float / n.attempt_count
@@ -313,6 +363,7 @@ class IOOGraphAgent:
                   {finance_filter}
                   {fitness_filter}
                   {location_filter}
+                  {_world_signal_freshness_sql('n')}
                 ORDER BY n.id,
                          (COALESCE(
                             (SELECT MAX(e.weight) FROM ioo_edges e
@@ -346,6 +397,7 @@ class IOOGraphAgent:
                   {finance_filter}
                   {fitness_filter}
                   {location_filter}
+                  {_world_signal_freshness_sql('n')}
                 ORDER BY success_rate DESC
                 LIMIT ${idx}
             """
@@ -482,7 +534,35 @@ class IOOGraphAgent:
         return embedded
 
     async def _capability_filter_sql(self, user_id: str, start_idx: int = 3) -> tuple[str, list]:
-        user_state = await fetchrow("SELECT * FROM ioo_user_state WHERE user_id = $1", str(user_id))
+        user_state = await fetchrow(
+            """
+            SELECT
+                s.finances_monthly_budget_usd,
+                s.fitness_level,
+                s.free_time_weekday_hours,
+                s.free_time_weekend_hours,
+                s.has_car,
+                COALESCE(
+                    NULLIF(s.location_city, ''),
+                    NULLIF(u.city, ''),
+                    NULLIF(u.profile->>'travel_city', ''),
+                    NULLIF(u.profile->>'travel_location_city', ''),
+                    NULLIF(u.profile->>'location_city', ''),
+                    NULLIF(u.profile->>'city', '')
+                ) AS location_city,
+                COALESCE(
+                    NULLIF(s.location_country, ''),
+                    NULLIF(u.profile->>'travel_country', ''),
+                    NULLIF(u.profile->>'travel_location_country', ''),
+                    NULLIF(u.profile->>'location_country', ''),
+                    NULLIF(u.profile->>'country', '')
+                ) AS location_country
+            FROM users u
+            LEFT JOIN ioo_user_state s ON s.user_id = u.id
+            WHERE u.id = $1::uuid
+            """,
+            str(user_id),
+        )
         clauses: list[str] = []
         params: list = []
         idx = start_idx
@@ -543,7 +623,30 @@ class IOOGraphAgent:
         if await fetchval("SELECT COUNT(*) FROM ioo_nodes WHERE is_active = TRUE AND embedding IS NULL"):
             await self.embed_all_nodes()
 
-        user_state = await fetchrow("SELECT location_city, location_country FROM ioo_user_state WHERE user_id = $1", str(user_id))
+        user_state = await fetchrow(
+            """
+            SELECT
+                COALESCE(
+                    NULLIF(s.location_city, ''),
+                    NULLIF(u.city, ''),
+                    NULLIF(u.profile->>'travel_city', ''),
+                    NULLIF(u.profile->>'travel_location_city', ''),
+                    NULLIF(u.profile->>'location_city', ''),
+                    NULLIF(u.profile->>'city', '')
+                ) AS location_city,
+                COALESCE(
+                    NULLIF(s.location_country, ''),
+                    NULLIF(u.profile->>'travel_country', ''),
+                    NULLIF(u.profile->>'travel_location_country', ''),
+                    NULLIF(u.profile->>'location_country', ''),
+                    NULLIF(u.profile->>'country', '')
+                ) AS location_country
+            FROM users u
+            LEFT JOIN ioo_user_state s ON s.user_id = u.id
+            WHERE u.id = $1::uuid
+            """,
+            str(user_id),
+        )
         location_context = ""
         user_city = user_state["location_city"] if user_state else None
         user_country = user_state["location_country"] if user_state else None
@@ -624,6 +727,7 @@ class IOOGraphAgent:
               )
               {capability_sql}
               {temporal_sql}
+              {_world_signal_freshness_sql('n')}
             ORDER BY (
                 (1 - (n.embedding <=> $2::vector)) * 0.60 +
                 COALESCE((
@@ -724,6 +828,7 @@ class IOOGraphAgent:
                     (cardinality($1::uuid[]) = 0 AND n.id NOT IN (SELECT to_node_id FROM ioo_edges))
                   )
                   {capability_sql}
+                  {_world_signal_freshness_sql('n')}
 
                 UNION ALL
 
@@ -743,6 +848,7 @@ class IOOGraphAgent:
                   AND NOT e.to_node_id = ANY(p.path_ids)
                   AND NOT e.to_node_id = ANY($1::uuid[])
                   {shifted_capability_sql}
+                  {_world_signal_freshness_sql('n')}
             )
             SELECT path_ids, depth, path_quality, total_time
             FROM paths
