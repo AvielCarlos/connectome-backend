@@ -40,6 +40,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/screens", tags=["screens"])
 
 
+@router.get("/challenge-filters")
+async def get_challenge_filters(user_id: str = Depends(get_current_user_id)):
+    """Return supported feed challenge difficulty filters for the client UI."""
+    return {
+        "default": "adaptive",
+        "filters": [
+            {
+                "id": "adaptive",
+                "label": "Adaptive",
+                "context": "Let Aura choose the right difficulty from the user's goals, capacity, streak, and recent engagement.",
+            },
+            {
+                "id": "easy",
+                "label": "Easy",
+                "context": "Prefer low-friction nodes: 2-10 minutes, emotionally gentle, no complex prerequisites, quick win.",
+            },
+            {
+                "id": "medium",
+                "label": "Medium",
+                "context": "Prefer meaningful but realistic nodes: 15-45 minutes, moderate effort, clear next steps.",
+            },
+            {
+                "id": "deep",
+                "label": "Deep",
+                "context": "Prefer ambitious stretch nodes: deeper focus, higher transformation potential, and richer IOO graph movement.",
+            },
+        ],
+    }
+
+
 # ---------------------------------------------------------------------------
 # IOO Graph helpers — smart feed routing
 # ---------------------------------------------------------------------------
