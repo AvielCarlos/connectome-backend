@@ -39,6 +39,7 @@ from api.routes import journal as journal_routes
 from api.routes import feature_lab as feature_lab_routes
 from api.routes import mood as mood_routes
 from api.routes import dao as dao_routes
+from api.routes import dao_public as dao_public_routes
 try:
     from api.routes.dao_rewards import router as dao_rewards_router
 except Exception:
@@ -299,6 +300,7 @@ app.include_router(journal_routes.router)
 app.include_router(feature_lab_routes.router)
 app.include_router(mood_routes.router)
 app.include_router(dao_routes.router)
+app.include_router(dao_public_routes.router)
 if dao_rewards_router:
     app.include_router(dao_rewards_router)
 app.include_router(world_routes.router)
