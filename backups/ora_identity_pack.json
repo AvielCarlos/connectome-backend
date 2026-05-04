@@ -1,11 +1,25 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-04T13:54:14.427625+00:00",
-  "exported_at": "2026-05-04T13:54:14.427625+00:00",
-  "collected_at": "2026-05-04T13:54:14.427625+00:00",
+  "timestamp": "2026-05-04T14:54:18.317679+00:00",
+  "exported_at": "2026-05-04T14:54:18.317679+00:00",
+  "collected_at": "2026-05-04T14:54:18.317679+00:00",
   "identity": {
-    "total_lessons": 1425,
+    "total_lessons": 1427,
     "lessons": [
+      {
+        "id": "71379a1b-4237-4f9f-9eeb-146c1127a7d7",
+        "lesson": "New growth experiment: Week 19 growth experiment (organic focus): Feature spotlight: Thread on X about Ora's AI goal coach \u2014 real user success stories",
+        "confidence": 0.6,
+        "source": "executive_council.cmo",
+        "created_at": "2026-05-04 14:00:26.820224"
+      },
+      {
+        "id": "15033371-89ef-4190-be8a-7196c7211a8b",
+        "lesson": "Growth state 2026-05-04: 0 users, +0 this week (flat trend), best channel=organic, viral K=0.000.",
+        "confidence": 0.8,
+        "source": "executive_council.cmo",
+        "created_at": "2026-05-04 14:00:26.673716"
+      },
       {
         "id": "2cbe9d04-d8bc-4214-b96c-bedaa5e20a05",
         "lesson": "Cohort analysis (2026-W18): Day-7 retention is ?%. Major drop-off at unknown. Users who set a goal in their first session retain 2x better \u2014 onboarding should prioritize immediate goal creation.",
@@ -10082,7 +10096,7 @@
       "rollback": {}
     },
     "consciousness_version": "c2f8a6fcebe6c975",
-    "lessons_hash": "80faac50402cc6a4"
+    "lessons_hash": "60ff249c20df8137"
   },
   "platform_stats": {
     "total_users": 20,
