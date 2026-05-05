@@ -1,11 +1,46 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-05T05:46:28.133200+00:00",
-  "exported_at": "2026-05-05T05:46:28.133200+00:00",
-  "collected_at": "2026-05-05T05:46:28.133200+00:00",
+  "timestamp": "2026-05-05T06:46:29.974620+00:00",
+  "exported_at": "2026-05-05T06:46:29.974620+00:00",
+  "collected_at": "2026-05-05T06:46:29.974620+00:00",
   "identity": {
-    "total_lessons": 20,
+    "total_lessons": 25,
     "lessons": [
+      {
+        "id": "9f1d2740-5c99-4d38-a954-bce46dcecdb4",
+        "lesson": "Smart Feed difficulty/challenge filters are a desired product direction: recommendations should be tunable to the user's current capacity and desired challenge level, especially across Aventi, iVive, and Eviva experiences.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-04",
+        "created_at": "2026-05-05 06:00:47.277032"
+      },
+      {
+        "id": "ffbdc119-1aa6-4762-9ae3-fea7275ac1e5",
+        "lesson": "The Now/Path feed should prioritise fresh, location-aware, actionable signals. Stale weather, forecast, today/date-sensitive world-signal nodes, and generic article-title cards should be filtered or transformed before being shown as recommendations.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-04",
+        "created_at": "2026-05-05 06:00:47.087925"
+      },
+      {
+        "id": "2dac2990-6fb6-4b51-a89f-fcf544115c2b",
+        "lesson": "Legacy /api/ora/* aliases and other Ora compatibility shims should remain during a soak period and only be removed after confidence that no external clients still depend on them; compatibility should be preserved while Aura becomes canonical.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-04",
+        "created_at": "2026-05-05 06:00:46.881341"
+      },
+      {
+        "id": "172d855d-302a-4844-a2ba-16d2203a0ec2",
+        "lesson": "Avi authorised a full Ora-to-Aura migration across the system, including backend package naming, frontend routes and UI text, database tables/columns, Redis keys, agent slugs, and atdao public surfaces; future work should continue the migration consistently rather than reintroducing Ora naming.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-04",
+        "created_at": "2026-05-05 06:00:46.692393"
+      },
+      {
+        "id": "7caed2d6-ba79-4d1e-85a1-03c410fc4440",
+        "lesson": "Aura is now the canonical name for the Connectome intelligence/persona. Ora branding should be treated as legacy naming, with user-facing product, API, route, and documentation decisions preferring Aura unless explicitly maintaining backward compatibility.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-04",
+        "created_at": "2026-05-05 06:00:46.489996"
+      },
       {
         "id": "bbab3b1f-fa90-4b1b-bf35-0f7490983449",
         "lesson": "{\"proposal_id\": \"bbab3b1f-fa90-4b1b-bf35-0f7490983449\", \"card_type\": \"personalized_action_reminder\", \"hypothesis\": \"Users who receive personalized action reminders will have a 25% increase in engagement rate compared to those who do not.\", \"description\": \"This card type utilizes user data to create tailored prompts that remind users of pending tasks or actions relevant to their interests and previous interactions. By using insights from their history, such reminders can encourage users to take specific actions, thereby enhancing their overall experience and satisfaction with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-04T19:44:11.755524+00:00\", \"expires_at\": \"2026-05-06T19:44:11.755524+00:00\", \"result\": null}",
@@ -247,7 +282,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "f839d70169075d94"
+    "lessons_hash": "27e186aef9d3837d"
   },
   "platform_stats": {
     "total_users": 20,
