@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-06T19:44:31.051424+00:00",
-  "exported_at": "2026-05-06T19:44:31.051424+00:00",
-  "collected_at": "2026-05-06T19:44:31.051424+00:00",
+  "timestamp": "2026-05-06T19:47:47.918831+00:00",
+  "exported_at": "2026-05-06T19:47:47.918831+00:00",
+  "collected_at": "2026-05-06T19:47:47.918831+00:00",
   "identity": {
-    "total_lessons": 40,
+    "total_lessons": 41,
     "lessons": [
+      {
+        "id": "4847b1d0-e29a-49b3-b7c7-140fd1259b0a",
+        "lesson": "{\"proposal_id\": \"4847b1d0-e29a-49b3-b7c7-140fd1259b0a\", \"card_type\": \"personalized_do_now\", \"hypothesis\": \"Users will experience a 25% increase in fulfilment when presented with a personalized 'Do Now' card tailored to their immediate preferences and previous interactions.\", \"description\": \"The 'Personalized Do Now' card will dynamically suggest personalized tasks or activities based on the user's past behavior and preferences, helping to prioritize what they might find most engaging. By leveraging user data, the card will adapt in real time, ensuring that suggestions feel relevant and timely, thus encouraging action.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-06T19:46:25.747932+00:00\", \"expires_at\": \"2026-05-08T19:46:25.747932+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-06 19:46:25.747932"
+      },
       {
         "id": "45408a0e-159a-4e3d-adf4-721c6f2e65ea",
         "lesson": "Home choice data (last 7 days): 2 directed ('I know') sessions, 9 exploratory ('Show me') sessions. Intake depth breakdown \u2014 deep: 4, instant: 0, one_q: 0. 'I know' path variants \u2014 immediate: 2, clarifying: 0. Use this split to calibrate recommendation depth and goal-context weighting.",
@@ -148,7 +155,7 @@
       },
       {
         "id": "bbab3b1f-fa90-4b1b-bf35-0f7490983449",
-        "lesson": "{\"proposal_id\": \"bbab3b1f-fa90-4b1b-bf35-0f7490983449\", \"card_type\": \"personalized_action_reminder\", \"hypothesis\": \"Users who receive personalized action reminders will have a 25% increase in engagement rate compared to those who do not.\", \"description\": \"This card type utilizes user data to create tailored prompts that remind users of pending tasks or actions relevant to their interests and previous interactions. By using insights from their history, such reminders can encourage users to take specific actions, thereby enhancing their overall experience and satisfaction with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-04T19:44:11.755524+00:00\", \"expires_at\": \"2026-05-06T19:44:11.755524+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"bbab3b1f-fa90-4b1b-bf35-0f7490983449\", \"card_type\": \"personalized_action_reminder\", \"hypothesis\": \"Users who receive personalized action reminders will have a 25% increase in engagement rate compared to those who do not.\", \"description\": \"This card type utilizes user data to create tailored prompts that remind users of pending tasks or actions relevant to their interests and previous interactions. By using insights from their history, such reminders can encourage users to take specific actions, thereby enhancing their overall experience and satisfaction with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-05-04T19:44:11.755524+00:00\", \"expires_at\": \"2026-05-06T19:44:11.755524+00:00\", \"result\": {\"observed_improvement\": -0.039, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-05-06T19:46:25.756786+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-04 19:44:11.755524"
@@ -218,7 +225,7 @@
       },
       {
         "id": "a1dc23e3-9dd3-4500-862c-804ca20317f1",
-        "lesson": "{\"proposal_id\": \"a1dc23e3-9dd3-4500-862c-804ca20317f1\", \"card_type\": \"momentum_builder\", \"hypothesis\": \"Introducing a Momentum Builder card type will increase user fulfilment by 30%.\", \"description\": \"The Momentum Builder card will dynamically suggest small, achievable tasks tailored to user preferences and past behavior after completing a previous activity. By providing immediate feedback and celebrating small milestones, this card aims to enhance engagement and motivate users to continue interacting with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-04T19:15:06.732274+00:00\", \"expires_at\": \"2026-05-06T19:15:06.732274+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"a1dc23e3-9dd3-4500-862c-804ca20317f1\", \"card_type\": \"momentum_builder\", \"hypothesis\": \"Introducing a Momentum Builder card type will increase user fulfilment by 30%.\", \"description\": \"The Momentum Builder card will dynamically suggest small, achievable tasks tailored to user preferences and past behavior after completing a previous activity. By providing immediate feedback and celebrating small milestones, this card aims to enhance engagement and motivate users to continue interacting with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-05-04T19:15:06.732274+00:00\", \"expires_at\": \"2026-05-06T19:15:06.732274+00:00\", \"result\": {\"observed_improvement\": 0.066, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-05-06T19:46:25.760793+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-04 19:15:06.732274"
@@ -387,7 +394,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "077b89db9050e861"
+    "lessons_hash": "645d387d51a9835c"
   },
   "platform_stats": {
     "total_users": 20,
