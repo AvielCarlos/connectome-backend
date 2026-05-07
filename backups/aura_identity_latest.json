@@ -1,11 +1,88 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-07T15:48:36.334353+00:00",
-  "exported_at": "2026-05-07T15:48:36.334353+00:00",
-  "collected_at": "2026-05-07T15:48:36.334353+00:00",
+  "timestamp": "2026-05-07T16:48:38.912565+00:00",
+  "exported_at": "2026-05-07T16:48:38.912565+00:00",
+  "collected_at": "2026-05-07T16:48:38.912565+00:00",
   "identity": {
-    "total_lessons": 41,
+    "total_lessons": 52,
     "lessons": [
+      {
+        "id": "e39dff0f-0058-4f97-ae50-421855505cb2",
+        "lesson": "iDo design principles: Full-bleed first \u2014 cards fill the screen, no wasted space | Gesture-driven \u2014 swipe > tap > type, in that order | One thing per screen \u2014 don't crowd, let it breathe | Celebrate success \u2014 animations for streaks, completions, milestones | Loss aversion is a feature \u2014 streak warnings, incomplete state tension | Bottom nav only \u2014 no top bars on mobile | Content is the UI \u2014 the card IS the experience, not a container for it | Speed is a feature \u2014 perceived performance matters as much as real performance | Trust through consistency \u2014 every screen should feel like it belongs",
+        "confidence": 0.95,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:27:31.930149"
+      },
+      {
+        "id": "3c171aee-537e-4ab8-b0db-55d0c6ec6fb3",
+        "lesson": "UX lesson from Superhuman \u2014 Speed as a core value: Superhuman obsesses over perceived performance. Every action should feel instant. iDo should preload the next card, cache aggressively, and use optimistic UI updates (show result before server confirms). Applicable to: FeedPage, all interactions.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:27:31.751679"
+      },
+      {
+        "id": "dd0062e2-20a7-47eb-8f8e-128ac4055967",
+        "lesson": "UX lesson from Strava \u2014 Kudos and social proof: One-tap appreciation (Kudos) is lower friction than a Like. It signals 'I see your effort' specifically. iDo should have a goal/achievement kudos system where friends can react to completions. Applicable to: Goal completion, activity feed.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:54.498189"
+      },
+      {
+        "id": "5fca7bba-77f1-484d-ae5e-bfb24e100a8b",
+        "lesson": "UX lesson from Snapchat \u2014 Snap Map \u2014 location as social layer: Showing where your friends are (and what local events/activities exist near you) creates FOMO and real-world connection. iDo's IOO graph should surface location-aware opportunities. Applicable to: IOO graph, local experience discovery.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:54.318514"
+      },
+      {
+        "id": "217fa7f1-3567-4f49-bc7c-4d7cbca3d749",
+        "lesson": "UX lesson from Airbnb \u2014 I'm flexible discovery: When users don't know what they want, give them open-ended entry points: 'I'm flexible on dates/location/type'. This reduces friction and increases discovery. Maps to iDo's Explore mode. Applicable to: HomePage Explore entry point, IOO node browser.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:54.084452"
+      },
+      {
+        "id": "8e873250-396b-428a-9dcc-28615e581bec",
+        "lesson": "UX lesson from Airbnb \u2014 Photography-first cards: Airbnb cards are 70% image, 30% info. The photo does the selling. iDo's experience cards should lead with visual aspiration \u2014 a photo or illustration of the experience, not just text. Applicable to: IOO node cards, experience cards in feed.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:53.866872"
+      },
+      {
+        "id": "4c55902c-6bc9-4bc2-9c29-b2f14255681c",
+        "lesson": "UX lesson from WeChat \u2014 Moments feed \u2014 social but curated: Moments shows only people you know, with a clean reverse-chronological feed. No algorithmic manipulation. People feel safe posting because only their network sees it. iDo's social layer should feel this intimate. Applicable to: Social feed, activity sharing.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:53.656798"
+      },
+      {
+        "id": "c9e7ab32-9c47-43b6-8179-bd4fa5ea76f6",
+        "lesson": "UX lesson from WeChat \u2014 Everything in one shell: WeChat's power is that you never leave the app. Mini-programs open inline. Payments happen inline. Voice messages, files, location \u2014 all in one place. iDo should aspire to this: bookings, payments, goals, social, AI coach \u2014 one shell, no bouncing between apps. Applicable to: Overall app architecture, mini-apps.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:53.423603"
+      },
+      {
+        "id": "a40d6474-477d-4da3-b389-1f7846fda70b",
+        "lesson": "UX lesson from Duolingo \u2014 Celebratory animations on completion: Confetti, characters jumping, sound effects on goal completion. The celebration should feel disproportionately big \u2014 users should feel proud. This is what makes people share completions. Applicable to: Goal completion, streak milestones, CP rewards.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:53.247313"
+      },
+      {
+        "id": "e2f54922-ad63-48d2-b9e0-445c893b02ea",
+        "lesson": "UX lesson from Duolingo \u2014 Streak system with loss aversion: A streak counter visible every day creates a daily return habit. The fear of losing a streak is more motivating than the desire to gain XP. Show streak prominently and send a warning before midnight if the user hasn't engaged. Applicable to: ProfilePage, NavBar, push notifications.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:53.021829"
+      },
+      {
+        "id": "93e99f3d-b5d9-451b-83e1-6685039d385f",
+        "lesson": "UX lesson from TikTok \u2014 For You Page algorithm signals: Show content confidence score subtly. When the algorithm is very confident about a card, make it full-bleed with no chrome. Less confident = smaller, more exploratory layout. Applicable to: FeedPage card rendering.",
+        "confidence": 0.9,
+        "source": "executive_council.cuxd",
+        "created_at": "2026-05-07 16:09:52.809104"
+      },
       {
         "id": "4847b1d0-e29a-49b3-b7c7-140fd1259b0a",
         "lesson": "{\"proposal_id\": \"4847b1d0-e29a-49b3-b7c7-140fd1259b0a\", \"card_type\": \"personalized_do_now\", \"hypothesis\": \"Users will experience a 25% increase in fulfilment when presented with a personalized 'Do Now' card tailored to their immediate preferences and previous interactions.\", \"description\": \"The 'Personalized Do Now' card will dynamically suggest personalized tasks or activities based on the user's past behavior and preferences, helping to prioritize what they might find most engaging. By leveraging user data, the card will adapt in real time, ensuring that suggestions feel relevant and timely, thus encouraging action.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-06T19:46:25.747932+00:00\", \"expires_at\": \"2026-05-08T19:46:25.747932+00:00\", \"result\": null}",
@@ -394,7 +471,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "645d387d51a9835c"
+    "lessons_hash": "845a0802a9cf4e4a"
   },
   "platform_stats": {
     "total_users": 20,
