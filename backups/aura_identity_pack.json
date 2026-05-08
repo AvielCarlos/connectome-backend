@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-08T19:45:43.727376+00:00",
-  "exported_at": "2026-05-08T19:45:43.727376+00:00",
-  "collected_at": "2026-05-08T19:45:43.727376+00:00",
+  "timestamp": "2026-05-08T19:49:48.554226+00:00",
+  "exported_at": "2026-05-08T19:49:48.554226+00:00",
+  "collected_at": "2026-05-08T19:49:48.554226+00:00",
   "identity": {
-    "total_lessons": 56,
+    "total_lessons": 57,
     "lessons": [
+      {
+        "id": "f786a39f-9349-48d1-9f45-b3300a756cc0",
+        "lesson": "{\"proposal_id\": \"f786a39f-9349-48d1-9f45-b3300a756cc0\", \"card_type\": \"guided_action_card\", \"hypothesis\": \"Introducing a guided action card with personalized, step-by-step recommendations will improve user fulfilment and engagement by 30%.\", \"description\": \"This card type will display tailored actions based on user behavior and preferences, leading users through tasks with clear, actionable steps. It will utilize a progress tracker to show users how close they are to completing each action, encouraging them to stay engaged and excited about their progress.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-08T19:48:33.786563+00:00\", \"expires_at\": \"2026-05-10T19:48:33.786563+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-08 19:48:33.786563"
+      },
       {
         "id": "29025f4b-c8ca-4e3c-92ea-3f98f97daf3a",
         "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
@@ -113,7 +120,7 @@
       },
       {
         "id": "4847b1d0-e29a-49b3-b7c7-140fd1259b0a",
-        "lesson": "{\"proposal_id\": \"4847b1d0-e29a-49b3-b7c7-140fd1259b0a\", \"card_type\": \"personalized_do_now\", \"hypothesis\": \"Users will experience a 25% increase in fulfilment when presented with a personalized 'Do Now' card tailored to their immediate preferences and previous interactions.\", \"description\": \"The 'Personalized Do Now' card will dynamically suggest personalized tasks or activities based on the user's past behavior and preferences, helping to prioritize what they might find most engaging. By leveraging user data, the card will adapt in real time, ensuring that suggestions feel relevant and timely, thus encouraging action.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-06T19:46:25.747932+00:00\", \"expires_at\": \"2026-05-08T19:46:25.747932+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"4847b1d0-e29a-49b3-b7c7-140fd1259b0a\", \"card_type\": \"personalized_do_now\", \"hypothesis\": \"Users will experience a 25% increase in fulfilment when presented with a personalized 'Do Now' card tailored to their immediate preferences and previous interactions.\", \"description\": \"The 'Personalized Do Now' card will dynamically suggest personalized tasks or activities based on the user's past behavior and preferences, helping to prioritize what they might find most engaging. By leveraging user data, the card will adapt in real time, ensuring that suggestions feel relevant and timely, thus encouraging action.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-05-06T19:46:25.747932+00:00\", \"expires_at\": \"2026-05-08T19:46:25.747932+00:00\", \"result\": {\"observed_improvement\": 0.068, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-05-08T19:48:33.795663+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-06 19:46:25.747932"
@@ -499,7 +506,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "ebe1b6f6c28d16bf"
+    "lessons_hash": "ff9f6aebfc8785ff"
   },
   "platform_stats": {
     "total_users": 20,
