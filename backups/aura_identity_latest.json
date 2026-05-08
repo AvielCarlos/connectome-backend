@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-08T16:49:40.256532+00:00",
-  "exported_at": "2026-05-08T16:49:40.256532+00:00",
-  "collected_at": "2026-05-08T16:49:40.256532+00:00",
+  "timestamp": "2026-05-08T17:49:42.813021+00:00",
+  "exported_at": "2026-05-08T17:49:42.813021+00:00",
+  "collected_at": "2026-05-08T17:49:42.813021+00:00",
   "identity": {
-    "total_lessons": 55,
+    "total_lessons": 56,
     "lessons": [
+      {
+        "id": "29025f4b-c8ca-4e3c-92ea-3f98f97daf3a",
+        "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-05-08 16:58:50.032351"
+      },
       {
         "id": "135136e7-6109-4600-90cc-5439487d93c1",
         "lesson": "{\"proposal_id\": \"135136e7-6109-4600-90cc-5439487d93c1\", \"card_type\": \"sticky_reminder_card\", \"hypothesis\": \"Implementing a 'Sticky Reminder Card' will increase user engagement by 40%.\", \"description\": \"This card type provides personalized reminders for tasks users expressed interest in but haven't completed yet, using a gentle nudge format. It features a brief motivational message and offers quick access to the relevant functions, ensuring users feel supported without feeling pressured.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.4, \"status\": \"hypothesis\", \"created_at\": \"2026-05-07T19:47:28.462018+00:00\", \"expires_at\": \"2026-05-09T19:47:28.462018+00:00\", \"result\": null}",
@@ -492,7 +499,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "31f813a33510e00f"
+    "lessons_hash": "ebe1b6f6c28d16bf"
   },
   "platform_stats": {
     "total_users": 20,
