@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-09T19:46:19.666348+00:00",
-  "exported_at": "2026-05-09T19:46:19.666348+00:00",
-  "collected_at": "2026-05-09T19:46:19.666348+00:00",
+  "timestamp": "2026-05-09T19:50:46.965743+00:00",
+  "exported_at": "2026-05-09T19:50:46.965743+00:00",
+  "collected_at": "2026-05-09T19:50:46.965743+00:00",
   "identity": {
-    "total_lessons": 82,
+    "total_lessons": 83,
     "lessons": [
+      {
+        "id": "24f5a98e-be79-4514-be79-69bd95c0f0cd",
+        "lesson": "{\"proposal_id\": \"24f5a98e-be79-4514-be79-69bd95c0f0cd\", \"card_type\": \"personalized_suggestion\", \"hypothesis\": \"Implementing a personalized suggestion card could increase user engagement by 25%.\", \"description\": \"This card type analyzes a user's previous interactions and preferences to provide tailored recommendations for actions or content. By presenting suggestions that resonate with the user's interests, it aims to encourage more meaningful engagement and reduce the likelihood of skipping or exiting.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-09T19:49:36.934264+00:00\", \"expires_at\": \"2026-05-11T19:49:36.934264+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-09 19:49:36.934264"
+      },
       {
         "id": "e0e35361-a3ff-4eee-985c-910b7eba7a37",
         "lesson": "Home choice data (last 7 days): 2 directed ('I know') sessions, 9 exploratory ('Show me') sessions. Intake depth breakdown \u2014 deep: 4, instant: 0, one_q: 0. 'I know' path variants \u2014 immediate: 2, clarifying: 0. Use this split to calibrate recommendation depth and goal-context weighting.",
@@ -197,7 +204,7 @@
       },
       {
         "id": "135136e7-6109-4600-90cc-5439487d93c1",
-        "lesson": "{\"proposal_id\": \"135136e7-6109-4600-90cc-5439487d93c1\", \"card_type\": \"sticky_reminder_card\", \"hypothesis\": \"Implementing a 'Sticky Reminder Card' will increase user engagement by 40%.\", \"description\": \"This card type provides personalized reminders for tasks users expressed interest in but haven't completed yet, using a gentle nudge format. It features a brief motivational message and offers quick access to the relevant functions, ensuring users feel supported without feeling pressured.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.4, \"status\": \"hypothesis\", \"created_at\": \"2026-05-07T19:47:28.462018+00:00\", \"expires_at\": \"2026-05-09T19:47:28.462018+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"135136e7-6109-4600-90cc-5439487d93c1\", \"card_type\": \"sticky_reminder_card\", \"hypothesis\": \"Implementing a 'Sticky Reminder Card' will increase user engagement by 40%.\", \"description\": \"This card type provides personalized reminders for tasks users expressed interest in but haven't completed yet, using a gentle nudge format. It features a brief motivational message and offers quick access to the relevant functions, ensuring users feel supported without feeling pressured.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.4, \"status\": \"killed\", \"created_at\": \"2026-05-07T19:47:28.462018+00:00\", \"expires_at\": \"2026-05-09T19:47:28.462018+00:00\", \"result\": {\"observed_improvement\": 0.008, \"threshold\": 0.4, \"promoted\": false, \"evaluated_at\": \"2026-05-09T19:49:36.945162+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-07 19:47:28.462018"
@@ -681,7 +688,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "94efdf384959f9ff"
+    "lessons_hash": "a476fceb5314d9e8"
   },
   "platform_stats": {
     "total_users": 20,
