@@ -205,6 +205,96 @@ def _node_embedding_text_with_temporal_contract(node: dict) -> str:
         )
     return _node_embedding_text(node) + "\n" + contract
 
+
+def _iter_profile_strings(value, *, depth: int = 0) -> list[str]:
+    """Extract compact preference/value strings from nested user profile blobs."""
+    if depth > 4 or value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text or len(text) > 240:
+            return []
+        return [text]
+    if isinstance(value, (int, float, bool)):
+        return []
+    if isinstance(value, list):
+        result: list[str] = []
+        for item in value[:12]:
+            result.extend(_iter_profile_strings(item, depth=depth + 1))
+        return result
+    if isinstance(value, dict):
+        preferred_keys = (
+            "goal", "goals", "value", "values", "interest", "interests",
+            "passion", "passions", "intention", "intentions", "priority",
+            "priorities", "preference", "preferences", "identity", "purpose",
+            "mission", "desired_experiences", "freeform", "bio", "about",
+        )
+        result: list[str] = []
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if any(marker in key_text for marker in preferred_keys):
+                result.extend(_iter_profile_strings(item, depth=depth + 1))
+        return result
+    return []
+
+
+def _profile_alignment_terms(profile) -> list[str]:
+    """Return de-duplicated terms that express what this user values or wants."""
+    if isinstance(profile, str):
+        try:
+            profile = json.loads(profile)
+        except Exception:
+            profile = {"freeform": profile}
+    terms: list[str] = []
+    seen: set[str] = set()
+    for term in _iter_profile_strings(profile):
+        normalized = re.sub(r"\s+", " ", term.lower()).strip(" .,;:!?")
+        if len(normalized) < 3 or normalized in seen:
+            continue
+        seen.add(normalized)
+        terms.append(normalized)
+        if len(terms) >= 30:
+            break
+    return terms
+
+
+def _node_alignment_score(node: dict, terms: list[str]) -> float:
+    """Score how well a node semantically overlaps a user's values/goals text."""
+    if not terms:
+        return 0.0
+    haystack = _node_embedding_text(node).lower()
+    haystack_tokens = set(re.findall(r"[a-z0-9][a-z0-9_-]{2,}", haystack))
+    if not haystack_tokens:
+        return 0.0
+
+    score = 0.0
+    for term in terms:
+        tokens = [t for t in re.findall(r"[a-z0-9][a-z0-9_-]{2,}", term) if t not in {"and", "the", "for", "with", "that", "this"}]
+        if not tokens:
+            continue
+        if term in haystack:
+            score += 0.35
+        overlap = len(set(tokens) & haystack_tokens) / max(len(set(tokens)), 1)
+        score += min(0.25, overlap * 0.25)
+    return min(score, 1.0)
+
+
+def _rerank_nodes_for_alignment(nodes: list[dict], profile, *, limit: int) -> list[dict]:
+    """Blend graph performance with profile alignment for default Now ranking."""
+    terms = _profile_alignment_terms(profile)
+    ranked: list[dict] = []
+    for node in nodes:
+        item = dict(node)
+        edge_weight = float(item.get("edge_weight") or 0.5)
+        success_rate = float(item.get("success_rate") or 0.5)
+        alignment = _node_alignment_score(item, terms)
+        item["alignment_score"] = alignment
+        item["recommendation_score"] = (edge_weight * 0.45) + (success_rate * 0.30) + (alignment * 0.25)
+        ranked.append(item)
+    ranked.sort(key=lambda item: item.get("recommendation_score", 0), reverse=True)
+    return ranked[:limit]
+
+
 class IOOGraphAgent:
     """Traverses and learns the IOO achievement graph."""
 
@@ -232,6 +322,7 @@ class IOOGraphAgent:
         user_state = await fetchrow(
             """
             SELECT
+                u.profile,
                 s.finances_monthly_budget_usd,
                 s.fitness_level,
                 COALESCE(
@@ -256,13 +347,24 @@ class IOOGraphAgent:
             str(user_id),
         )
 
-        # Build filter clause from user capabilities
+        # Find completed node IDs for this user (to use edge weights)
+        completed_ids = await fetch(
+            """
+            SELECT node_id FROM ioo_user_progress
+            WHERE user_id = $1 AND status = 'completed'
+            """,
+            str(user_id),
+        )
+        completed_node_ids = [str(r["node_id"]) for r in completed_ids]
+
+        # Build filter clause from user capabilities. The completed-node array uses
+        # $2 only when present, so capability placeholders must start after it.
         finance_filter = ""
         fitness_filter = ""
         location_filter = ""
 
-        params: list = [str(user_id)]
-        idx = 2  # next param index
+        params: list = [str(user_id), completed_node_ids] if completed_node_ids else [str(user_id)]
+        idx = 3 if completed_node_ids else 2  # next param index
 
         if user_state:
             # Finance: skip nodes that cost more than user can afford
@@ -291,16 +393,6 @@ class IOOGraphAgent:
                 params.append(f"%{city}%" if city else "%")
                 params.append(f"%{country}%" if country else "%")
                 idx += 2
-
-        # Find completed node IDs for this user (to use edge weights)
-        completed_ids = await fetch(
-            """
-            SELECT node_id FROM ioo_user_progress
-            WHERE user_id = $1 AND status = 'completed'
-            """,
-            str(user_id),
-        )
-        completed_node_ids = [str(r["node_id"]) for r in completed_ids]
 
         # Exclude already-completed or abandoned nodes
         exclude_sql = f"""
@@ -375,7 +467,8 @@ class IOOGraphAgent:
                                ELSE 0.5 END * 0.4) DESC
                 LIMIT ${idx}
             """
-            final_params = [str(user_id), completed_node_ids] + params[1:-1] + [limit]
+            candidate_limit = max(limit * 4, 20)
+            final_params = params + [candidate_limit]
         else:
             simple_query = f"""
                 SELECT
@@ -401,10 +494,11 @@ class IOOGraphAgent:
                 ORDER BY success_rate DESC
                 LIMIT ${idx}
             """
-            final_params = [str(user_id)] + params[1:-1] + [limit]
+            candidate_limit = max(limit * 4, 20)
+            final_params = params + [candidate_limit]
 
         rows = await fetch(simple_query, *final_params)
-        return [dict(r) for r in rows]
+        return _rerank_nodes_for_alignment([dict(r) for r in rows], user_state["profile"] if user_state else None, limit=limit)
 
 
     # ------------------------------------------------------------------
@@ -537,6 +631,7 @@ class IOOGraphAgent:
         user_state = await fetchrow(
             """
             SELECT
+                u.profile,
                 s.finances_monthly_budget_usd,
                 s.fitness_level,
                 s.free_time_weekday_hours,
