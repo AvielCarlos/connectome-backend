@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-10T19:46:51.702963+00:00",
-  "exported_at": "2026-05-10T19:46:51.702963+00:00",
-  "collected_at": "2026-05-10T19:46:51.702963+00:00",
+  "timestamp": "2026-05-10T19:51:46.990670+00:00",
+  "exported_at": "2026-05-10T19:51:46.990670+00:00",
+  "collected_at": "2026-05-10T19:51:46.990670+00:00",
   "identity": {
-    "total_lessons": 100,
+    "total_lessons": 101,
     "lessons": [
+      {
+        "id": "d88654d9-61cd-4645-b469-6da679fce40c",
+        "lesson": "{\"proposal_id\": \"d88654d9-61cd-4645-b469-6da679fce40c\", \"card_type\": \"goal_progress_card\", \"hypothesis\": \"Introducing a goal progress card will increase user engagement by 25%.\", \"description\": \"This card will allow users to set, track, and visualize their personal goals related to the platform's use, such as completing a certain number of activities or achieving a specific skill level. The card will display current progress, celebrate milestones, and offer tips for staying on track, all tailored to individual user behavior.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-10T19:50:39.212139+00:00\", \"expires_at\": \"2026-05-12T19:50:39.212139+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-10 19:50:39.212139"
+      },
       {
         "id": "6cedac5d-f2ba-4620-bb4b-aebeee663d23",
         "lesson": "Home choice data (last 7 days): 2 directed ('I know') sessions, 9 exploratory ('Show me') sessions. Intake depth breakdown \u2014 deep: 4, instant: 0, one_q: 0. 'I know' path variants \u2014 immediate: 2, clarifying: 0. Use this split to calibrate recommendation depth and goal-context weighting.",
@@ -309,7 +316,7 @@
       },
       {
         "id": "f786a39f-9349-48d1-9f45-b3300a756cc0",
-        "lesson": "{\"proposal_id\": \"f786a39f-9349-48d1-9f45-b3300a756cc0\", \"card_type\": \"guided_action_card\", \"hypothesis\": \"Introducing a guided action card with personalized, step-by-step recommendations will improve user fulfilment and engagement by 30%.\", \"description\": \"This card type will display tailored actions based on user behavior and preferences, leading users through tasks with clear, actionable steps. It will utilize a progress tracker to show users how close they are to completing each action, encouraging them to stay engaged and excited about their progress.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-08T19:48:33.786563+00:00\", \"expires_at\": \"2026-05-10T19:48:33.786563+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"f786a39f-9349-48d1-9f45-b3300a756cc0\", \"card_type\": \"guided_action_card\", \"hypothesis\": \"Introducing a guided action card with personalized, step-by-step recommendations will improve user fulfilment and engagement by 30%.\", \"description\": \"This card type will display tailored actions based on user behavior and preferences, leading users through tasks with clear, actionable steps. It will utilize a progress tracker to show users how close they are to completing each action, encouraging them to stay engaged and excited about their progress.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"promoted\", \"created_at\": \"2026-05-08T19:48:33.786563+00:00\", \"expires_at\": \"2026-05-10T19:48:33.786563+00:00\", \"result\": {\"observed_improvement\": 0.295, \"threshold\": 0.2, \"promoted\": true, \"evaluated_at\": \"2026-05-10T19:50:39.219598+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-08 19:48:33.786563"
@@ -807,7 +814,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "222f20959020b198"
+    "lessons_hash": "253689af8168db7e"
   },
   "platform_stats": {
     "total_users": 20,
