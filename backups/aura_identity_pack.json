@@ -1,11 +1,46 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-10T05:51:12.036448+00:00",
-  "exported_at": "2026-05-10T05:51:12.036448+00:00",
-  "collected_at": "2026-05-10T05:51:12.036448+00:00",
+  "timestamp": "2026-05-10T06:51:14.494558+00:00",
+  "exported_at": "2026-05-10T06:51:14.494558+00:00",
+  "collected_at": "2026-05-10T06:51:14.494558+00:00",
   "identity": {
-    "total_lessons": 83,
+    "total_lessons": 88,
     "lessons": [
+      {
+        "id": "337b850b-c928-4420-be11-466cd5a8062e",
+        "lesson": "High-risk UIEvolutionAgent or autonomous product-evolution proposals should require human/product review before implementation, especially when they could materially change Aura/Ora user experience.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-09",
+        "created_at": "2026-05-10 06:00:30.087803"
+      },
+      {
+        "id": "d25f9ae4-b818-4611-a115-d0ec23595cda",
+        "lesson": "Approval-gated Aura actions need explicit action-boundary evidence before execution; trust infrastructure should define what evidence is required at the boundary where an AI recommendation becomes a user-impacting action.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-09",
+        "created_at": "2026-05-10 06:00:29.875566"
+      },
+      {
+        "id": "e7f540b8-21fb-455d-9a75-eb16ba6302f8",
+        "lesson": "Ora/Connectome recommendations should rank IOO candidates using profile-alignment signals in addition to graph logic, widening the candidate fetch before final reranking so the default Now feed feels personally relevant.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-09",
+        "created_at": "2026-05-10 06:00:29.628623"
+      },
+      {
+        "id": "622fe387-2110-401d-8fa4-e85edccfff37",
+        "lesson": "Embedded Aura recommendation CTAs should not be isolated UI actions; they should write active feedback context and emit action events with route, surface, and tracking metadata so Ora can learn from user interaction evidence over time.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-09",
+        "created_at": "2026-05-10 06:00:29.407103"
+      },
+      {
+        "id": "acf9f0c4-ccca-4996-b3aa-0308651f97b3",
+        "lesson": "Connectome should treat DiscoveryAgent/Discover as the canonical user-facing discovery path: /app/discovery and /app/discovery-agent are primary discovery entry points, and the dock label should say Discover rather than Path.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-09",
+        "created_at": "2026-05-10 06:00:29.210544"
+      },
       {
         "id": "24f5a98e-be79-4514-be79-69bd95c0f0cd",
         "lesson": "{\"proposal_id\": \"24f5a98e-be79-4514-be79-69bd95c0f0cd\", \"card_type\": \"personalized_suggestion\", \"hypothesis\": \"Implementing a personalized suggestion card could increase user engagement by 25%.\", \"description\": \"This card type analyzes a user's previous interactions and preferences to provide tailored recommendations for actions or content. By presenting suggestions that resonate with the user's interests, it aims to encourage more meaningful engagement and reduce the likelihood of skipping or exiting.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-09T19:49:36.934264+00:00\", \"expires_at\": \"2026-05-11T19:49:36.934264+00:00\", \"result\": null}",
@@ -688,7 +723,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "a476fceb5314d9e8"
+    "lessons_hash": "a4e9052be43267fa"
   },
   "platform_stats": {
     "total_users": 20,
