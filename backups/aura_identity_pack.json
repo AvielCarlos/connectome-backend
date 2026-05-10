@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-10T18:51:44.606253+00:00",
-  "exported_at": "2026-05-10T18:51:44.606253+00:00",
-  "collected_at": "2026-05-10T18:51:44.606253+00:00",
+  "timestamp": "2026-05-10T19:46:51.702963+00:00",
+  "exported_at": "2026-05-10T19:46:51.702963+00:00",
+  "collected_at": "2026-05-10T19:46:51.702963+00:00",
   "identity": {
-    "total_lessons": 99,
+    "total_lessons": 100,
     "lessons": [
+      {
+        "id": "6cedac5d-f2ba-4620-bb4b-aebeee663d23",
+        "lesson": "Home choice data (last 7 days): 2 directed ('I know') sessions, 9 exploratory ('Show me') sessions. Intake depth breakdown \u2014 deep: 4, instant: 0, one_q: 0. 'I know' path variants \u2014 immediate: 2, clarifying: 0. Use this split to calibrate recommendation depth and goal-context weighting.",
+        "confidence": 0.8,
+        "source": "autonomy_home_analytics",
+        "created_at": "2026-05-10 19:00:17.285031"
+      },
       {
         "id": "7d595063-75ef-49c1-8ee7-94e3a571ad2d",
         "lesson": "App growth insight from week of 2026-05-10: Sent 0 acquisition tweets across X. Best variant: A (0 uses). Upgrade emails: 0. Re-engagement emails: 0. Backend reports: ? new users, ? new paid this week. ",
@@ -800,7 +807,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "7649bcdc548cdc5f"
+    "lessons_hash": "222f20959020b198"
   },
   "platform_stats": {
     "total_users": 20,
