@@ -23,7 +23,15 @@ class ActionBoundaryEvidenceTests(unittest.TestCase):
             tool_args={
                 "target": "telegram:user:avi",
                 "message": "summary",
-                "metadata": {"token": "do-not-log"},
+                "metadata": {
+                    "token": "do-not-log",
+                    "access_token": "oauth-access-token",
+                    "refreshToken": "oauth-refresh-token",
+                    "clientSecret": "oauth-client-secret",
+                    "headers": {"set-cookie": "session-cookie"},
+                    "api_version": "2026-05-11",
+                    "monkey": "banana",
+                },
             },
         )
 
@@ -88,7 +96,19 @@ class ActionBoundaryEvidenceTests(unittest.TestCase):
 
         self.assertEqual(audit["final_result"]["external_id"], "msg_123")
         self.assertEqual(audit["tool_args_redacted"]["metadata"]["token"], "[REDACTED]")
+        self.assertEqual(audit["tool_args_redacted"]["metadata"]["access_token"], "[REDACTED]")
+        self.assertEqual(audit["tool_args_redacted"]["metadata"]["refreshToken"], "[REDACTED]")
+        self.assertEqual(audit["tool_args_redacted"]["metadata"]["clientSecret"], "[REDACTED]")
+        self.assertEqual(
+            audit["tool_args_redacted"]["metadata"]["headers"]["set-cookie"], "[REDACTED]"
+        )
+        self.assertEqual(audit["tool_args_redacted"]["metadata"]["api_version"], "2026-05-11")
+        self.assertEqual(audit["tool_args_redacted"]["metadata"]["monkey"], "banana")
         self.assertNotIn("do-not-log", str(audit))
+        self.assertNotIn("oauth-access-token", str(audit))
+        self.assertNotIn("oauth-refresh-token", str(audit))
+        self.assertNotIn("oauth-client-secret", str(audit))
+        self.assertNotIn("session-cookie", str(audit))
 
 
 if __name__ == "__main__":
