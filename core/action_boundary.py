@@ -48,6 +48,17 @@ _SECRETISH_KEYS = {
     "token",
 }
 
+_SECRETISH_KEY_PARTS = {
+    "authorization",
+    "cookie",
+    "credential",
+    "key",
+    "password",
+    "secret",
+    "session",
+    "token",
+}
+
 
 class ActionBoundaryError(ValueError):
     """Raised when approval evidence no longer permits execution."""
@@ -249,7 +260,7 @@ def _redact(value: Any) -> Any:
     if isinstance(value, dict):
         redacted: Dict[str, Any] = {}
         for key, item in value.items():
-            if key.lower() in _SECRETISH_KEYS:
+            if _is_secretish_key(key):
                 redacted[key] = "[REDACTED]"
             else:
                 redacted[key] = _redact(item)
@@ -257,3 +268,28 @@ def _redact(value: Any) -> Any:
     if isinstance(value, list):
         return [_redact(item) for item in value]
     return value
+
+
+def _is_secretish_key(key: str) -> bool:
+    """Detect common secret-bearing key names before audit logging.
+
+    Approval evidence may include provider-native argument dictionaries. Those
+    APIs often use camelCase, kebab-case, or nested names like access_token,
+    refreshToken, set-cookie, and clientSecret. Treating only exact key matches
+    as sensitive can leak credentials into otherwise safe audit logs.
+    """
+
+    normalized_chars = []
+    previous = ""
+    for char in key:
+        if char.isupper() and previous and (previous.islower() or previous.isdigit()):
+            normalized_chars.append(" ")
+        normalized_chars.append(char.lower() if char.isalnum() else " ")
+        previous = char
+    normalized = "".join(normalized_chars)
+    compact = normalized.replace(" ", "")
+    if compact in _SECRETISH_KEYS:
+        return True
+
+    parts = set(normalized.split())
+    return bool(parts.intersection(_SECRETISH_KEY_PARTS))
