@@ -1,11 +1,46 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-12T05:53:17.179670+00:00",
-  "exported_at": "2026-05-12T05:53:17.179670+00:00",
-  "collected_at": "2026-05-12T05:53:17.179670+00:00",
+  "timestamp": "2026-05-12T06:53:19.690821+00:00",
+  "exported_at": "2026-05-12T06:53:19.690821+00:00",
+  "collected_at": "2026-05-12T06:53:19.690821+00:00",
   "identity": {
-    "total_lessons": 120,
+    "total_lessons": 125,
     "lessons": [
+      {
+        "id": "0d50cc71-11a7-48d3-85bd-6134a0266258",
+        "lesson": "Security, payment, provider/runtime infrastructure changes and high-risk Ora UI proposal work require human design or operations review before production integration.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-11",
+        "created_at": "2026-05-12 06:00:41.103294"
+      },
+      {
+        "id": "1ac8358e-f81d-4a19-87d3-658fd655e6d4",
+        "lesson": "Feedback reports should include a bounded local route/action context trail so Aura can understand what the user was doing before feedback, while avoiding secrets, excessive history, or new backend storage unless needed.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-11",
+        "created_at": "2026-05-12 06:00:40.913739"
+      },
+      {
+        "id": "65ba3a1e-b651-4c6b-ae18-e1eb188ccabb",
+        "lesson": "Path Feed needs a return-loop landing experience that can bring users back into saved or previously relevant path cards, supporting retention and continuity without framing contribution points as spendable rewards.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-11",
+        "created_at": "2026-05-12 06:00:40.702716"
+      },
+      {
+        "id": "7742984b-65cd-4f0e-90a5-2d910de354d5",
+        "lesson": "Ora should capture a user\u2019s available-time context around Path Feed actions and carry that context into Ask Aura, reminders, and safe-link feedback so recommendations can fit the user\u2019s real execution window.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-11",
+        "created_at": "2026-05-12 06:00:40.508903"
+      },
+      {
+        "id": "18490647-3241-4bbe-9e8f-1275c1d6c711",
+        "lesson": "Path Feed should treat saving a path card for later as an explicit resurface_intent signal, so Ora can learn which recommendations users want brought back at a better moment.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-11",
+        "created_at": "2026-05-12 06:00:40.332101"
+      },
       {
         "id": "b01dcf7b-82fb-4b12-93a4-b6dc69e1aadb",
         "lesson": "{\"proposal_id\": \"b01dcf7b-82fb-4b12-93a4-b6dc69e1aadb\", \"card_type\": \"habit_tracker\", \"hypothesis\": \"Implementing a habit tracker card will increase user fulfilment and engagement by 20%.\", \"description\": \"This card type allows users to set personal goals or habits they want to track over time, like reading, exercising, or meditation. It provides a visual representation of their progress, and users can receive reminders and motivational quotes to sustain motivation. By fostering accountability and celebrating small wins, users will feel more engaged and fulfilled in their pursuits.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-11T19:51:42.816022+00:00\", \"expires_at\": \"2026-05-13T19:51:42.816022+00:00\", \"result\": null}",
@@ -947,7 +982,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "63274f79e3515e19"
+    "lessons_hash": "24c91dd48def5c15"
   },
   "platform_stats": {
     "total_users": 20,
