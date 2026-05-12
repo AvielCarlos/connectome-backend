@@ -16,6 +16,7 @@ from core.models import FeedbackSubmit, FeedbackResponse
 from api.middleware import get_current_user_id
 from aura.brain import get_brain
 from core.database import execute, fetchrow
+from core.config import settings
 from openai import AsyncOpenAI
 
 from core.feedback_storage import ScreenshotStorageError, delete_feedback_screenshot, store_feedback_screenshot
