@@ -38,6 +38,14 @@ class DataClassification(str, Enum):
     HEALTH = "health"
 
 
+class ApprovalMode(str, Enum):
+    """How an action boundary was authorized to execute."""
+
+    USER_APPROVAL = "user_approval"
+    POLICY_PREAPPROVED = "policy_preapproved"
+    HUMAN_OPERATOR = "human_operator"
+
+
 _SECRETISH_KEYS = {
     "api_key",
     "apikey",
@@ -82,6 +90,8 @@ class ApprovalBinding(BaseModel):
     resource_scope: str
     data_classification: DataClassification
     policy_version: str
+    policy_rule_id: str
+    approval_mode: ApprovalMode
     approver_ref: str
     expires_at: datetime
     evidence_hash: str
@@ -125,6 +135,10 @@ class ActionBoundaryEvidence(BaseModel):
     resource_scope: str
     data_classification: DataClassification
     policy_version: str
+    policy_rule_id: str = "unspecified"
+    approval_mode: ApprovalMode = ApprovalMode.USER_APPROVAL
+    cost_or_risk: Optional[str] = None
+    rollback_notes: Optional[str] = None
     tool: str
     tool_args: Dict[str, Any] = Field(default_factory=dict)
     approval_binding: Optional[ApprovalBinding] = None
@@ -132,7 +146,14 @@ class ActionBoundaryEvidence(BaseModel):
     final_result: Optional[FinalActionResult] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-    @field_validator("user_intent", "target_resource", "resource_scope", "policy_version", "tool")
+    @field_validator(
+        "user_intent",
+        "target_resource",
+        "resource_scope",
+        "policy_version",
+        "policy_rule_id",
+        "tool",
+    )
     @classmethod
     def _non_empty(cls, value: str) -> str:
         if not value.strip():
@@ -157,6 +178,8 @@ class ActionBoundaryEvidence(BaseModel):
             "resource_scope": self.resource_scope,
             "data_classification": self.data_classification.value,
             "policy_version": self.policy_version,
+            "policy_rule_id": self.policy_rule_id,
+            "approval_mode": self.approval_mode.value,
             "tool": self.tool,
             "args_hash": self.args_hash,
         }
@@ -178,6 +201,8 @@ class ActionBoundaryEvidence(BaseModel):
             resource_scope=self.resource_scope,
             data_classification=self.data_classification,
             policy_version=self.policy_version,
+            policy_rule_id=self.policy_rule_id,
+            approval_mode=self.approval_mode,
             approver_ref=approver_ref,
             expires_at=expires_at,
             evidence_hash=self.evidence_hash,
@@ -206,6 +231,8 @@ class ActionBoundaryEvidence(BaseModel):
             "resource_scope": self.resource_scope,
             "data_classification": self.data_classification,
             "policy_version": self.policy_version,
+            "policy_rule_id": self.policy_rule_id,
+            "approval_mode": self.approval_mode,
             "evidence_hash": self.evidence_hash,
         }
         for field, current in checks.items():
@@ -232,6 +259,8 @@ class ActionBoundaryEvidence(BaseModel):
             if self.approval_binding
             else None,
             "approver_ref": self.approval_binding.approver_ref if self.approval_binding else None,
+            "cost_or_risk": self.cost_or_risk,
+            "rollback_notes": self.rollback_notes,
             "tool_args_redacted": _redact(self.tool_args),
             "worker_resume_token": {
                 "token_id_hash": _sha256(self.worker_resume_token.token_id)

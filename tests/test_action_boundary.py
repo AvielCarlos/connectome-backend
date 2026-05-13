@@ -5,6 +5,7 @@ from core.action_boundary import (
     ActionBoundaryError,
     ActionBoundaryEvidence,
     ActionType,
+    ApprovalMode,
     DataClassification,
     FinalActionResult,
 )
@@ -19,6 +20,10 @@ class ActionBoundaryEvidenceTests(unittest.TestCase):
             resource_scope="single message to Avi only",
             data_classification=DataClassification.PRIVATE,
             policy_version="approval-policy-v1",
+            policy_rule_id="send.private-message.requires-approval",
+            approval_mode=ApprovalMode.USER_APPROVAL,
+            cost_or_risk="Private message is sent externally to one Telegram recipient.",
+            rollback_notes="Delete the Telegram message if supported by the provider.",
             tool="message.send",
             tool_args={
                 "target": "telegram:user:avi",
@@ -59,6 +64,16 @@ class ActionBoundaryEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ActionBoundaryError, "approval drift"):
             drifted.assert_execution_allowed()
 
+    def test_rejects_approval_drift_when_policy_context_changes(self):
+        evidence = self._evidence().bind_approval(
+            approver_ref="user-hash:avi",
+            expires_at=datetime.now(timezone.utc) + timedelta(minutes=5),
+        )
+        drifted = evidence.model_copy(update={"policy_rule_id": "different-rule"})
+
+        with self.assertRaisesRegex(ActionBoundaryError, "approval drift"):
+            drifted.assert_execution_allowed()
+
     def test_rejects_expired_worker_resume_token(self):
         evidence = self._evidence().bind_approval(
             approver_ref="user-hash:avi",
@@ -95,6 +110,16 @@ class ActionBoundaryEvidenceTests(unittest.TestCase):
         audit = completed.to_audit_log()
 
         self.assertEqual(audit["final_result"]["external_id"], "msg_123")
+        self.assertEqual(audit["policy_rule_id"], "send.private-message.requires-approval")
+        self.assertEqual(audit["approval_mode"], "user_approval")
+        self.assertEqual(
+            audit["cost_or_risk"],
+            "Private message is sent externally to one Telegram recipient.",
+        )
+        self.assertEqual(
+            audit["rollback_notes"],
+            "Delete the Telegram message if supported by the provider.",
+        )
         self.assertEqual(audit["tool_args_redacted"]["metadata"]["token"], "[REDACTED]")
         self.assertEqual(audit["tool_args_redacted"]["metadata"]["access_token"], "[REDACTED]")
         self.assertEqual(audit["tool_args_redacted"]["metadata"]["refreshToken"], "[REDACTED]")
