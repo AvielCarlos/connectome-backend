@@ -72,6 +72,7 @@ class Settings(BaseSettings):
 
     # External APIs
     GOOGLE_PLACES_API_KEY: str = ""  # Optional — enables real venue search
+    BRAVE_SEARCH_API_KEY: str = ""    # Optional — enables live web result ranking
     SERPAPI_KEY: str = ""            # Google Events via SerpAPI (set in Railway env vars)
     EVENTBRITE_TOKEN: str = ""       # Eventbrite public API token (set in Railway env vars)
     TICKETMASTER_API_KEY: str = ""   # Ticketmaster Discovery API (optional)
@@ -215,6 +216,10 @@ class Settings(BaseSettings):
     @property
     def has_google_places(self) -> bool:
         return bool(self.GOOGLE_PLACES_API_KEY)
+
+    @property
+    def has_brave_search(self) -> bool:
+        return bool(self.BRAVE_SEARCH_API_KEY)
 
     class Config:
         env_file = ".env"

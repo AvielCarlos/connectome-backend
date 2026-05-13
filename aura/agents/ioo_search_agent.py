@@ -358,6 +358,77 @@ def _live_google_places_candidates(query: str, location: str | None, title: str)
     return candidates
 
 
+def _live_brave_web_candidates(query: str, title: str) -> list[SearchCandidate]:
+    """Return live web-search candidates when a Brave Search key is configured.
+
+    This is a read-only provider adapter for research/link discovery. It only
+    fetches public search metadata, stores no secrets, and performs no booking,
+    purchase, message, application, or other external action.
+    """
+    try:
+        from core.config import settings
+    except Exception:
+        return []
+
+    api_key = getattr(settings, "BRAVE_SEARCH_API_KEY", "") or ""
+    text_query = query.strip()
+    if not api_key or not text_query:
+        return []
+
+    try:
+        resp = httpx.get(
+            "https://api.search.brave.com/res/v1/web/search",
+            headers={
+                "Accept": "application/json",
+                "X-Subscription-Token": api_key,
+            },
+            params={"q": text_query, "count": 3, "safesearch": "moderate"},
+            timeout=6,
+        )
+        resp.raise_for_status()
+        results = ((resp.json() or {}).get("web") or {}).get("results") or []
+    except Exception:
+        return []
+
+    candidates: list[SearchCandidate] = []
+    seen_urls: set[str] = set()
+    for result in results:
+        if not isinstance(result, dict):
+            continue
+        result_title = str(result.get("title") or "").strip()
+        url = str(result.get("url") or "").strip()
+        description = str(result.get("description") or "").strip()
+        if not result_title or not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        idx = len(candidates) + 1
+        if idx > 3:
+            break
+        candidates.append(
+            _candidate(
+                cid=f"brave-web-result-{idx}",
+                title=result_title,
+                candidate_type="live_web_result",
+                source_name="Brave Search",
+                source_type="live_web_search_result",
+                source_url=url,
+                confidence=0.74 - ((idx - 1) * 0.04),
+                rationale=(
+                    f"Live web result for '{title}' from a configured search provider. "
+                    "Use it as a research/link option; any downstream external action still requires confirmation."
+                ),
+                next_label="Open result, verify credibility, and extract the first useful reversible step",
+                metadata={
+                    "query": text_query,
+                    "description": description,
+                    "provider": "brave_search",
+                    "external_actions_require_confirmation": True,
+                },
+            )
+        )
+    return candidates
+
+
 def _candidate(
     *,
     cid: str,
@@ -421,6 +492,13 @@ def build_search_agent_payload(node: Any, user_context: Any, intent: str = "do_n
     if swarmsync_candidates:
         candidates.extend(swarmsync_candidates)
         swarmsync_available = True
+
+    tutorial_query = f"{title} beginner guide practical steps"
+    live_web_available = False
+    live_web_candidates = _live_brave_web_candidates(tutorial_query, title)
+    if live_web_candidates:
+        candidates.extend(live_web_candidates)
+        live_web_available = True
 
     if n["step_type"] in {"physical", "hybrid"}:
         maps_query = base_query if location else f"{title} near me"
@@ -521,7 +599,6 @@ def build_search_agent_payload(node: Any, user_context: Any, intent: str = "do_n
             )
         )
 
-    tutorial_query = f"{title} beginner guide practical steps"
     candidates.append(
         _candidate(
             cid="practical-guide-search",
@@ -555,7 +632,8 @@ def build_search_agent_payload(node: Any, user_context: Any, intent: str = "do_n
 
     sorted_candidates = sorted(candidates, key=lambda item: item.confidence, reverse=True)[:5]
     live_integrations = {
-        "web_search": "not_configured",
+        "web_search": "available" if live_web_available else "not_configured",
+        "brave_search": "available" if live_web_available else "not_configured_or_no_results",
         "google_places": "available" if live_places_available else "not_configured_or_no_results",
         "swarmsync": "available" if swarmsync_available else "not_applicable_or_no_results",
         "aventi": "not_configured",
