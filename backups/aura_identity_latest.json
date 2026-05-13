@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-13T19:48:55.950098+00:00",
-  "exported_at": "2026-05-13T19:48:55.950098+00:00",
-  "collected_at": "2026-05-13T19:48:55.950098+00:00",
+  "timestamp": "2026-05-13T19:55:04.371284+00:00",
+  "exported_at": "2026-05-13T19:55:04.371284+00:00",
+  "collected_at": "2026-05-13T19:55:04.371284+00:00",
   "identity": {
-    "total_lessons": 145,
+    "total_lessons": 146,
     "lessons": [
+      {
+        "id": "dc68ce21-5ca8-431a-9220-ec8d379b01b9",
+        "lesson": "{\"proposal_id\": \"dc68ce21-5ca8-431a-9220-ec8d379b01b9\", \"card_type\": \"mood_check_in_card\", \"hypothesis\": \"Integrating a mood check-in card will increase user engagement by 25%.\", \"description\": \"This card prompts users to reflect on their current mood and offers personalized content suggestions based on their response. By integrating daily mood tracking, it fosters a deeper connection and encourages users to engage more frequently with the platform, as they can later see their mood trends over time.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-13T19:53:51.231056+00:00\", \"expires_at\": \"2026-05-15T19:53:51.231056+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-13 19:53:51.231056"
+      },
       {
         "id": "0cc54e84-b1f8-4865-a940-73d43242fdac",
         "lesson": "Home choice data (last 7 days): 2 directed ('I know') sessions, 9 exploratory ('Show me') sessions. Intake depth breakdown \u2014 deep: 4, instant: 0, one_q: 0. 'I know' path variants \u2014 immediate: 2, clarifying: 0. Use this split to calibrate recommendation depth and goal-context weighting.",
@@ -183,7 +190,7 @@
       },
       {
         "id": "b01dcf7b-82fb-4b12-93a4-b6dc69e1aadb",
-        "lesson": "{\"proposal_id\": \"b01dcf7b-82fb-4b12-93a4-b6dc69e1aadb\", \"card_type\": \"habit_tracker\", \"hypothesis\": \"Implementing a habit tracker card will increase user fulfilment and engagement by 20%.\", \"description\": \"This card type allows users to set personal goals or habits they want to track over time, like reading, exercising, or meditation. It provides a visual representation of their progress, and users can receive reminders and motivational quotes to sustain motivation. By fostering accountability and celebrating small wins, users will feel more engaged and fulfilled in their pursuits.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-11T19:51:42.816022+00:00\", \"expires_at\": \"2026-05-13T19:51:42.816022+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"b01dcf7b-82fb-4b12-93a4-b6dc69e1aadb\", \"card_type\": \"habit_tracker\", \"hypothesis\": \"Implementing a habit tracker card will increase user fulfilment and engagement by 20%.\", \"description\": \"This card type allows users to set personal goals or habits they want to track over time, like reading, exercising, or meditation. It provides a visual representation of their progress, and users can receive reminders and motivational quotes to sustain motivation. By fostering accountability and celebrating small wins, users will feel more engaged and fulfilled in their pursuits.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"killed\", \"created_at\": \"2026-05-11T19:51:42.816022+00:00\", \"expires_at\": \"2026-05-13T19:51:42.816022+00:00\", \"result\": {\"observed_improvement\": 0.138, \"threshold\": 0.2, \"promoted\": false, \"evaluated_at\": \"2026-05-13T19:53:51.240499+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-11 19:51:42.816022"
@@ -1122,7 +1129,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "8887cc919484f8c5"
+    "lessons_hash": "41118b8adb4e691d"
   },
   "platform_stats": {
     "total_users": 20,
