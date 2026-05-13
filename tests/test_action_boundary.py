@@ -34,6 +34,8 @@ class ActionBoundaryEvidenceTests(unittest.TestCase):
                     "refreshToken": "oauth-refresh-token",
                     "clientSecret": "oauth-client-secret",
                     "headers": {"set-cookie": "session-cookie"},
+                    "callback_url": "https://example.org/callback?code=oauth-code&state=safe-state",
+                    "request_note": "Authorization: Bearer sk-live-do-not-log-value",
                     "api_version": "2026-05-11",
                     "monkey": "banana",
                 },
@@ -127,6 +129,14 @@ class ActionBoundaryEvidenceTests(unittest.TestCase):
         self.assertEqual(
             audit["tool_args_redacted"]["metadata"]["headers"]["set-cookie"], "[REDACTED]"
         )
+        self.assertEqual(
+            audit["tool_args_redacted"]["metadata"]["callback_url"],
+            "https://example.org/callback?code=[REDACTED]&state=safe-state",
+        )
+        self.assertEqual(
+            audit["tool_args_redacted"]["metadata"]["request_note"],
+            "Authorization: Bearer [REDACTED]",
+        )
         self.assertEqual(audit["tool_args_redacted"]["metadata"]["api_version"], "2026-05-11")
         self.assertEqual(audit["tool_args_redacted"]["metadata"]["monkey"], "banana")
         self.assertNotIn("do-not-log", str(audit))
@@ -134,6 +144,8 @@ class ActionBoundaryEvidenceTests(unittest.TestCase):
         self.assertNotIn("oauth-refresh-token", str(audit))
         self.assertNotIn("oauth-client-secret", str(audit))
         self.assertNotIn("session-cookie", str(audit))
+        self.assertNotIn("oauth-code", str(audit))
+        self.assertNotIn("sk-live-do-not-log-value", str(audit))
 
 
 if __name__ == "__main__":
