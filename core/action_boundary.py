@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from enum import Enum
@@ -66,6 +67,11 @@ _SECRETISH_KEY_PARTS = {
     "session",
     "token",
 }
+
+_BEARER_SECRET_RE = re.compile(r"(?i)\b(bearer|basic)\s+[a-z0-9._~+/=-]{12,}")
+_URL_SECRET_PARAM_RE = re.compile(
+    r"(?i)([?&](?:access[_-]?token|api[_-]?key|auth[_-]?token|client[_-]?secret|code|key|password|refresh[_-]?token|secret|session|token)=)([^&#\s]+)"
+)
 
 
 class ActionBoundaryError(ValueError):
@@ -296,7 +302,16 @@ def _redact(value: Any) -> Any:
         return redacted
     if isinstance(value, list):
         return [_redact(item) for item in value]
+    if isinstance(value, str):
+        return _redact_secretish_string(value)
     return value
+
+
+def _redact_secretish_string(value: str) -> str:
+    """Redact credentials embedded in otherwise non-secret audit fields."""
+
+    redacted = _BEARER_SECRET_RE.sub(lambda match: f"{match.group(1)} [REDACTED]", value)
+    return _URL_SECRET_PARAM_RE.sub(lambda match: f"{match.group(1)}[REDACTED]", redacted)
 
 
 def _is_secretish_key(key: str) -> bool:
