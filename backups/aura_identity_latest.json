@@ -1,11 +1,46 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-13T05:54:23.684999+00:00",
-  "exported_at": "2026-05-13T05:54:23.684999+00:00",
-  "collected_at": "2026-05-13T05:54:23.684999+00:00",
+  "timestamp": "2026-05-13T06:54:26.194920+00:00",
+  "exported_at": "2026-05-13T06:54:26.194920+00:00",
+  "collected_at": "2026-05-13T06:54:26.194920+00:00",
   "identity": {
-    "total_lessons": 137,
+    "total_lessons": 142,
     "lessons": [
+      {
+        "id": "11849556-5f2d-4db2-8e20-4f34cdf246da",
+        "lesson": "Backend work touching security, payments, secrets, authentication, spend, infrastructure, or runtime dependencies should require human review before implementation or merge, even when the rest of the backlog can be handled autonomously.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-12",
+        "created_at": "2026-05-13 06:00:36.707557"
+      },
+      {
+        "id": "d9c0a5d9-7397-4664-a210-de24045acac2",
+        "lesson": "High-risk Aura/Ora goal-creation proposals need human product review before full automation; the safe near-term pattern is to capture intent and guide users into existing reviewed flows rather than silently creating or changing goals.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-12",
+        "created_at": "2026-05-13 06:00:36.512021"
+      },
+      {
+        "id": "3695e5aa-a060-49d8-a154-ccd74636d641",
+        "lesson": "Connectome public discovery should be search-engine friendly: maintain robots.txt, sitemap.xml, and clear links to public discovery and Path Feed pages so people and crawlers can find the mission and product surfaces.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-12",
+        "created_at": "2026-05-13 06:00:36.278411"
+      },
+      {
+        "id": "8f972fdf-fb7e-4f7f-9d84-16c7659f5730",
+        "lesson": "Developer onboarding is a growth funnel for Connectome and the DAO; Contribute-page interactions, backend repository CTA clicks, and onboarding funnel diagnostics should be tracked so the team can improve contributor conversion with evidence.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-12",
+        "created_at": "2026-05-13 06:00:36.099845"
+      },
+      {
+        "id": "06232282-e8b9-4470-b7aa-7b759c80acbd",
+        "lesson": "When the feed is empty, Connectome/iDo should convert that moment into goal capture with Aura: the primary CTA should invite the user to set a goal with Aura and route into the focused Goals capture flow rather than leaving the user at a dead end.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-12",
+        "created_at": "2026-05-13 06:00:35.885614"
+      },
       {
         "id": "74dcb1ea-3b15-4fd3-afb1-fec4443eaa87",
         "lesson": "{\"proposal_id\": \"74dcb1ea-3b15-4fd3-afb1-fec4443eaa87\", \"card_type\": \"emotion_check_in\", \"hypothesis\": \"Incorporating an 'Emotion Check-In' card can increase user fulfilment score by 20%, as it helps users reflect on their emotional state and adjust their activities accordingly.\", \"description\": \"This card prompts users to select their current emotional state from a set of options (e.g., happy, stressed, motivated, etc.) and suggests tailored content or activities based on their selection. By addressing users' emotional well-being, it creates a personalized experience that encourages deeper engagement with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-12T19:52:46.913473+00:00\", \"expires_at\": \"2026-05-14T19:52:46.913473+00:00\", \"result\": null}",
@@ -1066,7 +1101,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "3804f76e309943a4"
+    "lessons_hash": "6c940911a90143d7"
   },
   "platform_stats": {
     "total_users": 20,
