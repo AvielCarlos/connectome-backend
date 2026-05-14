@@ -62,9 +62,7 @@ DRIVE_SCOPES = [
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 
-# Where the web app lives — after OAuth we redirect here with the JWT
-FRONTEND_CALLBACK_URL = "https://avielcarlos.github.io/connectome-web/auth/callback"
-
+# Where the web app lives — after OAuth we redirect to settings.google_frontend_callback_url.
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -317,7 +315,7 @@ async def google_callback(
     """
     if error:
         # User denied consent — redirect to login page with error
-        frontend_error = f"{FRONTEND_CALLBACK_URL}?error={urllib.parse.quote(error)}"
+        frontend_error = f"{settings.google_frontend_callback_url}?error={urllib.parse.quote(error)}"
         return RedirectResponse(frontend_error)
 
     drive_requested = ":drive" in state
@@ -327,7 +325,7 @@ async def google_callback(
         token_data = await _exchange_code(code)
     except HTTPException as e:
         return RedirectResponse(
-            f"{FRONTEND_CALLBACK_URL}?error={urllib.parse.quote(e.detail)}"
+            f"{settings.google_frontend_callback_url}?error={urllib.parse.quote(e.detail)}"
         )
 
     access_token = token_data.get("access_token")
@@ -341,7 +339,7 @@ async def google_callback(
         user_info = await _get_user_info(access_token)
     except HTTPException as e:
         return RedirectResponse(
-            f"{FRONTEND_CALLBACK_URL}?error={urllib.parse.quote(e.detail)}"
+            f"{settings.google_frontend_callback_url}?error={urllib.parse.quote(e.detail)}"
         )
 
     google_id = user_info.get("sub")
@@ -414,7 +412,7 @@ async def google_callback(
     )
 
     # Redirect to frontend with JWT
-    redirect_url = f"{FRONTEND_CALLBACK_URL}?token={urllib.parse.quote(jwt_token)}"
+    redirect_url = f"{settings.google_frontend_callback_url}?token={urllib.parse.quote(jwt_token)}"
     return RedirectResponse(redirect_url)
 
 

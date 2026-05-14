@@ -18,9 +18,6 @@ router = APIRouter(prefix="/api/auth/github", tags=["github-auth"])
 GITHUB_AUTH_URL = "https://github.com/login/oauth/authorize"
 GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 GITHUB_USER_URL = "https://api.github.com/user"
-FRONTEND_CALLBACK_URL = "https://avielcarlos.github.io/connectome-web/auth/github-callback"
-
-
 async def _ensure_schema() -> None:
     await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS github_username TEXT")
     await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS github_avatar_url TEXT")
@@ -65,7 +62,7 @@ async def github_callback(code: str = Query(...), state: str = Query(...)):
     """Exchange GitHub code, store profile fields, and redirect to frontend."""
     user_id = decode_token(state)
     if not user_id:
-        return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?github_connected=false&error=invalid_state")
+        return RedirectResponse(f"{settings.github_frontend_callback_url}?github_connected=false&error=invalid_state")
 
     await _ensure_schema()
     async with httpx.AsyncClient(timeout=15) as client:
@@ -81,11 +78,11 @@ async def github_callback(code: str = Query(...), state: str = Query(...)):
         )
     if token_resp.status_code != 200:
         logger.error("GitHub token exchange failed: %s %s", token_resp.status_code, token_resp.text)
-        return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?github_connected=false&error=token_exchange")
+        return RedirectResponse(f"{settings.github_frontend_callback_url}?github_connected=false&error=token_exchange")
 
     access_token = token_resp.json().get("access_token")
     if not access_token:
-        return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?github_connected=false&error=no_token")
+        return RedirectResponse(f"{settings.github_frontend_callback_url}?github_connected=false&error=no_token")
 
     async with httpx.AsyncClient(timeout=10) as client:
         user_resp = await client.get(
@@ -94,13 +91,13 @@ async def github_callback(code: str = Query(...), state: str = Query(...)):
         )
     if user_resp.status_code != 200:
         logger.error("GitHub profile fetch failed: %s %s", user_resp.status_code, user_resp.text)
-        return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?github_connected=false&error=profile_fetch")
+        return RedirectResponse(f"{settings.github_frontend_callback_url}?github_connected=false&error=profile_fetch")
 
     gh = user_resp.json()
     username = (gh.get("login") or "").lower().strip()
     avatar_url = gh.get("avatar_url")
     if not username:
-        return RedirectResponse(f"{FRONTEND_CALLBACK_URL}?github_connected=false&error=no_username")
+        return RedirectResponse(f"{settings.github_frontend_callback_url}?github_connected=false&error=no_username")
 
     uid = UUID(user_id)
     await execute(
@@ -133,5 +130,5 @@ async def github_callback(code: str = Query(...), state: str = Query(...)):
     )
 
     return RedirectResponse(
-        f"{FRONTEND_CALLBACK_URL}?github_connected=true&github_username={urllib.parse.quote(username)}"
+        f"{settings.github_frontend_callback_url}?github_connected=true&github_username={urllib.parse.quote(username)}"
     )
