@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     # App
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
+    FRONTEND_BASE_URL: str = "https://avielcarlos.github.io/connectome-web"
+    GOOGLE_FRONTEND_CALLBACK_URL: str = ""
+    GITHUB_FRONTEND_CALLBACK_URL: str = ""
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:8081",
@@ -134,6 +137,20 @@ class Settings(BaseSettings):
     def has_stripe(self) -> bool:
         return bool(self.STRIPE_SECRET_KEY)
 
+    def frontend_url(self, path: str = "") -> str:
+        """Build a frontend URL from the configured base without double slashes."""
+        base = (self.FRONTEND_BASE_URL or "").rstrip("/")
+        suffix = path if path.startswith("/") else f"/{path}" if path else ""
+        return f"{base}{suffix}"
+
+    @property
+    def google_frontend_callback_url(self) -> str:
+        return (self.GOOGLE_FRONTEND_CALLBACK_URL or self.frontend_url("/auth/callback")).rstrip("?")
+
+    @property
+    def github_frontend_callback_url(self) -> str:
+        return (self.GITHUB_FRONTEND_CALLBACK_URL or self.frontend_url("/auth/github-callback")).rstrip("?")
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors(cls, v):
@@ -194,6 +211,8 @@ class Settings(BaseSettings):
             errors.append("REDIS_URL must not point at localhost in production")
         if any(origin == "*" for origin in self.CORS_ORIGINS):
             errors.append("CORS_ORIGINS must not contain '*' in production")
+        if not self.FRONTEND_BASE_URL or "localhost" in self.FRONTEND_BASE_URL or "127.0.0.1" in self.FRONTEND_BASE_URL:
+            errors.append("FRONTEND_BASE_URL must be a non-localhost URL in production")
         admin_secret = self.ADMIN_TOKEN or self.ADMIN_SECRET
         if not admin_secret or admin_secret == "connectome-admin-secret" or len(admin_secret) < 32:
             errors.append("ADMIN_TOKEN or ADMIN_SECRET must be configured with a non-default value of at least 32 characters")

@@ -30,7 +30,6 @@ router = APIRouter(prefix="/api/services", tags=["services"])
 
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
-FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://avielcarlos.github.io/connectome-web").rstrip("/")
 
 # ---------------------------------------------------------------------------
 # Service catalog
@@ -255,7 +254,7 @@ async def create_service_order(
 
     # Redirect customers back to the web app, not the API origin.
     # FRONTEND_BASE_URL should be set in Railway if the production frontend moves.
-    origin = FRONTEND_BASE_URL
+    origin = settings.frontend_url()
 
     try:
         import httpx
