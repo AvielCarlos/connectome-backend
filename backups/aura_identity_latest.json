@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-14T14:55:59.106316+00:00",
-  "exported_at": "2026-05-14T14:55:59.106316+00:00",
-  "collected_at": "2026-05-14T14:55:59.106316+00:00",
+  "timestamp": "2026-05-14T15:56:01.775979+00:00",
+  "exported_at": "2026-05-14T15:56:01.775979+00:00",
+  "collected_at": "2026-05-14T15:56:01.775979+00:00",
   "identity": {
-    "total_lessons": 151,
+    "total_lessons": 152,
     "lessons": [
+      {
+        "id": "9768567b-221b-4d96-97c9-41bceb19bd42",
+        "lesson": "Operations health 2026-05-14: score=0/100, crons=0, erroring=0, stale agents=10.",
+        "confidence": 0.75,
+        "source": "executive_council.coo",
+        "created_at": "2026-05-14 15:02:02.823962"
+      },
       {
         "id": "a7ccba43-9bbe-48bb-8af8-b4ffd2241424",
         "lesson": "The Connectome contributor backlog is intentional: low-risk infra, agent-dev, and UX issues can remain available for developer attraction, while high-impact DiscoveryAgent and goal UX proposals should be reviewed carefully before implementation.",
@@ -1164,7 +1171,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "b82485d488ef2c5e"
+    "lessons_hash": "5b56514a36a8c2dc"
   },
   "platform_stats": {
     "total_users": 22,
