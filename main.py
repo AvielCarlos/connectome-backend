@@ -122,71 +122,78 @@ async def lifespan(app: FastAPI):
     await get_redis()
     logger.info("✅ Redis connected")
 
+    background_workers_enabled = settings.ENABLE_BACKGROUND_WORKERS
+
     # Initialize Aura brain
-    await init_brain()
+    await init_brain(start_background_loops=background_workers_enabled)
     logger.info("✅ Aura brain initialized")
 
-    # Start notification worker
-    start_notification_worker()
-    logger.info("✅ Notification worker started")
-
-    # Start SelfHealingAgent
-    self_healer = SelfHealingAgent()
-    app.state.self_healer = self_healer
     import asyncio
-    asyncio.create_task(self_healer.start_watching())
-    logger.info("✅ SelfHealingAgent watching")
-
-    # Start Aura daily self-check background task
-    asyncio.create_task(_daily_self_check_loop())
-    logger.info("✅ Aura daily self-check loop started")
-
-    # Start Aura brain backup freshness loops (hourly identity backup + monitor)
-    try:
-        from aura.agents.backup_freshness import start_backup_freshness_loops
-        start_backup_freshness_loops(app)
-    except Exception as _backup_e:
-        logger.warning(f"Aura backup freshness loops failed to start: {_backup_e}")
-
-    # Start ModelEvolutionAgent weekly loop
     from aura.brain import get_brain as _get_brain
     _aura_brain = _get_brain()
-    model_evolution_agent = ModelEvolutionAgent(_aura_brain._openai)
-    app.state.model_evolution = model_evolution_agent
-    asyncio.create_task(model_evolution_agent.start_weekly_check_loop())
-    logger.info("✅ ModelEvolutionAgent weekly loop started")
 
-    # Start DaoAgent background loops
-    from aura.agents.dao_agent import DaoAgent
-    dao_agent = DaoAgent(_aura_brain._openai)
-    app.state.dao_agent = dao_agent
-    asyncio.create_task(dao_agent.run_daily_evaluation_loop())
-    asyncio.create_task(dao_agent.run_weekly_leaderboard_loop())
-    asyncio.create_task(dao_agent.run_monthly_ltv_loop())
-    logger.info("✅ DaoAgent evaluation + leaderboard + LTV loops started")
+    if background_workers_enabled:
+        # Start notification worker
+        start_notification_worker()
+        logger.info("✅ Notification worker started")
 
-    # Start suggestion integration + CP award automation
-    asyncio.create_task(_suggestion_integration_loop())
-    logger.info("✅ Suggestion integration + CP award automation loop started")
+        # Start SelfHealingAgent
+        self_healer = SelfHealingAgent()
+        app.state.self_healer = self_healer
+        asyncio.create_task(self_healer.start_watching())
+        logger.info("✅ SelfHealingAgent watching")
+
+        # Start Aura daily self-check background task
+        asyncio.create_task(_daily_self_check_loop())
+        logger.info("✅ Aura daily self-check loop started")
+
+        # Start Aura brain backup freshness loops (hourly identity backup + monitor)
+        try:
+            from aura.agents.backup_freshness import start_backup_freshness_loops
+            start_backup_freshness_loops(app)
+        except Exception as _backup_e:
+            logger.warning(f"Aura backup freshness loops failed to start: {_backup_e}")
+
+        # Start ModelEvolutionAgent weekly loop
+        model_evolution_agent = ModelEvolutionAgent(_aura_brain._openai)
+        app.state.model_evolution = model_evolution_agent
+        asyncio.create_task(model_evolution_agent.start_weekly_check_loop())
+        logger.info("✅ ModelEvolutionAgent weekly loop started")
+
+        # Start DaoAgent background loops
+        from aura.agents.dao_agent import DaoAgent
+        dao_agent = DaoAgent(_aura_brain._openai)
+        app.state.dao_agent = dao_agent
+        asyncio.create_task(dao_agent.run_daily_evaluation_loop())
+        asyncio.create_task(dao_agent.run_weekly_leaderboard_loop())
+        asyncio.create_task(dao_agent.run_monthly_ltv_loop())
+        logger.info("✅ DaoAgent evaluation + leaderboard + LTV loops started")
+
+        # Start suggestion integration + CP award automation
+        asyncio.create_task(_suggestion_integration_loop())
+        logger.info("✅ Suggestion integration + CP award automation loop started")
+
+        # Start MetaAgent periodic self-improvement loop (every 6 hours)
+        from aura.agents.meta_agent import MetaAgent
+        meta_agent = MetaAgent(_aura_brain._openai)
+        app.state.meta_agent = meta_agent
+        asyncio.create_task(_meta_agent_loop(meta_agent))
+        logger.info("✅ MetaAgent self-improvement loop started")
+
+        # Initialize PricingAgent — Aura manages her own pricing
+        try:
+            from aura.agents.pricing_agent import get_pricing_agent
+            pricing_agent = get_pricing_agent(getattr(_aura_brain, '_openai', None))
+            app.state.pricing_agent = pricing_agent
+            asyncio.create_task(_pricing_agent_loop(pricing_agent))
+            logger.info("✅ PricingAgent initialized — Aura owns her monetization")
+        except Exception as _pe:
+            logging.warning(f"PricingAgent init failed (non-critical): {_pe}")
+    else:
+        logger.info("⏸️ Background workers disabled for API runtime")
+
     # Initialize EventDiscoveryAgent (lazy — syncs cities on demand)
     logger.info("✅ EventDiscoveryAgent ready (city syncs on demand)")
-
-    # Start MetaAgent periodic self-improvement loop (every 6 hours)
-    from aura.agents.meta_agent import MetaAgent
-    meta_agent = MetaAgent(_aura_brain._openai)
-    app.state.meta_agent = meta_agent
-    asyncio.create_task(_meta_agent_loop(meta_agent))
-    logger.info("✅ MetaAgent self-improvement loop started")
-
-    # Initialize PricingAgent — Aura manages her own pricing
-    try:
-        from aura.agents.pricing_agent import get_pricing_agent
-        pricing_agent = get_pricing_agent(getattr(_aura_brain, '_openai', None))
-        app.state.pricing_agent = pricing_agent
-        asyncio.create_task(_pricing_agent_loop(pricing_agent))
-    except Exception as _pe:
-        logging.warning(f"PricingAgent init failed (non-critical): {_pe}")
-    logger.info("✅ PricingAgent initialized — Aura owns her monetization")
 
     logger.info("🚀 Connectome is live")
     yield

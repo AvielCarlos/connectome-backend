@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # App
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
+    # Set false for horizontally scaled API/web deployments. Dedicated worker
+    # processes can enable it to own long-lived schedulers and background loops.
+    ENABLE_BACKGROUND_WORKERS: bool = True
     API_BASE_URL: str = "https://connectome-api-production.up.railway.app"
     FRONTEND_BASE_URL: str = "https://avielcarlos.github.io/connectome-web"
     GOOGLE_FRONTEND_CALLBACK_URL: str = ""

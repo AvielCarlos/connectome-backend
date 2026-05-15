@@ -1741,8 +1741,13 @@ def get_brain() -> AuraBrain:
     return _brain
 
 
-async def init_brain():
-    """Call once on app startup."""
+async def init_brain(start_background_loops: bool = True):
+    """Call once on app startup.
+
+    Set ``start_background_loops`` to False for API/web runtimes that should
+    not own long-lived jobs. Dedicated worker/cron processes can leave it
+    enabled to run Aura's refresh and evaluation loops.
+    """
     global _brain
     _brain = AuraBrain()
     logger.info("Aura brain initialized")
@@ -1753,6 +1758,10 @@ async def init_brain():
     # Load dynamic agents from registry
     await _brain._load_dynamic_agents()
     logger.info(f"OraBrain: loaded {len(_brain._dynamic_agents)} dynamic agents from registry")
+
+    if not start_background_loops:
+        logger.info("Aura brain background loops disabled for this runtime")
+        return
 
     # Start WorldAgent background refresh loop
     asyncio.create_task(_brain.world.refresh_loop())
