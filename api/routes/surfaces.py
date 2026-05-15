@@ -24,6 +24,7 @@ from api.middleware import get_current_user_id
 from api.tier_guard import get_user_tier
 from aura.agents.web_spawn_agent import WebSpawnAgent
 from aura.surface_registry import SurfaceRegistry
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,24 @@ def _tier_gate(tier: str) -> None:
         )
 
 
+def _surface_listing_payload(surface: Dict[str, Any]) -> Dict[str, Any]:
+    """Build the public listing payload using configured app/API base URLs."""
+    spec = surface.get("spec", {})
+    surface_id = surface["id"]
+    return {
+        "id":           surface_id,
+        "title":        surface.get("title", ""),
+        "description":  spec.get("description", ""),
+        "inferred_type": surface.get("surface_type", "custom"),
+        "slug":         spec.get("slug", ""),
+        "url":          settings.surface_url(surface_id),
+        "api_endpoint": settings.surface_data_api_url(surface_id),
+        "status":       surface.get("status", "active"),
+        "view_count":   surface.get("view_count", 0),
+        "created_at":   surface.get("created_at", ""),
+    }
+
+
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/spawn")
@@ -126,21 +145,7 @@ async def get_my_surfaces(
     surfaces = await registry.get_user_surfaces(user_id)
 
     # Strip bulky generated source from listing (keep spec metadata only)
-    stripped = []
-    for s in surfaces:
-        spec = s.get("spec", {})
-        stripped.append({
-            "id":           s["id"],
-            "title":        s.get("title", ""),
-            "description":  spec.get("description", ""),
-            "inferred_type": s.get("surface_type", "custom"),
-            "slug":         spec.get("slug", ""),
-            "url":          f"https://avielcarlos.github.io/connectome-web/surfaces/{s['id']}",
-            "api_endpoint": f"https://connectome-api-production.up.railway.app/api/surfaces/{s['id']}/data",
-            "status":       s.get("status", "active"),
-            "view_count":   s.get("view_count", 0),
-            "created_at":   s.get("created_at", ""),
-        })
+    stripped = [_surface_listing_payload(s) for s in surfaces]
 
     return {"surfaces": stripped, "count": len(stripped)}
 
