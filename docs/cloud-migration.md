@@ -20,6 +20,7 @@ Run Connectome backend safely in Railway/cloud without depending on Avi's laptop
 - `/api/drive/*` routes use OAuth-backed `DriveAgentV2` instead of the local `gog` CLI.
 - WebSpawn Railway CLI deploy fallback is dev-only; production requires Railway API IDs.
 - `.env.example`, `render.yaml`, `deploy.sh`, and `requirements.txt` updated.
+- API/web runtime can disable long-lived schedulers with `ENABLE_BACKGROUND_WORKERS=false`; dedicated worker/cron runtimes should set it to `true`.
 
 ## Required production env vars before deploying this branch
 
@@ -33,6 +34,7 @@ Mandatory:
 - `GITHUB_WEBHOOK_SECRET`
 - `CONNECTOME_WORKER_JWT` or `ORA_JWT_TOKEN`
 - `FEEDBACK_SCREENSHOT_STORAGE_BACKEND=s3`
+- `ENABLE_BACKGROUND_WORKERS=false` for horizontally scaled API/web replicas. Use `true` only on the dedicated worker/cron runtime that should own notification, self-healing, backup, DAO, pricing, and Aura evaluation loops.
 - S3/R2 screenshot storage vars:
   - `FEEDBACK_SCREENSHOT_S3_BUCKET`
   - `FEEDBACK_SCREENSHOT_S3_ENDPOINT_URL`
@@ -110,6 +112,7 @@ Expected callback status is `422`, not `404`.
 ## Remaining non-blocking follow-up
 
 - Retire the legacy `DriveAgent` object from `AuraBrain` after discovery/search paths are fully verified against `DriveAgentV2`.
+- Add worker entrypoints/scheduler commands for the background loops gated by `ENABLE_BACKGROUND_WORKERS`.
 - Add cloud scheduler telemetry to replace local OpenClaw cron inspection.
 - Move OpenClaw Gateway to a Linux VPS/systemd host and keep the Mac as an optional node for macOS-only tools.
 - Consider making `/health` return non-200 when DB/Redis are degraded, or add a separate strict `/ready` endpoint for Railway.
