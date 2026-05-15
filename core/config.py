@@ -152,6 +152,14 @@ class Settings(BaseSettings):
         """Build a frontend URL from the configured base without double slashes."""
         return self._join_base_url(self.FRONTEND_BASE_URL, path)
 
+    def surface_url(self, surface_id: str) -> str:
+        """Build the public frontend URL for a spawned surface."""
+        return self.frontend_url(f"/surfaces/{surface_id}")
+
+    def surface_data_api_url(self, surface_id: str) -> str:
+        """Build the public API URL for a spawned surface data endpoint."""
+        return self.api_url(f"/api/surfaces/{surface_id}/data")
+
     @property
     def github_redirect_uri(self) -> str:
         return (self.GITHUB_REDIRECT_URI or self.api_url("/api/auth/github/callback")).rstrip("?")

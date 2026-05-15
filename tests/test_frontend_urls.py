@@ -17,6 +17,16 @@ def test_api_url_joins_paths_without_double_slashes():
     assert settings.api_url("api/screens/next") == "https://api.example.com/api/screens/next"
 
 
+def test_surface_urls_are_derived_from_configured_bases():
+    settings = Settings(
+        FRONTEND_BASE_URL="https://app.example/connectome/",
+        API_BASE_URL="https://api.example/",
+    )
+
+    assert settings.surface_url("surface_123") == "https://app.example/connectome/surfaces/surface_123"
+    assert settings.surface_data_api_url("surface_123") == "https://api.example/api/surfaces/surface_123/data"
+
+
 def test_oauth_frontend_callbacks_default_from_base_url():
     settings = Settings(FRONTEND_BASE_URL="https://app.example")
 
