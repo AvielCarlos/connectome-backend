@@ -49,7 +49,7 @@ async def github_login(token: str = Query(..., description="Current Connectome J
     await _ensure_schema()
     params = {
         "client_id": _require_client_id(),
-        "redirect_uri": settings.GITHUB_REDIRECT_URI,
+        "redirect_uri": settings.github_redirect_uri,
         "scope": "user:email read:user",
         "state": token,
         "allow_signup": "true",
@@ -72,7 +72,7 @@ async def github_callback(code: str = Query(...), state: str = Query(...)):
                 "client_id": _require_client_id(),
                 "client_secret": _require_client_secret(),
                 "code": code,
-                "redirect_uri": settings.GITHUB_REDIRECT_URI,
+                "redirect_uri": settings.github_redirect_uri,
             },
             headers={"Accept": "application/json"},
         )

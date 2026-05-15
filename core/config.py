@@ -40,7 +40,8 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str = ""
     GITHUB_CLIENT_ID: str = ""
     GITHUB_CLIENT_SECRET: str = ""
-    GITHUB_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/github/callback"
+    # Optional override. Defaults to API_BASE_URL + /api/auth/github/callback.
+    GITHUB_REDIRECT_URI: str = ""
 
     # Aura brain backup freshness
     ORA_BACKUP_SCHEDULER_ENABLED: bool = True
@@ -61,6 +62,7 @@ class Settings(BaseSettings):
     # App
     APP_ENV: str = "development"
     LOG_LEVEL: str = "INFO"
+    API_BASE_URL: str = "https://connectome-api-production.up.railway.app"
     FRONTEND_BASE_URL: str = "https://avielcarlos.github.io/connectome-web"
     GOOGLE_FRONTEND_CALLBACK_URL: str = ""
     GITHUB_FRONTEND_CALLBACK_URL: str = ""
@@ -96,10 +98,10 @@ class Settings(BaseSettings):
 
     # Google OAuth (for Sign In with Google + Drive integration)
     # Setup: console.cloud.google.com → APIs & Services → Credentials → OAuth 2.0 Client ID
-    # Authorized redirect URI: https://connectome-api-production.up.railway.app/api/auth/google/callback
+    # Authorized redirect URI: API_BASE_URL + /api/auth/google/callback unless GOOGLE_REDIRECT_URI overrides it.
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_REDIRECT_URI: str = "https://connectome-api-production.up.railway.app/api/auth/google/callback"
+    GOOGLE_REDIRECT_URI: str = ""
     FACEBOOK_APP_ID: str = ""
     APPLE_CLIENT_ID: str = ""
     IOS_BUNDLE_ID: str = ""
@@ -137,11 +139,26 @@ class Settings(BaseSettings):
     def has_stripe(self) -> bool:
         return bool(self.STRIPE_SECRET_KEY)
 
-    def frontend_url(self, path: str = "") -> str:
-        """Build a frontend URL from the configured base without double slashes."""
-        base = (self.FRONTEND_BASE_URL or "").rstrip("/")
+    def _join_base_url(self, base_url: str, path: str = "") -> str:
+        base = (base_url or "").rstrip("/")
         suffix = path if path.startswith("/") else f"/{path}" if path else ""
         return f"{base}{suffix}"
+
+    def api_url(self, path: str = "") -> str:
+        """Build a backend/public API URL from the configured base without double slashes."""
+        return self._join_base_url(self.API_BASE_URL, path)
+
+    def frontend_url(self, path: str = "") -> str:
+        """Build a frontend URL from the configured base without double slashes."""
+        return self._join_base_url(self.FRONTEND_BASE_URL, path)
+
+    @property
+    def github_redirect_uri(self) -> str:
+        return (self.GITHUB_REDIRECT_URI or self.api_url("/api/auth/github/callback")).rstrip("?")
+
+    @property
+    def google_redirect_uri(self) -> str:
+        return (self.GOOGLE_REDIRECT_URI or self.api_url("/api/auth/google/callback")).rstrip("?")
 
     @property
     def google_frontend_callback_url(self) -> str:
@@ -211,6 +228,8 @@ class Settings(BaseSettings):
             errors.append("REDIS_URL must not point at localhost in production")
         if any(origin == "*" for origin in self.CORS_ORIGINS):
             errors.append("CORS_ORIGINS must not contain '*' in production")
+        if not self.API_BASE_URL or "localhost" in self.API_BASE_URL or "127.0.0.1" in self.API_BASE_URL:
+            errors.append("API_BASE_URL must be a non-localhost URL in production")
         if not self.FRONTEND_BASE_URL or "localhost" in self.FRONTEND_BASE_URL or "127.0.0.1" in self.FRONTEND_BASE_URL:
             errors.append("FRONTEND_BASE_URL must be a non-localhost URL in production")
         admin_secret = self.ADMIN_TOKEN or self.ADMIN_SECRET

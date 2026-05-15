@@ -12,16 +12,16 @@ Endpoints:
 Environment variables required:
   GOOGLE_CLIENT_ID      — from console.cloud.google.com
   GOOGLE_CLIENT_SECRET  — from console.cloud.google.com
-  GOOGLE_REDIRECT_URI   — must match OAuth app config:
-                          https://connectome-api-production.up.railway.app/api/auth/google/callback
+  API_BASE_URL          — public backend base URL; callback defaults to
+                          API_BASE_URL + /api/auth/google/callback
+  GOOGLE_REDIRECT_URI   — optional override when OAuth callback routes diverge
 
 Setup instructions:
   1. Go to console.cloud.google.com → APIs & Services → Credentials
   2. Create OAuth 2.0 Client ID (Web application)
-  3. Add authorized redirect URI:
-       https://connectome-api-production.up.railway.app/api/auth/google/callback
-  4. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Railway env vars
-  5. Also add GOOGLE_REDIRECT_URI if different from default above
+  3. Add the authorized redirect URI matching API_BASE_URL + /api/auth/google/callback
+  4. Set API_BASE_URL, GOOGLE_CLIENT_ID, and GOOGLE_CLIENT_SECRET in runtime env vars
+  5. Also add GOOGLE_REDIRECT_URI if different from that default
 """
 
 import hashlib
@@ -87,9 +87,7 @@ def _get_google_client_secret() -> str:
 
 
 def _get_redirect_uri() -> str:
-    return settings.GOOGLE_REDIRECT_URI or (
-        "https://connectome-api-production.up.railway.app/api/auth/google/callback"
-    )
+    return settings.google_redirect_uri
 
 
 def _build_auth_url(scopes: list[str], state: str, *, force_consent: bool = True) -> str:
