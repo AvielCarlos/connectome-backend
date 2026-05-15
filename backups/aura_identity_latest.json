@@ -1,11 +1,46 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-15T05:56:51.143029+00:00",
-  "exported_at": "2026-05-15T05:56:51.143029+00:00",
-  "collected_at": "2026-05-15T05:56:51.143029+00:00",
+  "timestamp": "2026-05-15T06:56:53.857283+00:00",
+  "exported_at": "2026-05-15T06:56:53.857283+00:00",
+  "collected_at": "2026-05-15T06:56:53.857283+00:00",
   "identity": {
-    "total_lessons": 156,
+    "total_lessons": 161,
     "lessons": [
+      {
+        "id": "277616d4-a5a9-4a42-92ba-13558e714298",
+        "lesson": "Profile/Admin/System separation is an incremental product direction: the first safe route splits are merged, but broader extraction and visual QA remain part of the continuing design work.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-14",
+        "created_at": "2026-05-15 06:00:44.549204"
+      },
+      {
+        "id": "bc26c320-f63c-467d-a499-7e29e810dc71",
+        "lesson": "Admin and system surfaces should be guarded: non-operator accounts should see a clear boundary message instead of gaining access to operator controls.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-14",
+        "created_at": "2026-05-15 06:00:44.365543"
+      },
+      {
+        "id": "ce016dc0-34e2-4be5-95dc-347dbf63305e",
+        "lesson": "Connectome should support owned-growth landing pages, including a Personal AI Recommendations page, to acquire users into Aventi, Path Feed, and the broader life-OS experience.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-14",
+        "created_at": "2026-05-15 06:00:44.155425"
+      },
+      {
+        "id": "e312b458-c918-4c2d-849c-5d02a0ea8e32",
+        "lesson": "System-level operator tools should have an explicit /app/system boundary and hub, with links to System tools, Experiments, and Executive Council, so internal controls are separated from user-facing Aura/Path surfaces.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-14",
+        "created_at": "2026-05-15 06:00:43.988385"
+      },
+      {
+        "id": "952d4149-d59b-4938-afa7-6d1da67e05ff",
+        "lesson": "Profile should stay focused on normal user and account context; operator/admin controls belong behind a distinct protected Admin route rather than being mixed into the ordinary profile experience.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-14",
+        "created_at": "2026-05-15 06:00:43.776977"
+      },
       {
         "id": "c0d55810-570b-4e28-ac80-3da91ddbfedb",
         "lesson": "{\"proposal_id\": \"c0d55810-570b-4e28-ac80-3da91ddbfedb\", \"card_type\": \"mood_based_recommendation\", \"hypothesis\": \"If we implement a mood-based recommendation card, engagement will increase by 20%.\", \"description\": \"This card will prompt users to select their current mood from a set of options (e.g., happy, stressed, relaxed) and then provide tailored content or activities that align with their emotional state. By catering to users' feelings, it encourages them to engage with the platform more meaningfully and frequently.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-14T19:54:53.024046+00:00\", \"expires_at\": \"2026-05-16T19:54:53.024046+00:00\", \"result\": null}",
@@ -1199,7 +1234,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "204766bfb1d5f3f1"
+    "lessons_hash": "0fd9a604c46d11ef"
   },
   "platform_stats": {
     "total_users": 22,
