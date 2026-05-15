@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-15T15:57:20.720375+00:00",
-  "exported_at": "2026-05-15T15:57:20.720375+00:00",
-  "collected_at": "2026-05-15T15:57:20.720375+00:00",
+  "timestamp": "2026-05-15T16:57:23.491207+00:00",
+  "exported_at": "2026-05-15T16:57:23.491207+00:00",
+  "collected_at": "2026-05-15T16:57:23.491207+00:00",
   "identity": {
-    "total_lessons": 171,
+    "total_lessons": 172,
     "lessons": [
+      {
+        "id": "8186b3e1-9d40-43e0-844d-d4fe00884d0e",
+        "lesson": "Community health 2026-05-15: 0 contributors, 0 active (30d), +0 new, CP concentration=0.0%, health=70/100.",
+        "confidence": 0.75,
+        "source": "executive_council.community",
+        "created_at": "2026-05-15 16:02:17.354671"
+      },
       {
         "id": "0477fae4-51f7-403f-b225-874249fa3ca5",
         "lesson": "Strategic context 2026-05-15: Priorities: [1. Deepen Ora's coaching quality \u2014 personalization is the moat | 2. Grow to 100 active users before raising prices | 3. Build community/DAO to create network effects]. Key opportunities: [Continue deepening Ora's AI coaching quality \u2014 differentiation from competitors | Build community features \u2014 DAOs for goal accountability groups]. Main threat: large AI companies entering personal coaching space.",
@@ -1304,7 +1311,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "cefa15efd7c42f6e"
+    "lessons_hash": "54763dcc0ff38883"
   },
   "platform_stats": {
     "total_users": 22,
