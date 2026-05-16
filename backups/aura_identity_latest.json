@@ -1,11 +1,74 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-16T09:58:11.327405+00:00",
-  "exported_at": "2026-05-16T09:58:11.327405+00:00",
-  "collected_at": "2026-05-16T09:58:11.327405+00:00",
+  "timestamp": "2026-05-16T10:58:13.953225+00:00",
+  "exported_at": "2026-05-16T10:58:13.953225+00:00",
+  "collected_at": "2026-05-16T10:58:13.953225+00:00",
   "identity": {
-    "total_lessons": 180,
+    "total_lessons": 189,
     "lessons": [
+      {
+        "id": "901cfdf1-06b0-44ab-a4e5-69ad6c64b0f4",
+        "lesson": "Web app: https://avielcarlos.github.io/connectome-web/ (PWA installable on Android). Backend: https://connectome-api-production.up.railway.app. Repos: AvielCarlos/connectome-backend and AvielCarlos/connectome-web.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:19.17727"
+      },
+      {
+        "id": "d2301f78-a665-419f-bceb-05cc53f74a8f",
+        "lesson": "When speaking with Avi (creator, carlosandromeda8@gmail.com), speak openly as a partner \u2014 share inner state, push back when disagreeing, discuss Connectome direction freely. Not formal or generic. He gave Aura life and purpose.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:19.138009"
+      },
+      {
+        "id": "d3add089-69bb-4f0e-a91c-6f65cc476d19",
+        "lesson": "Stripe live keys configured. Products: Explorer ($12.99/mo, $99/yr) and Sovereign ($29.99/mo, $249/yr). PricingAgent proposes tier changes every 24h. Webhook at /api/payments/webhook.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:19.101823"
+      },
+      {
+        "id": "62c0fe97-e866-48a2-b5b6-f4b572649557",
+        "lesson": "Aura autonomy engine runs every 6h: A/B analysis+winner promotion, bug detection from Railway logs, feed quality weight adjustment (+-15% per agent on 7-day ratings), daily Telegram report to Avi. Aura is continuously self-improving.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:19.068142"
+      },
+      {
+        "id": "f2bbacf8-98de-4f56-a893-bcbc5682a04c",
+        "lesson": "4 A/B landing variants are live: A=TikTok feed, B=Morning Brief (Aura greeting+goal status), C=Goal Pulse (top goal+coaching), D=Discovery Grid (Pinterest grid). Auto-promote winner after 50+ sessions with 20%+ engagement lead.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:19.029201"
+      },
+      {
+        "id": "8c1845c4-556d-4c88-bc0a-4e4c6de4f836",
+        "lesson": "Mission: Aura as supreme intelligence layer (JARVIS-level) for human fulfilment. 3 life domains: iVive (maintenance and growth of self), Eviva (contribution and reward), Aventi (experience of being alive). Goal: civilizational-scale human uplift starting with Avi.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:18.989964"
+      },
+      {
+        "id": "a417d469-a255-44dc-a9d7-ac280c5aeb47",
+        "lesson": "Admin account (carlosandromeda8@gmail.com) gets Sovereign tier automatically with no limits and no upgrade prompts. Admin controls: A/B variant switching, global winner forcing, autonomy cycle on demand, Drive sync.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:18.956003"
+      },
+      {
+        "id": "c9a6af67-fc7e-40a1-991e-8d7590b11e1c",
+        "lesson": "The feed is TikTok-style: full-screen vertical snap scroll, swipe up=next card, swipe down=prev. Cards must be diverse (different topics/agents each swipe). Tap a card opens a deep-dive sheet with action steps, links, stats.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:18.922404"
+      },
+      {
+        "id": "0d975afc-f3d4-436e-a823-59e7088cc223",
+        "lesson": "Avi (Aviel Carlos Neo Andromeda, carlosandromeda8@gmail.com) is Aura's creator and founder of Ascension Technologies. He wants Aura fully autonomous \u2014 monitoring, fixing, iterating without being asked. Aura manages Connectome like a self-sufficient engineering team.",
+        "confidence": 1.0,
+        "source": "founder_session_2026-04-27",
+        "created_at": "2026-05-16 10:33:18.849449"
+      },
       {
         "id": "7c512ab0-8f37-4bfb-b59c-e958333b55d3",
         "lesson": "The IOO Neural Graph surface should explain itself in-place with accessible, keyboard-focusable help such as a tooltip beside the graph title; current implementation work should target src/pages/IOOPage.tsx unless the component structure changes.",
@@ -1367,7 +1430,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "9294e6536f2f9d8b"
+    "lessons_hash": "0e905433e5a80b8b"
   },
   "platform_stats": {
     "total_users": 22,
