@@ -1202,7 +1202,16 @@ async def run_migrations():
         """)
         # Idempotent migrations for existing user_suggestions table
         await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS title TEXT
+        """)
+        await conn.execute("""
             ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS content TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS body TEXT
+        """)
+        await conn.execute("""
+            ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()
         """)
         await conn.execute("""
             ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS cp_earned INTEGER DEFAULT 10
@@ -1217,6 +1226,8 @@ async def run_migrations():
         await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS triage_metadata JSONB DEFAULT '{}'::jsonb")
         await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS adopted_cp_awarded INTEGER DEFAULT 0")
         await conn.execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS adopted_at TIMESTAMPTZ")
+        await conn.execute("UPDATE user_suggestions SET title = COALESCE(title, content, body, 'Suggestion') WHERE title IS NULL")
+        await conn.execute("UPDATE user_suggestions SET updated_at = COALESCE(updated_at, created_at, NOW()) WHERE updated_at IS NULL")
         await conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_user_suggestions_integration_status
             ON user_suggestions(integration_status)

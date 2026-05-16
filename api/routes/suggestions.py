@@ -53,8 +53,10 @@ class SuggestionIntegrationUpdate(BaseModel):
 
 async def _ensure_suggestion_automation_schema() -> None:
     """Idempotent columns for app-feedback -> suggestion -> CP integration."""
+    await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS title TEXT")
     await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS content TEXT")
     await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS body TEXT")
+    await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW()")
     await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual'")
     await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS source_id TEXT")
     await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS integration_status TEXT DEFAULT 'pending'")
@@ -62,6 +64,8 @@ async def _ensure_suggestion_automation_schema() -> None:
     await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS triage_metadata JSONB DEFAULT '{}'::jsonb")
     await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS adopted_cp_awarded INTEGER DEFAULT 0")
     await execute("ALTER TABLE user_suggestions ADD COLUMN IF NOT EXISTS adopted_at TIMESTAMPTZ")
+    await execute("UPDATE user_suggestions SET title = COALESCE(title, content, body, 'Suggestion') WHERE title IS NULL")
+    await execute("UPDATE user_suggestions SET updated_at = COALESCE(updated_at, created_at, NOW()) WHERE updated_at IS NULL")
     await execute("CREATE INDEX IF NOT EXISTS idx_user_suggestions_integration_status ON user_suggestions(integration_status)")
     await execute(
         """
