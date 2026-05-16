@@ -4,7 +4,7 @@ Background asyncio task that polls Redis every 60 seconds for due
 scheduled_notifications and delivers them via the Expo Push API.
 
 Delivery flow:
-  1. Poll Redis sorted set `notifications:pending` for items due now
+  1. Atomically claim due IDs from Redis sorted set `notifications:pending`
   2. Fetch the notification row from DB (includes user_id)
   3. Look up the user's expo push_token
   4. POST to https://exp.host/--/api/v2/push/send (batch of up to 100)
@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 EXPO_BATCH_SIZE = 100  # Expo accepts up to 100 messages per request
+NOTIFICATION_CLAIM_BATCH_SIZE = 100
+NOTIFICATIONS_PENDING_KEY = "notifications:pending"
 
 _worker_task: asyncio.Task = None
 
@@ -72,15 +74,14 @@ async def _send_expo_notifications(messages: List[Dict[str, Any]]) -> List[Dict[
 
 async def _process_due_notifications() -> int:
     """
-    Check the Redis sorted set `notifications:pending` for entries due now.
+    Atomically claim due Redis entries from `notifications:pending`.
     Fetches push tokens, batches Expo deliveries, marks as sent.
     Returns the number of notifications processed.
     """
     r = await get_redis()
     now_ts = datetime.now(timezone.utc).timestamp()
 
-    # zrangebyscore returns all members with score (= scheduled_for timestamp) <= now
-    due_ids = await r.zrangebyscore("notifications:pending", 0, now_ts)
+    due_ids = await _claim_due_notification_ids(r, now_ts)
     if not due_ids:
         return 0
 
@@ -102,9 +103,10 @@ async def _process_due_notifications() -> int:
                 pending_rows.append(row)
             else:
                 # Already sent or deleted — clean up Redis
-                await r.zrem("notifications:pending", notification_id)
+                await r.zrem(NOTIFICATIONS_PENDING_KEY, notification_id)
         except Exception as e:
             logger.warning(f"[NotifWorker] Failed to fetch notification {notification_id}: {e}")
+            await _requeue_notification(notification_id, now_ts, r)
 
     if not pending_rows:
         return 0
@@ -211,9 +213,51 @@ async def _mark_sent(notification_id: str, r) -> None:
             "UPDATE scheduled_notifications SET sent = TRUE WHERE id = $1",
             UUID(notification_id),
         )
-        await r.zrem("notifications:pending", notification_id)
+        await r.zrem(NOTIFICATIONS_PENDING_KEY, notification_id)
     except Exception as e:
         logger.warning(f"[NotifWorker] Failed to mark sent {notification_id[:8]}: {e}")
+
+
+async def _claim_due_notification_ids(
+    r,
+    now_ts: float,
+    batch_size: int = NOTIFICATION_CLAIM_BATCH_SIZE,
+) -> list[str]:
+    """Atomically claim due notification IDs from Redis.
+
+    Multiple API/worker replicas may run this code concurrently. Reading due IDs
+    with ``ZRANGEBYSCORE`` and removing them only after delivery lets two
+    replicas fetch and send the same notification. ``ZPOPMIN`` claims by
+    removing the lowest-score item atomically; if the first popped item is still
+    scheduled for the future, it is restored and processing stops.
+    """
+    claimed: list[str] = []
+    while len(claimed) < batch_size:
+        popped = await r.zpopmin(NOTIFICATIONS_PENDING_KEY, 1)
+        if not popped:
+            break
+
+        notification_id, score = popped[0]
+        try:
+            scheduled_ts = float(score)
+        except (TypeError, ValueError):
+            scheduled_ts = 0.0
+
+        if scheduled_ts > now_ts:
+            await r.zadd(NOTIFICATIONS_PENDING_KEY, {notification_id: scheduled_ts})
+            break
+
+        claimed.append(str(notification_id))
+
+    return claimed
+
+
+async def _requeue_notification(notification_id: str, score: float, r) -> None:
+    """Put a claimed notification back so transient DB failures can retry."""
+    try:
+        await r.zadd(NOTIFICATIONS_PENDING_KEY, {notification_id: score})
+    except Exception as e:
+        logger.warning(f"[NotifWorker] Failed to requeue notification {notification_id[:8]}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +295,7 @@ async def _schedule_notification(
     if row:
         notif_id = str(row["id"])
         r = await get_redis()
-        await r.zadd("notifications:pending", {notif_id: scheduled_for.timestamp()})
+        await r.zadd(NOTIFICATIONS_PENDING_KEY, {notif_id: scheduled_for.timestamp()})
         logger.info(f"[NotifWorker] Scheduled {notif_type} notification for user {str(user_id)[:8]}")
 
 
