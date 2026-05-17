@@ -1,11 +1,39 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-17T05:59:04.405619+00:00",
-  "exported_at": "2026-05-17T05:59:04.405619+00:00",
-  "collected_at": "2026-05-17T05:59:04.405619+00:00",
+  "timestamp": "2026-05-17T06:59:06.895911+00:00",
+  "exported_at": "2026-05-17T06:59:06.895911+00:00",
+  "collected_at": "2026-05-17T06:59:06.895911+00:00",
   "identity": {
-    "total_lessons": 192,
+    "total_lessons": 196,
     "lessons": [
+      {
+        "id": "1b79343e-a5db-4b99-8ea2-bb98f97ec009",
+        "lesson": "Connectome background notification delivery should use atomic claiming rather than read-then-send polling, with future-entry restoration and DB-fetch requeue handling to prevent duplicate or lost deliveries.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-16",
+        "created_at": "2026-05-17 06:00:42.521911"
+      },
+      {
+        "id": "b140641b-161f-4d61-b8d0-ea53aa850352",
+        "lesson": "Aventi Goals should include proactive intelligence such as a Focus Forecast that ranks the next active goal to protect using due date, progress, stalled age, unmapped spark status, and next-step signals.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-16",
+        "created_at": "2026-05-17 06:00:42.296858"
+      },
+      {
+        "id": "a41bc3b6-2382-48a1-ac69-9c7701b7df82",
+        "lesson": "When a user saves a feed item for later, Connectome should keep the associated IOO node ID and time-horizon resurface metadata so saved path nodes can re-enter the user journey intelligently.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-16",
+        "created_at": "2026-05-17 06:00:42.114459"
+      },
+      {
+        "id": "f44eb744-fb99-4e8e-88ea-d7fc8bc05a45",
+        "lesson": "Connectome should protect in-progress user input by preserving feedback/report and goal-capture drafts locally, using guarded versioned persistence and clearing drafts only after submit or explicit reset/close.",
+        "confidence": 0.9,
+        "source": "founder_session_2026-05-16",
+        "created_at": "2026-05-17 06:00:41.927135"
+      },
       {
         "id": "0597067e-ec25-4831-8fc9-aeccd722815c",
         "lesson": "{\"proposal_id\": \"0597067e-ec25-4831-8fc9-aeccd722815c\", \"card_type\": \"mood_tracker\", \"hypothesis\": \"Implementing a mood tracker card will increase user engagement by 25%.\", \"description\": \"The mood tracker card allows users to log their emotional state daily through simple emojis and short prompts. This feature encourages reflection and personal growth, while also offering suggestions for content based on their current mood. Over time, users can visualize their mood trends, promoting a deeper connection with the app.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-16T19:56:56.553526+00:00\", \"expires_at\": \"2026-05-18T19:56:56.553526+00:00\", \"result\": null}",
@@ -1451,7 +1479,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "8b07e63adbb2d388"
+    "lessons_hash": "24b1e576344c63dd"
   },
   "platform_stats": {
     "total_users": 22,
