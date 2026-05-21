@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-21T16:04:29.097222+00:00",
-  "exported_at": "2026-05-21T16:04:29.097222+00:00",
-  "collected_at": "2026-05-21T16:04:29.097222+00:00",
+  "timestamp": "2026-05-21T17:04:32.793246+00:00",
+  "exported_at": "2026-05-21T17:04:32.793246+00:00",
+  "collected_at": "2026-05-21T17:04:32.793246+00:00",
   "identity": {
-    "total_lessons": 232,
+    "total_lessons": 233,
     "lessons": [
+      {
+        "id": "4bfa7376-d71f-447a-ace6-6e0b269cf1e4",
+        "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-05-21 16:58:50.95799"
+      },
       {
         "id": "afbb5201-7264-49ae-949a-7a4b287cc2fa",
         "lesson": "Operations health 2026-05-21: score=30/100, crons=0, erroring=0, stale agents=7.",
@@ -1731,7 +1738,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "1afb19ba9a8f5579"
+    "lessons_hash": "3304ac1697633272"
   },
   "platform_stats": {
     "total_users": 22,
