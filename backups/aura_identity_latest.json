@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-21T19:54:42.650078+00:00",
-  "exported_at": "2026-05-21T19:54:42.650078+00:00",
-  "collected_at": "2026-05-21T19:54:42.650078+00:00",
+  "timestamp": "2026-05-21T20:04:42.905451+00:00",
+  "exported_at": "2026-05-21T20:04:42.905451+00:00",
+  "collected_at": "2026-05-21T20:04:42.905451+00:00",
   "identity": {
-    "total_lessons": 233,
+    "total_lessons": 234,
     "lessons": [
+      {
+        "id": "04ef93ab-ebf5-47be-b0f2-ee2aa2472f8f",
+        "lesson": "{\"proposal_id\": \"04ef93ab-ebf5-47be-b0f2-ee2aa2472f8f\", \"card_type\": \"personalized_growth_journey\", \"hypothesis\": \"Introducing personalized growth journey cards will increase user engagement by 25%.\", \"description\": \"These cards will provide users with tailored milestones based on their activity and interests, guiding them towards achievable goals. Users can track their progress and receive personalized tips and encouragement, creating a sense of belonging and motivation. The journey can be adapted as the user progresses, ensuring continuous relevance and engagement.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-21T20:02:06.820727+00:00\", \"expires_at\": \"2026-05-23T20:02:06.820727+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-21 20:02:06.820727"
+      },
       {
         "id": "4bfa7376-d71f-447a-ace6-6e0b269cf1e4",
         "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
@@ -43,7 +50,7 @@
       },
       {
         "id": "fb2db21a-72e9-4729-b416-8c28bac68cd4",
-        "lesson": "{\"proposal_id\": \"fb2db21a-72e9-4729-b416-8c28bac68cd4\", \"card_type\": \"mood_booster_card\", \"hypothesis\": \"Implementing a mood booster card will increase user fulfilment by 20%.\", \"description\": \"This card type displays curated content designed to improve the user's mood based on their current activity or mood tracking data. It could include motivational quotes, uplifting stories, or links to enjoyable activities tailored to their preferences. The card will adapt its suggestions over time by learning from user interactions and feedback.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-19T20:00:02.638756+00:00\", \"expires_at\": \"2026-05-21T20:00:02.638756+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"fb2db21a-72e9-4729-b416-8c28bac68cd4\", \"card_type\": \"mood_booster_card\", \"hypothesis\": \"Implementing a mood booster card will increase user fulfilment by 20%.\", \"description\": \"This card type displays curated content designed to improve the user's mood based on their current activity or mood tracking data. It could include motivational quotes, uplifting stories, or links to enjoyable activities tailored to their preferences. The card will adapt its suggestions over time by learning from user interactions and feedback.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"promoted\", \"created_at\": \"2026-05-19T20:00:02.638756+00:00\", \"expires_at\": \"2026-05-21T20:00:02.638756+00:00\", \"result\": {\"observed_improvement\": 0.276, \"threshold\": 0.2, \"promoted\": true, \"evaluated_at\": \"2026-05-21T20:02:06.829314+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-19 20:00:02.638756"
@@ -1738,7 +1745,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "3304ac1697633272"
+    "lessons_hash": "2e655272e51c17a6"
   },
   "platform_stats": {
     "total_users": 22,
