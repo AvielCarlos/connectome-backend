@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-22T16:05:48.444938+00:00",
-  "exported_at": "2026-05-22T16:05:48.444938+00:00",
-  "collected_at": "2026-05-22T16:05:48.444938+00:00",
+  "timestamp": "2026-05-22T17:05:51.657791+00:00",
+  "exported_at": "2026-05-22T17:05:51.657791+00:00",
+  "collected_at": "2026-05-22T17:05:51.657791+00:00",
   "identity": {
-    "total_lessons": 234,
+    "total_lessons": 235,
     "lessons": [
+      {
+        "id": "12c63282-8b7e-4059-92c6-925a06e63eae",
+        "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-05-22 16:58:50.976633"
+      },
       {
         "id": "04ef93ab-ebf5-47be-b0f2-ee2aa2472f8f",
         "lesson": "{\"proposal_id\": \"04ef93ab-ebf5-47be-b0f2-ee2aa2472f8f\", \"card_type\": \"personalized_growth_journey\", \"hypothesis\": \"Introducing personalized growth journey cards will increase user engagement by 25%.\", \"description\": \"These cards will provide users with tailored milestones based on their activity and interests, guiding them towards achievable goals. Users can track their progress and receive personalized tips and encouragement, creating a sense of belonging and motivation. The journey can be adapted as the user progresses, ensuring continuous relevance and engagement.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-21T20:02:06.820727+00:00\", \"expires_at\": \"2026-05-23T20:02:06.820727+00:00\", \"result\": null}",
@@ -1745,7 +1752,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "2e655272e51c17a6"
+    "lessons_hash": "1c892adf75f94ef0"
   },
   "platform_stats": {
     "total_users": 22,
