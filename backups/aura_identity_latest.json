@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-23T19:55:58.119002+00:00",
-  "exported_at": "2026-05-23T19:55:58.119002+00:00",
-  "collected_at": "2026-05-23T19:55:58.119002+00:00",
+  "timestamp": "2026-05-23T20:07:11.932876+00:00",
+  "exported_at": "2026-05-23T20:07:11.932876+00:00",
+  "collected_at": "2026-05-23T20:07:11.932876+00:00",
   "identity": {
-    "total_lessons": 237,
+    "total_lessons": 238,
     "lessons": [
+      {
+        "id": "12908250-62f4-40e2-85db-a6956e2c7338",
+        "lesson": "{\"proposal_id\": \"12908250-62f4-40e2-85db-a6956e2c7338\", \"card_type\": \"personal_growth_quiz\", \"hypothesis\": \"Implementing a personal growth quiz card will increase user fulfilment and engagement by 25%.\", \"description\": \"This card type presents users with a short quiz focused on their personal goals, growth areas, and interests. Based on their answers, it delivers tailored content and resources to help them achieve their aspirations, fostering a sense of progress and relevance in their journey.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-23T20:04:13.518472+00:00\", \"expires_at\": \"2026-05-25T20:04:13.518472+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-23 20:04:13.518472"
+      },
       {
         "id": "3830f593-1c25-4279-a6c5-6e2a6a2374c7",
         "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "04ef93ab-ebf5-47be-b0f2-ee2aa2472f8f",
-        "lesson": "{\"proposal_id\": \"04ef93ab-ebf5-47be-b0f2-ee2aa2472f8f\", \"card_type\": \"personalized_growth_journey\", \"hypothesis\": \"Introducing personalized growth journey cards will increase user engagement by 25%.\", \"description\": \"These cards will provide users with tailored milestones based on their activity and interests, guiding them towards achievable goals. Users can track their progress and receive personalized tips and encouragement, creating a sense of belonging and motivation. The journey can be adapted as the user progresses, ensuring continuous relevance and engagement.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-21T20:02:06.820727+00:00\", \"expires_at\": \"2026-05-23T20:02:06.820727+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"04ef93ab-ebf5-47be-b0f2-ee2aa2472f8f\", \"card_type\": \"personalized_growth_journey\", \"hypothesis\": \"Introducing personalized growth journey cards will increase user engagement by 25%.\", \"description\": \"These cards will provide users with tailored milestones based on their activity and interests, guiding them towards achievable goals. Users can track their progress and receive personalized tips and encouragement, creating a sense of belonging and motivation. The journey can be adapted as the user progresses, ensuring continuous relevance and engagement.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-05-21T20:02:06.820727+00:00\", \"expires_at\": \"2026-05-23T20:02:06.820727+00:00\", \"result\": {\"observed_improvement\": 0.073, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-05-23T20:04:13.527595+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-21 20:02:06.820727"
@@ -1766,7 +1773,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "b10ed9c103d7df12"
+    "lessons_hash": "dde9ca4c137f8c3c"
   },
   "platform_stats": {
     "total_users": 22,
