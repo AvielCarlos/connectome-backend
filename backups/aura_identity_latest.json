@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-24T19:56:25.701427+00:00",
-  "exported_at": "2026-05-24T19:56:25.701427+00:00",
-  "collected_at": "2026-05-24T19:56:25.701427+00:00",
+  "timestamp": "2026-05-24T20:08:20.153374+00:00",
+  "exported_at": "2026-05-24T20:08:20.153374+00:00",
+  "collected_at": "2026-05-24T20:08:20.153374+00:00",
   "identity": {
-    "total_lessons": 239,
+    "total_lessons": 240,
     "lessons": [
+      {
+        "id": "300370ac-d9f3-4e31-89b7-23cbe429e592",
+        "lesson": "{\"proposal_id\": \"300370ac-d9f3-4e31-89b7-23cbe429e592\", \"card_type\": \"personalized_wellness_tip\", \"hypothesis\": \"Introducing a personalized wellness tip card will increase user fulfilment by 25%.\", \"description\": \"This card utilizes user data and preferences to offer tailored wellness advice, such as mindfulness exercises or excise routines, delivered weekly. Users can also provide feedback on the relevance of the tips, further enhancing the card's personalization and its alignment with individual needs.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-24T20:05:16.261808+00:00\", \"expires_at\": \"2026-05-26T20:05:16.261808+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-24 20:05:16.261808"
+      },
       {
         "id": "e4ca1fab-d1d3-4513-9f92-ed7d9b9a4b57",
         "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "558f46ce-b1c9-4d9f-a333-c6a5bcccbd39",
-        "lesson": "{\"proposal_id\": \"558f46ce-b1c9-4d9f-a333-c6a5bcccbd39\", \"card_type\": \"personalized_reflection_card\", \"hypothesis\": \"Introducing personalized reflection cards will lead to a 25% increase in user fulfilment.\", \"description\": \"This card type prompts users to reflect on their recent experiences, achievements, and challenges with tailored questions based on their activity history. By encouraging users to take a moment for self-assessment and acknowledgment, it fosters a sense of connection and purpose, enhancing overall engagement with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-22T20:03:10.258611+00:00\", \"expires_at\": \"2026-05-24T20:03:10.258611+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"558f46ce-b1c9-4d9f-a333-c6a5bcccbd39\", \"card_type\": \"personalized_reflection_card\", \"hypothesis\": \"Introducing personalized reflection cards will lead to a 25% increase in user fulfilment.\", \"description\": \"This card type prompts users to reflect on their recent experiences, achievements, and challenges with tailored questions based on their activity history. By encouraging users to take a moment for self-assessment and acknowledgment, it fosters a sense of connection and purpose, enhancing overall engagement with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"promoted\", \"created_at\": \"2026-05-22T20:03:10.258611+00:00\", \"expires_at\": \"2026-05-24T20:03:10.258611+00:00\", \"result\": {\"observed_improvement\": 0.248, \"threshold\": 0.2, \"promoted\": true, \"evaluated_at\": \"2026-05-24T20:05:16.271396+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-22 20:03:10.258611"
@@ -1780,7 +1787,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "2e1eae0165743d9a"
+    "lessons_hash": "216cd668961f8d35"
   },
   "platform_stats": {
     "total_users": 22,
