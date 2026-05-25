@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-25T13:56:47.055227+00:00",
-  "exported_at": "2026-05-25T13:56:47.055227+00:00",
-  "collected_at": "2026-05-25T13:56:47.055227+00:00",
+  "timestamp": "2026-05-25T14:09:16.122711+00:00",
+  "exported_at": "2026-05-25T14:09:16.122711+00:00",
+  "collected_at": "2026-05-25T14:09:16.122711+00:00",
   "identity": {
-    "total_lessons": 240,
+    "total_lessons": 241,
     "lessons": [
+      {
+        "id": "a2fbaddd-bf38-4e14-a21d-b710be90483c",
+        "lesson": "New growth experiment: Week 22 growth experiment (organic focus): Niche targeting: Focus Twitter replies on 'quit job to build startup' + 'new year goals' threads",
+        "confidence": 0.6,
+        "source": "executive_council.cmo",
+        "created_at": "2026-05-25 14:00:07.343612"
+      },
       {
         "id": "300370ac-d9f3-4e31-89b7-23cbe429e592",
         "lesson": "{\"proposal_id\": \"300370ac-d9f3-4e31-89b7-23cbe429e592\", \"card_type\": \"personalized_wellness_tip\", \"hypothesis\": \"Introducing a personalized wellness tip card will increase user fulfilment by 25%.\", \"description\": \"This card utilizes user data and preferences to offer tailored wellness advice, such as mindfulness exercises or excise routines, delivered weekly. Users can also provide feedback on the relevance of the tips, further enhancing the card's personalization and its alignment with individual needs.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-24T20:05:16.261808+00:00\", \"expires_at\": \"2026-05-26T20:05:16.261808+00:00\", \"result\": null}",
@@ -1787,7 +1794,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "216cd668961f8d35"
+    "lessons_hash": "7a9b05e6ff634bbd"
   },
   "platform_stats": {
     "total_users": 22,
