@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-25T19:56:54.232383+00:00",
-  "exported_at": "2026-05-25T19:56:54.232383+00:00",
-  "collected_at": "2026-05-25T19:56:54.232383+00:00",
+  "timestamp": "2026-05-25T20:09:35.073772+00:00",
+  "exported_at": "2026-05-25T20:09:35.073772+00:00",
+  "collected_at": "2026-05-25T20:09:35.073772+00:00",
   "identity": {
-    "total_lessons": 242,
+    "total_lessons": 243,
     "lessons": [
+      {
+        "id": "230bd951-5ebf-4841-9df2-fa0e0d43727a",
+        "lesson": "{\"proposal_id\": \"230bd951-5ebf-4841-9df2-fa0e0d43727a\", \"card_type\": \"guided_goal_card\", \"hypothesis\": \"Introducing a guided goal card will improve user fulfilment and engagement by 25%.\", \"description\": \"The guided goal card will allow users to set personalized goals related to their interests and daily activities, breaking them down into actionable steps. Users will receive prompts, reminders, and progress updates, enabling them to celebrate small wins along the way and stay motivated. By fostering a sense of achievement through small milestones, users may feel more connected to the platform and motivated to engage consistently.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-25T20:06:20.158724+00:00\", \"expires_at\": \"2026-05-27T20:06:20.158724+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-25 20:06:20.158724"
+      },
       {
         "id": "4034849e-bddb-403e-b61a-9ed4ee16532d",
         "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
@@ -36,7 +43,7 @@
       },
       {
         "id": "12908250-62f4-40e2-85db-a6956e2c7338",
-        "lesson": "{\"proposal_id\": \"12908250-62f4-40e2-85db-a6956e2c7338\", \"card_type\": \"personal_growth_quiz\", \"hypothesis\": \"Implementing a personal growth quiz card will increase user fulfilment and engagement by 25%.\", \"description\": \"This card type presents users with a short quiz focused on their personal goals, growth areas, and interests. Based on their answers, it delivers tailored content and resources to help them achieve their aspirations, fostering a sense of progress and relevance in their journey.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-05-23T20:04:13.518472+00:00\", \"expires_at\": \"2026-05-25T20:04:13.518472+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"12908250-62f4-40e2-85db-a6956e2c7338\", \"card_type\": \"personal_growth_quiz\", \"hypothesis\": \"Implementing a personal growth quiz card will increase user fulfilment and engagement by 25%.\", \"description\": \"This card type presents users with a short quiz focused on their personal goals, growth areas, and interests. Based on their answers, it delivers tailored content and resources to help them achieve their aspirations, fostering a sense of progress and relevance in their journey.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"promoted\", \"created_at\": \"2026-05-23T20:04:13.518472+00:00\", \"expires_at\": \"2026-05-25T20:04:13.518472+00:00\", \"result\": {\"observed_improvement\": 0.221, \"threshold\": 0.2, \"promoted\": true, \"evaluated_at\": \"2026-05-25T20:06:20.166358+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-23 20:04:13.518472"
@@ -1801,7 +1808,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "3774e4ce237d77f9"
+    "lessons_hash": "818200e7774174c9"
   },
   "platform_stats": {
     "total_users": 22,
