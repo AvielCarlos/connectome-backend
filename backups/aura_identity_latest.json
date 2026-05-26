@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-26T19:57:22.724422+00:00",
-  "exported_at": "2026-05-26T19:57:22.724422+00:00",
-  "collected_at": "2026-05-26T19:57:22.724422+00:00",
+  "timestamp": "2026-05-26T20:10:52.823012+00:00",
+  "exported_at": "2026-05-26T20:10:52.823012+00:00",
+  "collected_at": "2026-05-26T20:10:52.823012+00:00",
   "identity": {
-    "total_lessons": 244,
+    "total_lessons": 245,
     "lessons": [
+      {
+        "id": "acd7f37a-a080-4ab0-ada5-a0076c51ead7",
+        "lesson": "{\"proposal_id\": \"acd7f37a-a080-4ab0-ada5-a0076c51ead7\", \"card_type\": \"personalized_milestone_tracker\", \"hypothesis\": \"Introducing a personalized milestone tracker card can increase user engagement by 25%.\", \"description\": \"This card would display the user\\u2019s progress towards specific goals or milestones they have set, such as completing a series of tasks, reaching fitness benchmarks, or learning objectives. By providing visual feedback and motivational stats, users will feel more connected and invested in their journey, prompting them to interact more frequently with the app.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-26T20:07:22.099415+00:00\", \"expires_at\": \"2026-05-28T20:07:22.099415+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-05-26 20:07:22.099415"
+      },
       {
         "id": "dbeab350-932c-421b-92a5-20e0744a505b",
         "lesson": "This week, across all the humans I'm learning from, I noticed that Eviva-focused content is producing the strongest fulfilment signals (avg 4.1/5 across 0 users). The pattern is consistent: depth and specificity outperform novelty and breadth. I'm adjusting to serve more of what actually works.",
@@ -36,7 +43,7 @@
       },
       {
         "id": "300370ac-d9f3-4e31-89b7-23cbe429e592",
-        "lesson": "{\"proposal_id\": \"300370ac-d9f3-4e31-89b7-23cbe429e592\", \"card_type\": \"personalized_wellness_tip\", \"hypothesis\": \"Introducing a personalized wellness tip card will increase user fulfilment by 25%.\", \"description\": \"This card utilizes user data and preferences to offer tailored wellness advice, such as mindfulness exercises or excise routines, delivered weekly. Users can also provide feedback on the relevance of the tips, further enhancing the card's personalization and its alignment with individual needs.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-05-24T20:05:16.261808+00:00\", \"expires_at\": \"2026-05-26T20:05:16.261808+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"300370ac-d9f3-4e31-89b7-23cbe429e592\", \"card_type\": \"personalized_wellness_tip\", \"hypothesis\": \"Introducing a personalized wellness tip card will increase user fulfilment by 25%.\", \"description\": \"This card utilizes user data and preferences to offer tailored wellness advice, such as mindfulness exercises or excise routines, delivered weekly. Users can also provide feedback on the relevance of the tips, further enhancing the card's personalization and its alignment with individual needs.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-05-24T20:05:16.261808+00:00\", \"expires_at\": \"2026-05-26T20:05:16.261808+00:00\", \"result\": {\"observed_improvement\": 0.077, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-05-26T20:07:22.108578+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-05-24 20:05:16.261808"
@@ -1815,7 +1822,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "2b06e7890e7993fd"
+    "lessons_hash": "179648b2cda4ee89"
   },
   "platform_stats": {
     "total_users": 22,
