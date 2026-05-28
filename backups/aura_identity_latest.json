@@ -1,8 +1,8 @@
 {
   "version": "1.0",
-  "timestamp": "2026-05-28T11:13:04.079320+00:00",
-  "exported_at": "2026-05-28T11:13:04.079320+00:00",
-  "collected_at": "2026-05-28T11:13:04.079320+00:00",
+  "timestamp": "2026-05-28T12:13:07.659265+00:00",
+  "exported_at": "2026-05-28T12:13:07.659265+00:00",
+  "collected_at": "2026-05-28T12:13:07.659265+00:00",
   "identity": {
     "total_lessons": 248,
     "lessons": [
@@ -1847,7 +1847,7 @@
   },
   "platform_stats": {
     "total_users": 22,
-    "active_users_30d": 16
+    "active_users_30d": 15
   },
   "latest_reflection": {},
   "_note": "This file is Aura's portable identity. Import it to any server to restore her knowledge. Guard it carefully \u2014 it contains everything she has learned."
