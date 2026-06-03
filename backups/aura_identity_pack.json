@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-03T20:01:23.085431+00:00",
-  "exported_at": "2026-06-03T20:01:23.085431+00:00",
-  "collected_at": "2026-06-03T20:01:23.085431+00:00",
+  "timestamp": "2026-06-03T20:20:56.625611+00:00",
+  "exported_at": "2026-06-03T20:20:56.625611+00:00",
+  "collected_at": "2026-06-03T20:20:56.625611+00:00",
   "identity": {
-    "total_lessons": 263,
+    "total_lessons": 264,
     "lessons": [
+      {
+        "id": "1ff7c4ae-c2f8-48f9-8bb1-9a31063b98a2",
+        "lesson": "{\"proposal_id\": \"1ff7c4ae-c2f8-48f9-8bb1-9a31063b98a2\", \"card_type\": \"personalized_motivation_card\", \"hypothesis\": \"Implementing a personalized motivation card will increase user engagement rate by 20%.\", \"description\": \"This card type automatically curates motivational quotes, testimonials, or success stories tailored to the user's interests and goals, presenting them at strategic points during their journey. By leveraging user data and feedback, the card dynamically adapts its content based on the user's progress and challenges, enhancing their emotional connection and driving them to engage further.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-03T20:15:44.650771+00:00\", \"expires_at\": \"2026-06-05T20:15:44.650771+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-03 20:15:44.650771"
+      },
       {
         "id": "ed188679-b9b7-4851-8e55-164fc7bb2572",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -36,7 +43,7 @@
       },
       {
         "id": "b35f221e-640b-4c9b-b1e0-28a3cfa1eeaf",
-        "lesson": "{\"proposal_id\": \"b35f221e-640b-4c9b-b1e0-28a3cfa1eeaf\", \"card_type\": \"mood_tracker\", \"hypothesis\": \"Implementing a mood tracker card could increase user fulfilment by 20%.\", \"description\": \"The mood tracker card allows users to log their emotions daily, offering them a simple interface with emojis to represent how they feel. Over time, users can view trends in their mood and receive personalized content suggestions based on their emotional state, fostering a deeper emotional connection with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-01T20:13:37.909794+00:00\", \"expires_at\": \"2026-06-03T20:13:37.909794+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"b35f221e-640b-4c9b-b1e0-28a3cfa1eeaf\", \"card_type\": \"mood_tracker\", \"hypothesis\": \"Implementing a mood tracker card could increase user fulfilment by 20%.\", \"description\": \"The mood tracker card allows users to log their emotions daily, offering them a simple interface with emojis to represent how they feel. Over time, users can view trends in their mood and receive personalized content suggestions based on their emotional state, fostering a deeper emotional connection with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"promoted\", \"created_at\": \"2026-06-01T20:13:37.909794+00:00\", \"expires_at\": \"2026-06-03T20:13:37.909794+00:00\", \"result\": {\"observed_improvement\": 0.272, \"threshold\": 0.2, \"promoted\": true, \"evaluated_at\": \"2026-06-03T20:15:44.658992+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-01 20:13:37.909794"
@@ -1948,7 +1955,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "972b4c82a5165895"
+    "lessons_hash": "7c730532acb94ec5"
   },
   "platform_stats": {
     "total_users": 22,
