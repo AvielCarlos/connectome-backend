@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-06T20:02:50.870999+00:00",
-  "exported_at": "2026-06-06T20:02:50.870999+00:00",
-  "collected_at": "2026-06-06T20:02:50.870999+00:00",
+  "timestamp": "2026-06-06T20:24:33.607946+00:00",
+  "exported_at": "2026-06-06T20:24:33.607946+00:00",
+  "collected_at": "2026-06-06T20:24:33.607946+00:00",
   "identity": {
-    "total_lessons": 269,
+    "total_lessons": 270,
     "lessons": [
+      {
+        "id": "83d1429b-3182-4e79-9d4e-b4be810247a1",
+        "lesson": "{\"proposal_id\": \"83d1429b-3182-4e79-9d4e-b4be810247a1\", \"card_type\": \"mood_tracking_card\", \"hypothesis\": \"Introducing a mood tracking card will increase user engagement by 25%.\", \"description\": \"This card allows users to log their current mood and provide context for their feelings through quick prompts (e.g., 'What triggered this mood?'). Additionally, it suggests tailored content or activities based on the user's mood to enhance emotional well-being and engagement with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-06T20:18:54.145205+00:00\", \"expires_at\": \"2026-06-08T20:18:54.145205+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-06 20:18:54.145205"
+      },
       {
         "id": "3a308ece-0148-475e-abfa-43664cdf0cea",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "c0470267-784d-45dd-acac-32d6baf6b196",
-        "lesson": "{\"proposal_id\": \"c0470267-784d-45dd-acac-32d6baf6b196\", \"card_type\": \"guided_meditation_card\", \"hypothesis\": \"Integrating a guided meditation card will increase user fulfilment by 25%.\", \"description\": \"This card type offers users a short, personalized meditation session based on their current mood or stress level, using AI to recommend content. Users can choose from various themes such as 'calm', 'focus', or 'energy boost', and the card includes voice guidance, soothing visuals, and ambient sounds to enhance the experience.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-04T20:16:47.709562+00:00\", \"expires_at\": \"2026-06-06T20:16:47.709562+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"c0470267-784d-45dd-acac-32d6baf6b196\", \"card_type\": \"guided_meditation_card\", \"hypothesis\": \"Integrating a guided meditation card will increase user fulfilment by 25%.\", \"description\": \"This card type offers users a short, personalized meditation session based on their current mood or stress level, using AI to recommend content. Users can choose from various themes such as 'calm', 'focus', or 'energy boost', and the card includes voice guidance, soothing visuals, and ambient sounds to enhance the experience.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-06-04T20:16:47.709562+00:00\", \"expires_at\": \"2026-06-06T20:16:47.709562+00:00\", \"result\": {\"observed_improvement\": -0.04, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-06-06T20:18:54.153749+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-04 20:16:47.709562"
@@ -1990,7 +1997,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "3aa21a88522390fb"
+    "lessons_hash": "79794d696f9dac10"
   },
   "platform_stats": {
     "total_users": 22,
