@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-08T20:03:48.308814+00:00",
-  "exported_at": "2026-06-08T20:03:48.308814+00:00",
-  "collected_at": "2026-06-08T20:03:48.308814+00:00",
+  "timestamp": "2026-06-08T20:26:52.527394+00:00",
+  "exported_at": "2026-06-08T20:26:52.527394+00:00",
+  "collected_at": "2026-06-08T20:26:52.527394+00:00",
   "identity": {
-    "total_lessons": 274,
+    "total_lessons": 275,
     "lessons": [
+      {
+        "id": "2b3accba-72ae-4a34-9aa5-9804d480da31",
+        "lesson": "{\"proposal_id\": \"2b3accba-72ae-4a34-9aa5-9804d480da31\", \"card_type\": \"daily_mood_tracker\", \"hypothesis\": \"Introducing a daily mood tracker card will increase user fulfilment by 20%.\", \"description\": \"The daily mood tracker card prompts users to reflect on their feelings each day, allowing them to select from a range of emotions and provide optional notes. By visualizing their mood trends over time, users can gain insights into their emotional well-being, which could encourage them to engage more with the platform. The card will also include tips or resources based on their mood patterns, fostering a supportive environment.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-08T20:20:59.922653+00:00\", \"expires_at\": \"2026-06-10T20:20:59.922653+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-08 20:20:59.922653"
+      },
       {
         "id": "5005db13-76b4-4623-9c55-538cc0925852",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -36,7 +43,7 @@
       },
       {
         "id": "83d1429b-3182-4e79-9d4e-b4be810247a1",
-        "lesson": "{\"proposal_id\": \"83d1429b-3182-4e79-9d4e-b4be810247a1\", \"card_type\": \"mood_tracking_card\", \"hypothesis\": \"Introducing a mood tracking card will increase user engagement by 25%.\", \"description\": \"This card allows users to log their current mood and provide context for their feelings through quick prompts (e.g., 'What triggered this mood?'). Additionally, it suggests tailored content or activities based on the user's mood to enhance emotional well-being and engagement with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-06T20:18:54.145205+00:00\", \"expires_at\": \"2026-06-08T20:18:54.145205+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"83d1429b-3182-4e79-9d4e-b4be810247a1\", \"card_type\": \"mood_tracking_card\", \"hypothesis\": \"Introducing a mood tracking card will increase user engagement by 25%.\", \"description\": \"This card allows users to log their current mood and provide context for their feelings through quick prompts (e.g., 'What triggered this mood?'). Additionally, it suggests tailored content or activities based on the user's mood to enhance emotional well-being and engagement with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-06-06T20:18:54.145205+00:00\", \"expires_at\": \"2026-06-08T20:18:54.145205+00:00\", \"result\": {\"observed_improvement\": -0.03, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-06-08T20:20:59.932812+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-06 20:18:54.145205"
@@ -2025,7 +2032,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "8ea12dfc24190a9f"
+    "lessons_hash": "20717e0b2cd9ea9c"
   },
   "platform_stats": {
     "total_users": 22,
