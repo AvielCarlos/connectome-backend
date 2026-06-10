@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-10T14:29:00.615101+00:00",
-  "exported_at": "2026-06-10T14:29:00.615101+00:00",
-  "collected_at": "2026-06-10T14:29:00.615101+00:00",
+  "timestamp": "2026-06-10T15:29:03.854325+00:00",
+  "exported_at": "2026-06-10T15:29:03.854325+00:00",
+  "collected_at": "2026-06-10T15:29:03.854325+00:00",
   "identity": {
-    "total_lessons": 277,
+    "total_lessons": 278,
     "lessons": [
+      {
+        "id": "106103d7-994f-4c41-902c-3b328fdaa2cc",
+        "lesson": "Infrastructure health 2026-06-10: API healthy (0.471s), health score=75/100, CI=success.",
+        "confidence": 0.9,
+        "source": "executive_council.cto",
+        "created_at": "2026-06-10 15:00:13.367226"
+      },
       {
         "id": "ee06157e-858c-459b-a334-70f6aa1cd5fd",
         "lesson": "{\"proposal_id\": \"ee06157e-858c-459b-a334-70f6aa1cd5fd\", \"card_type\": \"personalized_goal_tracker\", \"hypothesis\": \"Implementing a personalized goal tracker card will increase user engagement by 20%.\", \"description\": \"This card will allow users to set specific, measurable personal goals related to their interests, and provide prompts and reminders to encourage progress. It will also display motivational statistics about their achievements, fostering a sense of community by allowing users to share their goals or accomplishments with friends or the wider user base.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-09T20:22:03.169096+00:00\", \"expires_at\": \"2026-06-11T20:22:03.169096+00:00\", \"result\": null}",
@@ -2046,7 +2053,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "44c4223a3b297697"
+    "lessons_hash": "e2a4b05f49900795"
   },
   "platform_stats": {
     "total_users": 22,
