@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-11T16:30:23.271832+00:00",
-  "exported_at": "2026-06-11T16:30:23.271832+00:00",
-  "collected_at": "2026-06-11T16:30:23.271832+00:00",
+  "timestamp": "2026-06-11T17:30:26.719678+00:00",
+  "exported_at": "2026-06-11T17:30:26.719678+00:00",
+  "collected_at": "2026-06-11T17:30:26.719678+00:00",
   "identity": {
-    "total_lessons": 280,
+    "total_lessons": 281,
     "lessons": [
+      {
+        "id": "a2b08e37-d980-466f-bee9-70735f157f3f",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-06-11 16:58:52.125099"
+      },
       {
         "id": "fc2592cc-ca4f-482e-a222-1421e2f5a8a3",
         "lesson": "{\"proposal_id\": \"fc2592cc-ca4f-482e-a222-1421e2f5a8a3\", \"card_type\": \"mood_based_suggestion\", \"hypothesis\": \"Introducing a mood-based suggestion card will improve user engagement by 25%.\", \"description\": \"This card will prompt users to select their current mood from a range of options (e.g., happy, stressed, tired), and based on their selection, it will recommend relevant content or activities that enhance their current state. The card will adapt over time, learning from user preferences and past interactions to provide increasingly personalized suggestions.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-10T20:23:05.131170+00:00\", \"expires_at\": \"2026-06-12T20:23:05.131170+00:00\", \"result\": null}",
@@ -2067,7 +2074,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "da0f2f2d5bf60f23"
+    "lessons_hash": "5bb390978bb1988f"
   },
   "platform_stats": {
     "total_users": 22,
