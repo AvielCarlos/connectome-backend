@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-12T20:05:52.180571+00:00",
-  "exported_at": "2026-06-12T20:05:52.180571+00:00",
-  "collected_at": "2026-06-12T20:05:52.180571+00:00",
+  "timestamp": "2026-06-12T20:31:52.126194+00:00",
+  "exported_at": "2026-06-12T20:31:52.126194+00:00",
+  "collected_at": "2026-06-12T20:31:52.126194+00:00",
   "identity": {
-    "total_lessons": 283,
+    "total_lessons": 284,
     "lessons": [
+      {
+        "id": "3361fee6-bd34-4bbc-aba2-a86345e8021e",
+        "lesson": "{\"proposal_id\": \"3361fee6-bd34-4bbc-aba2-a86345e8021e\", \"card_type\": \"wellbeing_checkin\", \"hypothesis\": \"Implementing a wellbeing check-in card will increase user fulfilment by 25%.\", \"description\": \"This card prompts users to reflect on their emotional and mental health with simple multiple-choice questions or sliders, guiding them to appropriate resources or recommendations based on their responses. It aims to create a personalized touch in the user experience, encouraging deeper engagement with the platform as they recognize their mental health is valued.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-12T20:25:10.154074+00:00\", \"expires_at\": \"2026-06-14T20:25:10.154074+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-12 20:25:10.154074"
+      },
       {
         "id": "3a2b4ca2-db28-4239-affc-7b89c2ecfeae",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "fc2592cc-ca4f-482e-a222-1421e2f5a8a3",
-        "lesson": "{\"proposal_id\": \"fc2592cc-ca4f-482e-a222-1421e2f5a8a3\", \"card_type\": \"mood_based_suggestion\", \"hypothesis\": \"Introducing a mood-based suggestion card will improve user engagement by 25%.\", \"description\": \"This card will prompt users to select their current mood from a range of options (e.g., happy, stressed, tired), and based on their selection, it will recommend relevant content or activities that enhance their current state. The card will adapt over time, learning from user preferences and past interactions to provide increasingly personalized suggestions.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-10T20:23:05.131170+00:00\", \"expires_at\": \"2026-06-12T20:23:05.131170+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"fc2592cc-ca4f-482e-a222-1421e2f5a8a3\", \"card_type\": \"mood_based_suggestion\", \"hypothesis\": \"Introducing a mood-based suggestion card will improve user engagement by 25%.\", \"description\": \"This card will prompt users to select their current mood from a range of options (e.g., happy, stressed, tired), and based on their selection, it will recommend relevant content or activities that enhance their current state. The card will adapt over time, learning from user preferences and past interactions to provide increasingly personalized suggestions.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-06-10T20:23:05.131170+00:00\", \"expires_at\": \"2026-06-12T20:23:05.131170+00:00\", \"result\": {\"observed_improvement\": 0.096, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-06-12T20:25:10.162365+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-10 20:23:05.13117"
@@ -2088,7 +2095,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "0d735f52f7ef9eb5"
+    "lessons_hash": "58d86989c0c12edc"
   },
   "platform_stats": {
     "total_users": 22,
