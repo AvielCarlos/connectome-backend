@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-14T20:06:54.347452+00:00",
-  "exported_at": "2026-06-14T20:06:54.347452+00:00",
-  "collected_at": "2026-06-14T20:06:54.347452+00:00",
+  "timestamp": "2026-06-14T20:34:18.196956+00:00",
+  "exported_at": "2026-06-14T20:34:18.196956+00:00",
+  "collected_at": "2026-06-14T20:34:18.196956+00:00",
   "identity": {
-    "total_lessons": 287,
+    "total_lessons": 288,
     "lessons": [
+      {
+        "id": "bd26ec31-8cda-44b5-b724-d3da4765292b",
+        "lesson": "{\"proposal_id\": \"bd26ec31-8cda-44b5-b724-d3da4765292b\", \"card_type\": \"mood_check_in\", \"hypothesis\": \"Introducing a mood check-in card will increase user engagement by 25%.\", \"description\": \"This card prompts users to select their current mood from a range of options, allowing them to express their feelings and triggering personalized content or suggestions based on their selection. It could also encourage reflective journaling by leading to follow-up prompts that help users track their emotional journey over time.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-14T20:27:15.217781+00:00\", \"expires_at\": \"2026-06-16T20:27:15.217781+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-14 20:27:15.217781"
+      },
       {
         "id": "36f9ddbe-423c-4d3d-929c-e0cf934f457e",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "3361fee6-bd34-4bbc-aba2-a86345e8021e",
-        "lesson": "{\"proposal_id\": \"3361fee6-bd34-4bbc-aba2-a86345e8021e\", \"card_type\": \"wellbeing_checkin\", \"hypothesis\": \"Implementing a wellbeing check-in card will increase user fulfilment by 25%.\", \"description\": \"This card prompts users to reflect on their emotional and mental health with simple multiple-choice questions or sliders, guiding them to appropriate resources or recommendations based on their responses. It aims to create a personalized touch in the user experience, encouraging deeper engagement with the platform as they recognize their mental health is valued.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-12T20:25:10.154074+00:00\", \"expires_at\": \"2026-06-14T20:25:10.154074+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"3361fee6-bd34-4bbc-aba2-a86345e8021e\", \"card_type\": \"wellbeing_checkin\", \"hypothesis\": \"Implementing a wellbeing check-in card will increase user fulfilment by 25%.\", \"description\": \"This card prompts users to reflect on their emotional and mental health with simple multiple-choice questions or sliders, guiding them to appropriate resources or recommendations based on their responses. It aims to create a personalized touch in the user experience, encouraging deeper engagement with the platform as they recognize their mental health is valued.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-06-12T20:25:10.154074+00:00\", \"expires_at\": \"2026-06-14T20:25:10.154074+00:00\", \"result\": {\"observed_improvement\": 0.087, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-06-14T20:27:15.226532+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-12 20:25:10.154074"
@@ -2116,7 +2123,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "5bc4e9c4aee28431"
+    "lessons_hash": "64231c295808b303"
   },
   "platform_stats": {
     "total_users": 22,
