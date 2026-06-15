@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-15T16:35:20.802192+00:00",
-  "exported_at": "2026-06-15T16:35:20.802192+00:00",
-  "collected_at": "2026-06-15T16:35:20.802192+00:00",
+  "timestamp": "2026-06-15T17:35:24.294011+00:00",
+  "exported_at": "2026-06-15T17:35:24.294011+00:00",
+  "collected_at": "2026-06-15T17:35:24.294011+00:00",
   "identity": {
-    "total_lessons": 288,
+    "total_lessons": 289,
     "lessons": [
+      {
+        "id": "e02be8ac-1875-4a75-b7dd-d399083a8036",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-06-15 16:58:52.508567"
+      },
       {
         "id": "bd26ec31-8cda-44b5-b724-d3da4765292b",
         "lesson": "{\"proposal_id\": \"bd26ec31-8cda-44b5-b724-d3da4765292b\", \"card_type\": \"mood_check_in\", \"hypothesis\": \"Introducing a mood check-in card will increase user engagement by 25%.\", \"description\": \"This card prompts users to select their current mood from a range of options, allowing them to express their feelings and triggering personalized content or suggestions based on their selection. It could also encourage reflective journaling by leading to follow-up prompts that help users track their emotional journey over time.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-14T20:27:15.217781+00:00\", \"expires_at\": \"2026-06-16T20:27:15.217781+00:00\", \"result\": null}",
@@ -2123,7 +2130,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "64231c295808b303"
+    "lessons_hash": "82ae33f366d76be5"
   },
   "platform_stats": {
     "total_users": 22,
