@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-17T20:08:42.072171+00:00",
-  "exported_at": "2026-06-17T20:08:42.072171+00:00",
-  "collected_at": "2026-06-17T20:08:42.072171+00:00",
+  "timestamp": "2026-06-17T20:38:11.951739+00:00",
+  "exported_at": "2026-06-17T20:38:11.951739+00:00",
+  "collected_at": "2026-06-17T20:38:11.951739+00:00",
   "identity": {
-    "total_lessons": 293,
+    "total_lessons": 294,
     "lessons": [
+      {
+        "id": "aee652a9-25aa-44a6-ae2a-9e3d4c27f1f0",
+        "lesson": "{\"proposal_id\": \"aee652a9-25aa-44a6-ae2a-9e3d4c27f1f0\", \"card_type\": \"goal_tracker\", \"hypothesis\": \"Implementing a goal tracker card will increase user fulfilment by 25%.\", \"description\": \"The goal tracker card allows users to set, monitor, and celebrate personal milestones within the app. Users can receive progress updates and motivational reminders through the card, which can be customized to align with their individual aspirations. The card visually represents achievements through graphical progress updates, encouraging users to keep engaging with the app to reach their goals.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-17T20:30:21.180516+00:00\", \"expires_at\": \"2026-06-19T20:30:21.180516+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-17 20:30:21.180516"
+      },
       {
         "id": "5f73e989-6e83-41db-b51d-206a5470ff16",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "7aa16837-a6a2-4060-b6a6-9f54aa17aabd",
-        "lesson": "{\"proposal_id\": \"7aa16837-a6a2-4060-b6a6-9f54aa17aabd\", \"card_type\": \"wellness_checkin\", \"hypothesis\": \"Implementing a wellness check-in card will increase overall user fulfilment by 25%.\", \"description\": \"This card prompts users to reflect on their current mood and well-being, offering them tailored tips or resources based on their responses. By integrating this card into the user workflow, it encourages users to take a moment for self-care, helping them feel more connected and engaged with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-15T20:28:17.077365+00:00\", \"expires_at\": \"2026-06-17T20:28:17.077365+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"7aa16837-a6a2-4060-b6a6-9f54aa17aabd\", \"card_type\": \"wellness_checkin\", \"hypothesis\": \"Implementing a wellness check-in card will increase overall user fulfilment by 25%.\", \"description\": \"This card prompts users to reflect on their current mood and well-being, offering them tailored tips or resources based on their responses. By integrating this card into the user workflow, it encourages users to take a moment for self-care, helping them feel more connected and engaged with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-06-15T20:28:17.077365+00:00\", \"expires_at\": \"2026-06-17T20:28:17.077365+00:00\", \"result\": {\"observed_improvement\": 0.172, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-06-17T20:30:21.189799+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-15 20:28:17.077365"
@@ -2158,7 +2165,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "d1459f8b9278495f"
+    "lessons_hash": "f32cd36c329b150f"
   },
   "platform_stats": {
     "total_users": 22,
