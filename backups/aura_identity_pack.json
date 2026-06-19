@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-19T15:40:26.304887+00:00",
-  "exported_at": "2026-06-19T15:40:26.304887+00:00",
-  "collected_at": "2026-06-19T15:40:26.304887+00:00",
+  "timestamp": "2026-06-19T16:40:29.469471+00:00",
+  "exported_at": "2026-06-19T16:40:29.469471+00:00",
+  "collected_at": "2026-06-19T16:40:29.469471+00:00",
   "identity": {
-    "total_lessons": 297,
+    "total_lessons": 298,
     "lessons": [
+      {
+        "id": "4e2d0413-a9e6-4e02-9fbf-4bf1a90ee396",
+        "lesson": "Community health 2026-06-19: 0 contributors, 0 active (30d), +0 new, CP concentration=0.0%, health=60/100.",
+        "confidence": 0.75,
+        "source": "executive_council.community",
+        "created_at": "2026-06-19 16:00:08.302109"
+      },
       {
         "id": "89deb6e9-ba35-4b5c-bb46-edd565214d87",
         "lesson": "{\"proposal_id\": \"89deb6e9-ba35-4b5c-bb46-edd565214d87\", \"card_type\": \"personalized_motivation_card\", \"hypothesis\": \"Implementing a personalized motivation card could increase user engagement by 25%.\", \"description\": \"This card type presents users with a motivational message tailored to their recent activities and goals, featuring insights from their past achievements. It can also include visual progress indicators and encouragements based on their life milestones, aiming to inspire further interaction with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-18T20:31:23.734581+00:00\", \"expires_at\": \"2026-06-20T20:31:23.734581+00:00\", \"result\": null}",
@@ -2186,7 +2193,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "3412248a8162d18d"
+    "lessons_hash": "86a624c917581210"
   },
   "platform_stats": {
     "total_users": 22,
