@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-20T16:41:41.432052+00:00",
-  "exported_at": "2026-06-20T16:41:41.432052+00:00",
-  "collected_at": "2026-06-20T16:41:41.432052+00:00",
+  "timestamp": "2026-06-20T17:41:44.509267+00:00",
+  "exported_at": "2026-06-20T17:41:44.509267+00:00",
+  "collected_at": "2026-06-20T17:41:44.509267+00:00",
   "identity": {
-    "total_lessons": 300,
+    "total_lessons": 301,
     "lessons": [
+      {
+        "id": "743564ae-f315-4a7d-916d-aa3bbfc4273d",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-06-20 16:58:52.876191"
+      },
       {
         "id": "7b29ad64-4e8a-4325-ba1a-25297f3c5776",
         "lesson": "{\"proposal_id\": \"7b29ad64-4e8a-4325-ba1a-25297f3c5776\", \"card_type\": \"goal_mapping_card\", \"hypothesis\": \"Introducing a goal mapping card will increase user fulfilment and engagement by 25%.\", \"description\": \"The goal mapping card allows users to set personal objectives and visually track their progress towards these goals over time. It integrates with existing data to provide personalized reminders, suggestions, and motivational quotes, creating a more connected user experience. Users can adjust their targets and add milestones, fostering a greater sense of achievement.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-19T20:32:26.843342+00:00\", \"expires_at\": \"2026-06-21T20:32:26.843342+00:00\", \"result\": null}",
@@ -2207,7 +2214,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "97a597cd5cc7c7f8"
+    "lessons_hash": "13d35ffd90949af7"
   },
   "platform_stats": {
     "total_users": 22,
