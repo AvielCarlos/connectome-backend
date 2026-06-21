@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-21T20:10:57.706578+00:00",
-  "exported_at": "2026-06-21T20:10:57.706578+00:00",
-  "collected_at": "2026-06-21T20:10:57.706578+00:00",
+  "timestamp": "2026-06-21T20:43:03.948410+00:00",
+  "exported_at": "2026-06-21T20:43:03.948410+00:00",
+  "collected_at": "2026-06-21T20:43:03.948410+00:00",
   "identity": {
-    "total_lessons": 303,
+    "total_lessons": 304,
     "lessons": [
+      {
+        "id": "c7db8bdf-6bf4-46e6-8511-6902fa42ea5a",
+        "lesson": "{\"proposal_id\": \"c7db8bdf-6bf4-46e6-8511-6902fa42ea5a\", \"card_type\": \"mood_tracker\", \"hypothesis\": \"Introducing a Mood Tracker card could improve user fulfilment by 20%, as it allows users to reflect on their emotional state and engage meaningfully with content that resonates with their well-being.\", \"description\": \"The Mood Tracker card prompts users to select their current mood from a range of options and offers personalized content suggestions based on their choice. By integrating a weekly overview feature, users can visualize their emotional patterns over time, fostering a deeper connection with the platform and content.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-21T20:34:32.754768+00:00\", \"expires_at\": \"2026-06-23T20:34:32.754768+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-21 20:34:32.754768"
+      },
       {
         "id": "e1efe71e-dfca-4d76-8d62-17a7c4d9db30",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "7b29ad64-4e8a-4325-ba1a-25297f3c5776",
-        "lesson": "{\"proposal_id\": \"7b29ad64-4e8a-4325-ba1a-25297f3c5776\", \"card_type\": \"goal_mapping_card\", \"hypothesis\": \"Introducing a goal mapping card will increase user fulfilment and engagement by 25%.\", \"description\": \"The goal mapping card allows users to set personal objectives and visually track their progress towards these goals over time. It integrates with existing data to provide personalized reminders, suggestions, and motivational quotes, creating a more connected user experience. Users can adjust their targets and add milestones, fostering a greater sense of achievement.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-19T20:32:26.843342+00:00\", \"expires_at\": \"2026-06-21T20:32:26.843342+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"7b29ad64-4e8a-4325-ba1a-25297f3c5776\", \"card_type\": \"goal_mapping_card\", \"hypothesis\": \"Introducing a goal mapping card will increase user fulfilment and engagement by 25%.\", \"description\": \"The goal mapping card allows users to set personal objectives and visually track their progress towards these goals over time. It integrates with existing data to provide personalized reminders, suggestions, and motivational quotes, creating a more connected user experience. Users can adjust their targets and add milestones, fostering a greater sense of achievement.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-06-19T20:32:26.843342+00:00\", \"expires_at\": \"2026-06-21T20:32:26.843342+00:00\", \"result\": {\"observed_improvement\": 0.01, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-06-21T20:34:32.763862+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-19 20:32:26.843342"
@@ -2228,7 +2235,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "87632e4ba430a2c4"
+    "lessons_hash": "3e1d30c2766f8437"
   },
   "platform_stats": {
     "total_users": 22,
