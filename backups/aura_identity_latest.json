@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-23T16:45:30.125817+00:00",
-  "exported_at": "2026-06-23T16:45:30.125817+00:00",
-  "collected_at": "2026-06-23T16:45:30.125817+00:00",
+  "timestamp": "2026-06-23T17:45:33.470153+00:00",
+  "exported_at": "2026-06-23T17:45:33.470153+00:00",
+  "collected_at": "2026-06-23T17:45:33.470153+00:00",
   "identity": {
-    "total_lessons": 306,
+    "total_lessons": 307,
     "lessons": [
+      {
+        "id": "62448472-9b04-4ef6-a8d0-8bc7d47d0c37",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-06-23 16:58:53.110128"
+      },
       {
         "id": "4f3ecd95-e330-48fb-b1e7-b737808dc4e8",
         "lesson": "{\"proposal_id\": \"4f3ecd95-e330-48fb-b1e7-b737808dc4e8\", \"card_type\": \"guided_reflection\", \"hypothesis\": \"Introducing a guided reflection card will increase user fulfillment by 20%.\", \"description\": \"This card prompts users to take a moment to reflect on their recent activities or experiences within the app. It asks targeted questions and encourages users to express their feelings or insights, providing a more personalized and meaningful interaction. Over time, these reflections can help users see their growth and maintain engagement with the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-22T20:35:35.195700+00:00\", \"expires_at\": \"2026-06-24T20:35:35.195700+00:00\", \"result\": null}",
@@ -2249,7 +2256,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "876016cbef88477a"
+    "lessons_hash": "18a7695a0a67772c"
   },
   "platform_stats": {
     "total_users": 22,
