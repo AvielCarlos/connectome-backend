@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-26T20:14:11.202205+00:00",
-  "exported_at": "2026-06-26T20:14:11.202205+00:00",
-  "collected_at": "2026-06-26T20:14:11.202205+00:00",
+  "timestamp": "2026-06-26T20:49:43.143851+00:00",
+  "exported_at": "2026-06-26T20:49:43.143851+00:00",
+  "collected_at": "2026-06-26T20:49:43.143851+00:00",
   "identity": {
-    "total_lessons": 313,
+    "total_lessons": 314,
     "lessons": [
+      {
+        "id": "6371802e-4db0-472d-ab04-11832fe78460",
+        "lesson": "{\"proposal_id\": \"6371802e-4db0-472d-ab04-11832fe78460\", \"card_type\": \"contextual_motivation_cards\", \"hypothesis\": \"Introducing contextual motivation cards will improve user fulfilment by 20%.\", \"description\": \"These cards will present personalized motivational quotes, statistics, and relevant success stories related to the user's current activity or goal. By dynamically adapting to user behavior and preferences, these cards aim to inspire and reinforce positive actions, making users feel more connected to their progress.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-26T20:39:45.993029+00:00\", \"expires_at\": \"2026-06-28T20:39:45.993029+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-26 20:39:45.993029"
+      },
       {
         "id": "7ecbd452-bbde-4f33-98ba-b60225f12abf",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "404d65cb-4822-47b6-a0da-e5d6bfc16314",
-        "lesson": "{\"proposal_id\": \"404d65cb-4822-47b6-a0da-e5d6bfc16314\", \"card_type\": \"adaptive_mood_tracker\", \"hypothesis\": \"Implementing an adaptive mood tracker card will improve user fulfilment and engagement by 25%.\", \"description\": \"This card prompts users to select their current mood and suggests personalized activities or content based on their emotional state. Over time, the card adjusts its suggestions according to the user\\u2019s feedback and historical mood patterns, promoting a more tailored engagement experience.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-24T20:37:41.079670+00:00\", \"expires_at\": \"2026-06-26T20:37:41.079670+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"404d65cb-4822-47b6-a0da-e5d6bfc16314\", \"card_type\": \"adaptive_mood_tracker\", \"hypothesis\": \"Implementing an adaptive mood tracker card will improve user fulfilment and engagement by 25%.\", \"description\": \"This card prompts users to select their current mood and suggests personalized activities or content based on their emotional state. Over time, the card adjusts its suggestions according to the user\\u2019s feedback and historical mood patterns, promoting a more tailored engagement experience.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-06-24T20:37:41.079670+00:00\", \"expires_at\": \"2026-06-26T20:37:41.079670+00:00\", \"result\": {\"observed_improvement\": 0.014, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-06-26T20:39:46.002111+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-24 20:37:41.07967"
@@ -2298,7 +2305,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "ec4f00c71d84b247"
+    "lessons_hash": "5bef11efe990cdf5"
   },
   "platform_stats": {
     "total_users": 22,
