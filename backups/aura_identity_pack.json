@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-27T20:14:49.008319+00:00",
-  "exported_at": "2026-06-27T20:14:49.008319+00:00",
-  "collected_at": "2026-06-27T20:14:49.008319+00:00",
+  "timestamp": "2026-06-27T20:51:01.080231+00:00",
+  "exported_at": "2026-06-27T20:51:01.080231+00:00",
+  "collected_at": "2026-06-27T20:51:01.080231+00:00",
   "identity": {
-    "total_lessons": 315,
+    "total_lessons": 316,
     "lessons": [
+      {
+        "id": "b0e2aba0-6da7-4979-8407-4c1e86ba7c2d",
+        "lesson": "{\"proposal_id\": \"b0e2aba0-6da7-4979-8407-4c1e86ba7c2d\", \"card_type\": \"mood_check_in\", \"hypothesis\": \"Implementing a mood check-in card will improve user engagement by 25%.\", \"description\": \"This card prompts users to reflect on their current mood and provides tailored content or activities based on their response. By integrating personalized recommendations or community support related to their mood, users are more likely to engage with the platform meaningfully.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-27T20:40:48.119953+00:00\", \"expires_at\": \"2026-06-29T20:40:48.119953+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-06-27 20:40:48.119953"
+      },
       {
         "id": "1eb2b4ac-57bc-4bc6-a6ef-15081a81589e",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "29f8f989-4a59-419b-b87b-e4414167f7fe",
-        "lesson": "{\"proposal_id\": \"29f8f989-4a59-419b-b87b-e4414167f7fe\", \"card_type\": \"personalized_goal_tracker\", \"hypothesis\": \"Implementing a personalized goal tracker card will increase user fulfilment by 25%.\", \"description\": \"This card allows users to set and track personal goals based on their interests and past activities, providing tailored encouragement and suggestions along the way. It visually represents progress and offers reminders and motivational quotes, creating a sense of accountability and achievement.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-06-25T20:38:43.249769+00:00\", \"expires_at\": \"2026-06-27T20:38:43.249769+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"29f8f989-4a59-419b-b87b-e4414167f7fe\", \"card_type\": \"personalized_goal_tracker\", \"hypothesis\": \"Implementing a personalized goal tracker card will increase user fulfilment by 25%.\", \"description\": \"This card allows users to set and track personal goals based on their interests and past activities, providing tailored encouragement and suggestions along the way. It visually represents progress and offers reminders and motivational quotes, creating a sense of accountability and achievement.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-06-25T20:38:43.249769+00:00\", \"expires_at\": \"2026-06-27T20:38:43.249769+00:00\", \"result\": {\"observed_improvement\": 0.143, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-06-27T20:40:48.128575+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-25 20:38:43.249769"
@@ -2312,7 +2319,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "331c614561dce5d8"
+    "lessons_hash": "e97f54778a243175"
   },
   "platform_stats": {
     "total_users": 22,
