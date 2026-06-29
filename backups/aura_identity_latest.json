@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-29T16:53:33.327505+00:00",
-  "exported_at": "2026-06-29T16:53:33.327505+00:00",
-  "collected_at": "2026-06-29T16:53:33.327505+00:00",
+  "timestamp": "2026-06-29T17:53:36.849866+00:00",
+  "exported_at": "2026-06-29T17:53:36.849866+00:00",
+  "collected_at": "2026-06-29T17:53:36.849866+00:00",
   "identity": {
-    "total_lessons": 318,
+    "total_lessons": 319,
     "lessons": [
+      {
+        "id": "976cac63-14a5-49b9-a56c-889941f25fba",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-06-29 16:58:53.565328"
+      },
       {
         "id": "0ebf0ed0-642d-49ed-86c3-27c6c2b46437",
         "lesson": "{\"proposal_id\": \"0ebf0ed0-642d-49ed-86c3-27c6c2b46437\", \"card_type\": \"personalized_reflection_card\", \"hypothesis\": \"Implementing a personalized reflection card will increase user fulfilment by 25%.\", \"description\": \"This card type prompts users to reflect on their recent activities and achievements, accompanied by tailored questions based on their goals and behavior patterns within the app. By encouraging users to engage in self-assessment, it fosters a deeper connection to the platform and motivates them to take actionable steps towards their objectives.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-28T20:41:50.392521+00:00\", \"expires_at\": \"2026-06-30T20:41:50.392521+00:00\", \"result\": null}",
@@ -2333,7 +2340,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "56e248078d44b3ff"
+    "lessons_hash": "9313e54c7cd57da6"
   },
   "platform_stats": {
     "total_users": 22,
