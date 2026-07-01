@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-01T20:17:20.618162+00:00",
-  "exported_at": "2026-07-01T20:17:20.618162+00:00",
-  "collected_at": "2026-07-01T20:17:20.618162+00:00",
+  "timestamp": "2026-07-01T20:56:33.952954+00:00",
+  "exported_at": "2026-07-01T20:56:33.952954+00:00",
+  "collected_at": "2026-07-01T20:56:33.952954+00:00",
   "identity": {
-    "total_lessons": 323,
+    "total_lessons": 324,
     "lessons": [
+      {
+        "id": "dbb0c705-7549-4f50-b5f9-172b1e18e3a7",
+        "lesson": "{\"proposal_id\": \"dbb0c705-7549-4f50-b5f9-172b1e18e3a7\", \"card_type\": \"personalized_milestone_tracker\", \"hypothesis\": \"Users who engage with a personalized milestone tracker card will have a 20% higher completion rate.\", \"description\": \"This card type allows users to visualize their progress towards specific goals and milestones based on their past activities and aspirations. It provides motivational feedback, such as encouraging messages and visual rewards when they reach certain thresholds, tailored to the individual user's journey. By making users aware of their achievements and what remains to be accomplished, it fosters a sense of ownership and encouragement.\", \"success_metric\": \"completion_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-07-01T20:44:57.826157+00:00\", \"expires_at\": \"2026-07-03T20:44:57.826157+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-07-01 20:44:57.826157"
+      },
       {
         "id": "4aa21e95-45ad-4b81-9865-76d7438d975e",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "9140213f-a050-4f2f-8af8-78a51396059f",
-        "lesson": "{\"proposal_id\": \"9140213f-a050-4f2f-8af8-78a51396059f\", \"card_type\": \"mood_booster\", \"hypothesis\": \"Introducing a mood booster card could increase user fulfilment by 25%.\", \"description\": \"The mood booster card presents personalized, uplifting content or activities based on the user's emotional state and engagement history. It can include prompts for self-reflection, inspirational quotes, or suggestions for short, enjoyable tasks to enhance their mood. This card adapts dynamically by assessing user interactions and feedback to ensure relevance and effectiveness.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-06-29T20:42:52.524139+00:00\", \"expires_at\": \"2026-07-01T20:42:52.524139+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"9140213f-a050-4f2f-8af8-78a51396059f\", \"card_type\": \"mood_booster\", \"hypothesis\": \"Introducing a mood booster card could increase user fulfilment by 25%.\", \"description\": \"The mood booster card presents personalized, uplifting content or activities based on the user's emotional state and engagement history. It can include prompts for self-reflection, inspirational quotes, or suggestions for short, enjoyable tasks to enhance their mood. This card adapts dynamically by assessing user interactions and feedback to ensure relevance and effectiveness.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"killed\", \"created_at\": \"2026-06-29T20:42:52.524139+00:00\", \"expires_at\": \"2026-07-01T20:42:52.524139+00:00\", \"result\": {\"observed_improvement\": 0.059, \"threshold\": 0.2, \"promoted\": false, \"evaluated_at\": \"2026-07-01T20:44:57.833441+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-06-29 20:42:52.524139"
@@ -2368,7 +2375,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "06586cc25bb58168"
+    "lessons_hash": "b4cc245b887264e7"
   },
   "platform_stats": {
     "total_users": 22,
