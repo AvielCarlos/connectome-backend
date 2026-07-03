@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-03T20:18:35.589159+00:00",
-  "exported_at": "2026-07-03T20:18:35.589159+00:00",
-  "collected_at": "2026-07-03T20:18:35.589159+00:00",
+  "timestamp": "2026-07-03T20:59:16.403123+00:00",
+  "exported_at": "2026-07-03T20:59:16.403123+00:00",
+  "collected_at": "2026-07-03T20:59:16.403123+00:00",
   "identity": {
-    "total_lessons": 329,
+    "total_lessons": 330,
     "lessons": [
+      {
+        "id": "f4eece10-0637-4d20-bb27-845b5d6ccac1",
+        "lesson": "{\"proposal_id\": \"f4eece10-0637-4d20-bb27-845b5d6ccac1\", \"card_type\": \"guided_reflection\", \"hypothesis\": \"Introducing guided reflection cards will improve user fulfillment by 25%.\", \"description\": \"These cards prompt users to reflect on their daily experiences and share insights through targeted questions, enhancing self-awareness. Each card will present thought-provoking prompts such as 'What did I learn today?' or 'How did I overcome a challenge?' to encourage deeper engagement with personal growth content.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-03T20:47:03.473128+00:00\", \"expires_at\": \"2026-07-05T20:47:03.473128+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-07-03 20:47:03.473128"
+      },
       {
         "id": "b0450da6-21c7-49b5-beaa-9fdef9457170",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -43,7 +50,7 @@
       },
       {
         "id": "dbb0c705-7549-4f50-b5f9-172b1e18e3a7",
-        "lesson": "{\"proposal_id\": \"dbb0c705-7549-4f50-b5f9-172b1e18e3a7\", \"card_type\": \"personalized_milestone_tracker\", \"hypothesis\": \"Users who engage with a personalized milestone tracker card will have a 20% higher completion rate.\", \"description\": \"This card type allows users to visualize their progress towards specific goals and milestones based on their past activities and aspirations. It provides motivational feedback, such as encouraging messages and visual rewards when they reach certain thresholds, tailored to the individual user's journey. By making users aware of their achievements and what remains to be accomplished, it fosters a sense of ownership and encouragement.\", \"success_metric\": \"completion_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-07-01T20:44:57.826157+00:00\", \"expires_at\": \"2026-07-03T20:44:57.826157+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"dbb0c705-7549-4f50-b5f9-172b1e18e3a7\", \"card_type\": \"personalized_milestone_tracker\", \"hypothesis\": \"Users who engage with a personalized milestone tracker card will have a 20% higher completion rate.\", \"description\": \"This card type allows users to visualize their progress towards specific goals and milestones based on their past activities and aspirations. It provides motivational feedback, such as encouraging messages and visual rewards when they reach certain thresholds, tailored to the individual user's journey. By making users aware of their achievements and what remains to be accomplished, it fosters a sense of ownership and encouragement.\", \"success_metric\": \"completion_rate\", \"success_threshold\": 0.2, \"status\": \"promoted\", \"created_at\": \"2026-07-01T20:44:57.826157+00:00\", \"expires_at\": \"2026-07-03T20:44:57.826157+00:00\", \"result\": {\"observed_improvement\": 0.254, \"threshold\": 0.2, \"promoted\": true, \"evaluated_at\": \"2026-07-03T20:47:03.481897+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-07-01 20:44:57.826157"
@@ -2410,7 +2417,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "038ab3414fb86d12"
+    "lessons_hash": "c11996dec3e84f30"
   },
   "platform_stats": {
     "total_users": 22,
