@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-05T20:19:45.962685+00:00",
-  "exported_at": "2026-07-05T20:19:45.962685+00:00",
-  "collected_at": "2026-07-05T20:19:45.962685+00:00",
+  "timestamp": "2026-07-05T21:01:50.988287+00:00",
+  "exported_at": "2026-07-05T21:01:50.988287+00:00",
+  "collected_at": "2026-07-05T21:01:50.988287+00:00",
   "identity": {
-    "total_lessons": 333,
+    "total_lessons": 334,
     "lessons": [
+      {
+        "id": "92e7e14c-7e49-436a-a9b7-619a61480076",
+        "lesson": "{\"proposal_id\": \"92e7e14c-7e49-436a-a9b7-619a61480076\", \"card_type\": \"gratitude_journal\", \"hypothesis\": \"Introducing a gratitude journal card could increase user fulfilment by 20%.\", \"description\": \"This card encourages users to reflect on and document three things they are grateful for each day. By integrating this activity into their daily routine, it aims to enhance emotional wellbeing and promote positive habits, fostering a deeper connection with the app. Users will be reminded periodically to return to their journal, making it a part of their self-care process.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-07-05T20:49:09.241624+00:00\", \"expires_at\": \"2026-07-07T20:49:09.241624+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-07-05 20:49:09.241624"
+      },
       {
         "id": "ae5a02b6-9521-4a8a-a838-3350008347e7",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "f4eece10-0637-4d20-bb27-845b5d6ccac1",
-        "lesson": "{\"proposal_id\": \"f4eece10-0637-4d20-bb27-845b5d6ccac1\", \"card_type\": \"guided_reflection\", \"hypothesis\": \"Introducing guided reflection cards will improve user fulfillment by 25%.\", \"description\": \"These cards prompt users to reflect on their daily experiences and share insights through targeted questions, enhancing self-awareness. Each card will present thought-provoking prompts such as 'What did I learn today?' or 'How did I overcome a challenge?' to encourage deeper engagement with personal growth content.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-03T20:47:03.473128+00:00\", \"expires_at\": \"2026-07-05T20:47:03.473128+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"f4eece10-0637-4d20-bb27-845b5d6ccac1\", \"card_type\": \"guided_reflection\", \"hypothesis\": \"Introducing guided reflection cards will improve user fulfillment by 25%.\", \"description\": \"These cards prompt users to reflect on their daily experiences and share insights through targeted questions, enhancing self-awareness. Each card will present thought-provoking prompts such as 'What did I learn today?' or 'How did I overcome a challenge?' to encourage deeper engagement with personal growth content.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"promoted\", \"created_at\": \"2026-07-03T20:47:03.473128+00:00\", \"expires_at\": \"2026-07-05T20:47:03.473128+00:00\", \"result\": {\"observed_improvement\": 0.294, \"threshold\": 0.25, \"promoted\": true, \"evaluated_at\": \"2026-07-05T20:49:09.253196+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-07-03 20:47:03.473128"
@@ -2438,7 +2445,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "cb83e6c620cebd11"
+    "lessons_hash": "dc7e665106f18de4"
   },
   "platform_stats": {
     "total_users": 22,
