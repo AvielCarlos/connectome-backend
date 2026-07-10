@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-10T08:16:56.678176+00:00",
-  "exported_at": "2026-07-10T08:16:56.678176+00:00",
-  "collected_at": "2026-07-10T08:16:56.678176+00:00",
+  "timestamp": "2026-07-10T08:22:42.826114+00:00",
+  "exported_at": "2026-07-10T08:22:42.826114+00:00",
+  "collected_at": "2026-07-10T08:22:42.826114+00:00",
   "identity": {
-    "total_lessons": 343,
+    "total_lessons": 344,
     "lessons": [
+      {
+        "id": "08358fa7-3c3a-40a8-8e2e-6e2723bcbaca",
+        "lesson": "Survival learning: for issue 'backup_freshness', action 'trigger_emergency_backup' succeeded after 0 prior failure(s). Prefer actions with higher aura_heal_policies.score for this issue.",
+        "confidence": 0.82,
+        "source": "survival_agent",
+        "created_at": "2026-07-10 08:17:00.562882"
+      },
       {
         "id": "2de5f36c-6daa-45f8-b094-6816a40c5bf4",
         "lesson": "Survival learning: for issue 'backup_freshness', action 'trigger_emergency_backup' succeeded after 0 prior failure(s). Prefer actions with higher aura_heal_policies.score for this issue.",
@@ -2508,7 +2515,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "0fcd610a14d7477a"
+    "lessons_hash": "ebdb93c51a1dd613"
   },
   "platform_stats": {
     "total_users": 22,
