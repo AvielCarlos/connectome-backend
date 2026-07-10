@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-10T20:23:09.668346+00:00",
-  "exported_at": "2026-07-10T20:23:09.668346+00:00",
-  "collected_at": "2026-07-10T20:23:09.668346+00:00",
+  "timestamp": "2026-07-10T21:09:22.899826+00:00",
+  "exported_at": "2026-07-10T21:09:22.899826+00:00",
+  "collected_at": "2026-07-10T21:09:22.899826+00:00",
   "identity": {
-    "total_lessons": 345,
+    "total_lessons": 346,
     "lessons": [
+      {
+        "id": "b8c0fec3-f204-4325-a1a1-7b2c6f183f52",
+        "lesson": "{\"proposal_id\": \"b8c0fec3-f204-4325-a1a1-7b2c6f183f52\", \"card_type\": \"goal_progress_tracker\", \"hypothesis\": \"Implementing a goal progress tracker card will increase user fulfilment and engagement by 20%.\", \"description\": \"This card will allow users to set personal goals (e.g., daily steps, reading time, or meditation minutes) and track their progress visually over time. By showcasing achievements and providing motivational nudges based on the user's progress, it aims to create a sense of accomplishment and community sharing among users.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-07-10T20:54:27.122258+00:00\", \"expires_at\": \"2026-07-12T20:54:27.122258+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-07-10 20:54:27.122258"
+      },
       {
         "id": "497afa41-017f-4ff5-b009-741ebdb21bb2",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -43,7 +50,7 @@
       },
       {
         "id": "190d74c7-3f74-4f95-8bd0-e589d6b90968",
-        "lesson": "{\"proposal_id\": \"190d74c7-3f74-4f95-8bd0-e589d6b90968\", \"card_type\": \"mood_feeler\", \"hypothesis\": \"Introducing a 'Mood Feeler' card can increase user fulfilment scores by 25%.\", \"description\": \"The 'Mood Feeler' card allows users to select their current emotional state through a simple interface with emoji options. Based on their selection, personalized content such as articles, offers, or activities that align with their mood will be suggested, creating a tailored experience that fosters engagement and connection. Users can also track their mood over time, enabling deeper self-reflection and awareness.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-08T20:52:21.606327+00:00\", \"expires_at\": \"2026-07-10T20:52:21.606327+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"190d74c7-3f74-4f95-8bd0-e589d6b90968\", \"card_type\": \"mood_feeler\", \"hypothesis\": \"Introducing a 'Mood Feeler' card can increase user fulfilment scores by 25%.\", \"description\": \"The 'Mood Feeler' card allows users to select their current emotional state through a simple interface with emoji options. Based on their selection, personalized content such as articles, offers, or activities that align with their mood will be suggested, creating a tailored experience that fosters engagement and connection. Users can also track their mood over time, enabling deeper self-reflection and awareness.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-07-08T20:52:21.606327+00:00\", \"expires_at\": \"2026-07-10T20:52:21.606327+00:00\", \"result\": {\"observed_improvement\": 0.05, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-07-10T20:54:27.140655+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-07-08 20:52:21.606327"
@@ -2522,7 +2529,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "22ce0bd5dbe1dc55"
+    "lessons_hash": "043b6e068b898028"
   },
   "platform_stats": {
     "total_users": 22,
