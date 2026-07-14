@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-14T20:25:55.645839+00:00",
-  "exported_at": "2026-07-14T20:25:55.645839+00:00",
-  "collected_at": "2026-07-14T20:25:55.645839+00:00",
+  "timestamp": "2026-07-14T21:16:27.066279+00:00",
+  "exported_at": "2026-07-14T21:16:27.066279+00:00",
+  "collected_at": "2026-07-14T21:16:27.066279+00:00",
   "identity": {
-    "total_lessons": 354,
+    "total_lessons": 355,
     "lessons": [
+      {
+        "id": "194b2316-e675-4d85-8334-505975e33ab1",
+        "lesson": "{\"proposal_id\": \"194b2316-e675-4d85-8334-505975e33ab1\", \"card_type\": \"personalized_milestone_card\", \"hypothesis\": \"Introducing a personalized milestone card will enhance user fulfillment and engagement by 25%.\", \"description\": \"This card type celebrates individual user milestones, such as completing their first goal or achieving a certain level of engagement. It includes tailored messages, visual progress indicators, and offers suggestions on what users can aim for next based on their historical activity. Users can also share their milestones on social media directly from the card to foster community interaction.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-07-14T20:58:41.348636+00:00\", \"expires_at\": \"2026-07-16T20:58:41.348636+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-07-14 20:58:41.348636"
+      },
       {
         "id": "c8d769e3-5c1d-4002-89e9-15091919603b",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -36,7 +43,7 @@
       },
       {
         "id": "9c728ded-fa2a-4662-9388-6878e3742dcc",
-        "lesson": "{\"proposal_id\": \"9c728ded-fa2a-4662-9388-6878e3742dcc\", \"card_type\": \"daily_mood_tracker\", \"hypothesis\": \"Introducing a Daily Mood Tracker card will lead to a 20% increase in user engagement as users express their feelings regularly.\", \"description\": \"The Daily Mood Tracker card allows users to select their mood from a range of emotions each day. This card provides a visual representation of their emotional trends over time and prompts users to reflect on their experiences, which may lead them to engage more deeply with the platform for support or related content.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-07-12T20:56:33.351423+00:00\", \"expires_at\": \"2026-07-14T20:56:33.351423+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"9c728ded-fa2a-4662-9388-6878e3742dcc\", \"card_type\": \"daily_mood_tracker\", \"hypothesis\": \"Introducing a Daily Mood Tracker card will lead to a 20% increase in user engagement as users express their feelings regularly.\", \"description\": \"The Daily Mood Tracker card allows users to select their mood from a range of emotions each day. This card provides a visual representation of their emotional trends over time and prompts users to reflect on their experiences, which may lead them to engage more deeply with the platform for support or related content.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.2, \"status\": \"killed\", \"created_at\": \"2026-07-12T20:56:33.351423+00:00\", \"expires_at\": \"2026-07-14T20:56:33.351423+00:00\", \"result\": {\"observed_improvement\": 0.127, \"threshold\": 0.2, \"promoted\": false, \"evaluated_at\": \"2026-07-14T20:58:41.357238+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-07-12 20:56:33.351423"
@@ -2585,7 +2592,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "305eaf56e089453a"
+    "lessons_hash": "8c7b53ad29759e23"
   },
   "platform_stats": {
     "total_users": 22,
