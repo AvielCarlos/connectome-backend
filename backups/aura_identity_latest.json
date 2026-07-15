@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-15T20:26:32.607554+00:00",
-  "exported_at": "2026-07-15T20:26:32.607554+00:00",
-  "collected_at": "2026-07-15T20:26:32.607554+00:00",
+  "timestamp": "2026-07-15T21:17:47.506791+00:00",
+  "exported_at": "2026-07-15T21:17:47.506791+00:00",
+  "collected_at": "2026-07-15T21:17:47.506791+00:00",
   "identity": {
-    "total_lessons": 356,
+    "total_lessons": 357,
     "lessons": [
+      {
+        "id": "d6b78c97-eea8-4e72-a9d5-f454749ed3df",
+        "lesson": "{\"proposal_id\": \"d6b78c97-eea8-4e72-a9d5-f454749ed3df\", \"card_type\": \"mindfulness_moments\", \"hypothesis\": \"Implementing a 'Mindfulness Moments' card will increase user fulfilment by 25%.\", \"description\": \"This card type presents users with short, guided mindfulness exercises tailored to their current mood or stress level. Each session lasts 3 to 5 minutes and includes interactive elements, such as breathing exercises and reflective prompts, encouraging users to take a break and focus on their well-being.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-15T20:59:44.258991+00:00\", \"expires_at\": \"2026-07-17T20:59:44.258991+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-07-15 20:59:44.258991"
+      },
       {
         "id": "07286885-a311-46ac-810f-8f0d40af8506",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "d44b12f4-1154-4e30-bff2-29466647ea6a",
-        "lesson": "{\"proposal_id\": \"d44b12f4-1154-4e30-bff2-29466647ea6a\", \"card_type\": \"wellness_check_in\", \"hypothesis\": \"Introducing a wellness check-in card could increase user fulfilment by 25%.\", \"description\": \"This card prompts users to assess their current emotional or mental state through a simple survey or emoji selection. Based on their responses, personalized content or recommendations can be provided to enhance their mood or well-being, fostering deeper engagement and a stronger connection to the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-13T20:57:36.673739+00:00\", \"expires_at\": \"2026-07-15T20:57:36.673739+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"d44b12f4-1154-4e30-bff2-29466647ea6a\", \"card_type\": \"wellness_check_in\", \"hypothesis\": \"Introducing a wellness check-in card could increase user fulfilment by 25%.\", \"description\": \"This card prompts users to assess their current emotional or mental state through a simple survey or emoji selection. Based on their responses, personalized content or recommendations can be provided to enhance their mood or well-being, fostering deeper engagement and a stronger connection to the platform.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"killed\", \"created_at\": \"2026-07-13T20:57:36.673739+00:00\", \"expires_at\": \"2026-07-15T20:57:36.673739+00:00\", \"result\": {\"observed_improvement\": 0.208, \"threshold\": 0.25, \"promoted\": false, \"evaluated_at\": \"2026-07-15T20:59:44.270854+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-07-13 20:57:36.673739"
@@ -2599,7 +2606,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "515652f874f08e20"
+    "lessons_hash": "2715a65826ce6aa3"
   },
   "platform_stats": {
     "total_users": 22,
