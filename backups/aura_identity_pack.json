@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-24T20:32:34.757174+00:00",
-  "exported_at": "2026-07-24T20:32:34.757174+00:00",
-  "collected_at": "2026-07-24T20:32:34.757174+00:00",
+  "timestamp": "2026-07-24T21:30:15.775709+00:00",
+  "exported_at": "2026-07-24T21:30:15.775709+00:00",
+  "collected_at": "2026-07-24T21:30:15.775709+00:00",
   "identity": {
-    "total_lessons": 374,
+    "total_lessons": 375,
     "lessons": [
+      {
+        "id": "b74e7ab7-02f7-4b2c-a9d9-03b95c97af21",
+        "lesson": "{\"proposal_id\": \"b74e7ab7-02f7-4b2c-a9d9-03b95c97af21\", \"card_type\": \"mood_tracker_card\", \"hypothesis\": \"Introducing a mood tracker card will increase user engagement by 30%.\", \"description\": \"This card allows users to log their daily moods and reflect on how it impacts their activities and interactions within the app. It uses simple emoji selections for quick feedback, enabling users to build a visual mood history over time. Additionally, it can provide personalized content suggestions based on their recorded moods, enriching the user experience.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.3, \"status\": \"hypothesis\", \"created_at\": \"2026-07-24T21:09:10.643632+00:00\", \"expires_at\": \"2026-07-26T21:09:10.643632+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-07-24 21:09:10.643632"
+      },
       {
         "id": "ba98cdb6-1285-45c6-a2ed-b428f6198be4",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "7c6ee6bb-ab32-41fc-ae87-4058dd429d2b",
-        "lesson": "{\"proposal_id\": \"7c6ee6bb-ab32-41fc-ae87-4058dd429d2b\", \"card_type\": \"mood_check_in\", \"hypothesis\": \"Implementing a mood check-in card can increase user engagement by 25%.\", \"description\": \"This card prompts users to select their current mood from a visual scale and offers personalized content or activities based on their selection. By regularly checking in with users' emotional states, the app can adapt and provide relevant support, enhancing the overall user experience and emotional connection to the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-22T21:07:03.947824+00:00\", \"expires_at\": \"2026-07-24T21:07:03.947824+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"7c6ee6bb-ab32-41fc-ae87-4058dd429d2b\", \"card_type\": \"mood_check_in\", \"hypothesis\": \"Implementing a mood check-in card can increase user engagement by 25%.\", \"description\": \"This card prompts users to select their current mood from a visual scale and offers personalized content or activities based on their selection. By regularly checking in with users' emotional states, the app can adapt and provide relevant support, enhancing the overall user experience and emotional connection to the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"promoted\", \"created_at\": \"2026-07-22T21:07:03.947824+00:00\", \"expires_at\": \"2026-07-24T21:07:03.947824+00:00\", \"result\": {\"observed_improvement\": 0.304, \"threshold\": 0.25, \"promoted\": true, \"evaluated_at\": \"2026-07-24T21:09:10.654353+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-07-22 21:07:03.947824"
@@ -2725,7 +2732,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "3d738ecb8a3abb80"
+    "lessons_hash": "eae25c6815abad88"
   },
   "platform_stats": {
     "total_users": 22,
