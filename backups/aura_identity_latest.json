@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-25T16:31:19.657869+00:00",
-  "exported_at": "2026-07-25T16:31:19.657869+00:00",
-  "collected_at": "2026-07-25T16:31:19.657869+00:00",
+  "timestamp": "2026-07-25T17:31:22.641722+00:00",
+  "exported_at": "2026-07-25T17:31:22.641722+00:00",
+  "collected_at": "2026-07-25T17:31:22.641722+00:00",
   "identity": {
-    "total_lessons": 375,
+    "total_lessons": 376,
     "lessons": [
+      {
+        "id": "4765676a-9835-47be-8b2f-2a1390244fa9",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-07-25 16:58:55.460525"
+      },
       {
         "id": "b74e7ab7-02f7-4b2c-a9d9-03b95c97af21",
         "lesson": "{\"proposal_id\": \"b74e7ab7-02f7-4b2c-a9d9-03b95c97af21\", \"card_type\": \"mood_tracker_card\", \"hypothesis\": \"Introducing a mood tracker card will increase user engagement by 30%.\", \"description\": \"This card allows users to log their daily moods and reflect on how it impacts their activities and interactions within the app. It uses simple emoji selections for quick feedback, enabling users to build a visual mood history over time. Additionally, it can provide personalized content suggestions based on their recorded moods, enriching the user experience.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.3, \"status\": \"hypothesis\", \"created_at\": \"2026-07-24T21:09:10.643632+00:00\", \"expires_at\": \"2026-07-26T21:09:10.643632+00:00\", \"result\": null}",
@@ -2732,7 +2739,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "eae25c6815abad88"
+    "lessons_hash": "d1c41703226e550f"
   },
   "platform_stats": {
     "total_users": 22,
