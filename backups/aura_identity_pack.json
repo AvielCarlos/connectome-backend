@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-28T16:40:02.135176+00:00",
-  "exported_at": "2026-07-28T16:40:02.135176+00:00",
-  "collected_at": "2026-07-28T16:40:02.135176+00:00",
+  "timestamp": "2026-07-28T17:35:47.224045+00:00",
+  "exported_at": "2026-07-28T17:35:47.224045+00:00",
+  "collected_at": "2026-07-28T17:35:47.224045+00:00",
   "identity": {
-    "total_lessons": 390,
+    "total_lessons": 391,
     "lessons": [
+      {
+        "id": "052ea3bc-2c4c-4bbc-b0dc-973101d5e216",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-07-28 16:58:55.778118"
+      },
       {
         "id": "9de49277-d85f-4750-935a-37c804ab70e6",
         "lesson": "{\"proposal_id\": \"9de49277-d85f-4750-935a-37c804ab70e6\", \"card_type\": \"personalized_reflection_card\", \"hypothesis\": \"Implementing a personalized reflection card will increase user fulfilment by 20%.\", \"description\": \"This card prompts users to reflect on their recent activities and achievements, providing tailored questions based on their preferences and past interactions. Users can journal their thoughts directly within the card, promoting self-awareness and deeper engagement with the app\\u2019s content.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-07-27T17:36:29.363666+00:00\", \"expires_at\": \"2026-07-29T17:36:29.363666+00:00\", \"result\": null}",
@@ -2837,7 +2844,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "0abc60ed56e38c93"
+    "lessons_hash": "c34c6f79ff3cadaf"
   },
   "platform_stats": {
     "total_users": 22,
