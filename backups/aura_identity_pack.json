@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-29T17:36:35.620985+00:00",
-  "exported_at": "2026-07-29T17:36:35.620985+00:00",
-  "collected_at": "2026-07-29T17:36:35.620985+00:00",
+  "timestamp": "2026-07-29T17:41:26.611221+00:00",
+  "exported_at": "2026-07-29T17:41:26.611221+00:00",
+  "collected_at": "2026-07-29T17:41:26.611221+00:00",
   "identity": {
-    "total_lessons": 393,
+    "total_lessons": 394,
     "lessons": [
+      {
+        "id": "b817e3b3-a275-43a5-9a10-1f94bb86f7ee",
+        "lesson": "{\"proposal_id\": \"b817e3b3-a275-43a5-9a10-1f94bb86f7ee\", \"card_type\": \"social_inspiration_card\", \"hypothesis\": \"Introducing a social inspiration card that shares user-generated content and success stories could increase engagement by 25%.\", \"description\": \"This card type showcases inspiring quotes, stories, or achievements from users within the community. It encourages users to share their own stories and provides a sense of belonging and motivation, which can enhance user fulfilment and drive further engagement with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-29T17:38:33.732613+00:00\", \"expires_at\": \"2026-07-31T17:38:33.732613+00:00\", \"result\": null}",
+        "confidence": 0.5,
+        "source": "feature_lab",
+        "created_at": "2026-07-29 17:38:33.732613"
+      },
       {
         "id": "d6ee2085-f66b-4a4a-9e5b-3a28fcfb91b9",
         "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
@@ -29,7 +36,7 @@
       },
       {
         "id": "9de49277-d85f-4750-935a-37c804ab70e6",
-        "lesson": "{\"proposal_id\": \"9de49277-d85f-4750-935a-37c804ab70e6\", \"card_type\": \"personalized_reflection_card\", \"hypothesis\": \"Implementing a personalized reflection card will increase user fulfilment by 20%.\", \"description\": \"This card prompts users to reflect on their recent activities and achievements, providing tailored questions based on their preferences and past interactions. Users can journal their thoughts directly within the card, promoting self-awareness and deeper engagement with the app\\u2019s content.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"hypothesis\", \"created_at\": \"2026-07-27T17:36:29.363666+00:00\", \"expires_at\": \"2026-07-29T17:36:29.363666+00:00\", \"result\": null}",
+        "lesson": "{\"proposal_id\": \"9de49277-d85f-4750-935a-37c804ab70e6\", \"card_type\": \"personalized_reflection_card\", \"hypothesis\": \"Implementing a personalized reflection card will increase user fulfilment by 20%.\", \"description\": \"This card prompts users to reflect on their recent activities and achievements, providing tailored questions based on their preferences and past interactions. Users can journal their thoughts directly within the card, promoting self-awareness and deeper engagement with the app\\u2019s content.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.2, \"status\": \"promoted\", \"created_at\": \"2026-07-27T17:36:29.363666+00:00\", \"expires_at\": \"2026-07-29T17:36:29.363666+00:00\", \"result\": {\"observed_improvement\": 0.264, \"threshold\": 0.2, \"promoted\": true, \"evaluated_at\": \"2026-07-29T17:38:33.755595+00:00\"}}",
         "confidence": 0.5,
         "source": "feature_lab",
         "created_at": "2026-07-27 17:36:29.363666"
@@ -2858,7 +2865,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "b25c1e286c6c4ac0"
+    "lessons_hash": "ba57b23353cdd726"
   },
   "platform_stats": {
     "total_users": 22,
