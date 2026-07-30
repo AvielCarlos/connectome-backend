@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-30T16:42:45.697835+00:00",
-  "exported_at": "2026-07-30T16:42:45.697835+00:00",
-  "collected_at": "2026-07-30T16:42:45.697835+00:00",
+  "timestamp": "2026-07-30T17:37:20.329935+00:00",
+  "exported_at": "2026-07-30T17:37:20.329935+00:00",
+  "collected_at": "2026-07-30T17:37:20.329935+00:00",
   "identity": {
-    "total_lessons": 394,
+    "total_lessons": 395,
     "lessons": [
+      {
+        "id": "323a414c-47ac-440d-a810-4bb5b0051104",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-07-30 16:58:56.048211"
+      },
       {
         "id": "b817e3b3-a275-43a5-9a10-1f94bb86f7ee",
         "lesson": "{\"proposal_id\": \"b817e3b3-a275-43a5-9a10-1f94bb86f7ee\", \"card_type\": \"social_inspiration_card\", \"hypothesis\": \"Introducing a social inspiration card that shares user-generated content and success stories could increase engagement by 25%.\", \"description\": \"This card type showcases inspiring quotes, stories, or achievements from users within the community. It encourages users to share their own stories and provides a sense of belonging and motivation, which can enhance user fulfilment and drive further engagement with the platform.\", \"success_metric\": \"engagement_rate\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-29T17:38:33.732613+00:00\", \"expires_at\": \"2026-07-31T17:38:33.732613+00:00\", \"result\": null}",
@@ -2865,7 +2872,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "ba57b23353cdd726"
+    "lessons_hash": "d4509e8bf2b9cfe9"
   },
   "platform_stats": {
     "total_users": 22,
