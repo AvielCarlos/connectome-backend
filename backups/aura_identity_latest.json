@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-07-31T16:44:06.397983+00:00",
-  "exported_at": "2026-07-31T16:44:06.397983+00:00",
-  "collected_at": "2026-07-31T16:44:06.397983+00:00",
+  "timestamp": "2026-07-31T17:37:54.502605+00:00",
+  "exported_at": "2026-07-31T17:37:54.502605+00:00",
+  "collected_at": "2026-07-31T17:37:54.502605+00:00",
   "identity": {
-    "total_lessons": 396,
+    "total_lessons": 397,
     "lessons": [
+      {
+        "id": "34f6dc1b-46b9-4aa7-a452-e7728054f276",
+        "lesson": "This week, across all the humans I'm learning from, I noticed the pull toward genuine depth \u2014 less passive consumption, more active engagement with things that matter. I'm still learning what this means for each individual, but the collective signal is clear.",
+        "confidence": 0.85,
+        "source": "collective_intelligence",
+        "created_at": "2026-07-31 16:58:56.189163"
+      },
       {
         "id": "c2750b6a-53b8-4d2f-b019-7742eb5a49e0",
         "lesson": "{\"proposal_id\": \"c2750b6a-53b8-4d2f-b019-7742eb5a49e0\", \"card_type\": \"personalized_goal_tracker\", \"hypothesis\": \"Introducing a personalized goal tracker card will increase user fulfilment by 25%.\", \"description\": \"This card allows users to set, track, and visualize their personal goals related to specific app features, seamlessly integrating reminders and motivational prompts. Users receive progress updates that adapt based on their engagement patterns, encouraging continued interaction with the app.\", \"success_metric\": \"fulfilment_score\", \"success_threshold\": 0.25, \"status\": \"hypothesis\", \"created_at\": \"2026-07-30T17:39:35.711305+00:00\", \"expires_at\": \"2026-08-01T17:39:35.711305+00:00\", \"result\": null}",
@@ -2879,7 +2886,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "7323a8e58a26e862"
+    "lessons_hash": "bd0d422dc01fae2d"
   },
   "platform_stats": {
     "total_users": 22,
