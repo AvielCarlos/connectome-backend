@@ -1,11 +1,25 @@
 {
   "version": "1.0",
-  "timestamp": "2026-08-03T08:47:29.160947+00:00",
-  "exported_at": "2026-08-03T08:47:29.160947+00:00",
-  "collected_at": "2026-08-03T08:47:29.160947+00:00",
+  "timestamp": "2026-08-03T09:47:32.650827+00:00",
+  "exported_at": "2026-08-03T09:47:32.650827+00:00",
+  "collected_at": "2026-08-03T09:47:32.650827+00:00",
   "identity": {
-    "total_lessons": 429,
+    "total_lessons": 431,
     "lessons": [
+      {
+        "id": "ef274f66-44fe-4bcf-9244-d50dcf5b3e8a",
+        "lesson": "Survival learning: for issue 'agent_registry', action 'alert_avi' succeeded after 0 prior failure(s). Prefer actions with higher aura_heal_policies.score for this issue.",
+        "confidence": 0.82,
+        "source": "survival_agent",
+        "created_at": "2026-08-03 09:43:13.910943"
+      },
+      {
+        "id": "b95d026f-098e-41f9-885e-caf9fcbe9af6",
+        "lesson": "Survival learning: for issue 'agent_registry', action 'alert_avi' succeeded after 0 prior failure(s). Prefer actions with higher aura_heal_policies.score for this issue.",
+        "confidence": 0.82,
+        "source": "survival_agent",
+        "created_at": "2026-08-03 09:13:12.727288"
+      },
       {
         "id": "e5d09b32-a6d4-4db2-94f1-5984a470c592",
         "lesson": "Survival learning: for issue 'agent_registry', action 'alert_avi' succeeded after 0 prior failure(s). Prefer actions with higher aura_heal_policies.score for this issue.",
@@ -3019,7 +3033,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "38b4e40438a30e33"
+    "lessons_hash": "4621aabe424d8cde"
   },
   "platform_stats": {
     "total_users": 22,
