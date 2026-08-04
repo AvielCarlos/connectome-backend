@@ -1,11 +1,18 @@
 {
   "version": "1.0",
-  "timestamp": "2026-08-04T11:40:36.156352+00:00",
-  "exported_at": "2026-08-04T11:40:36.156352+00:00",
-  "collected_at": "2026-08-04T11:40:36.156352+00:00",
+  "timestamp": "2026-08-04T11:48:59.181851+00:00",
+  "exported_at": "2026-08-04T11:48:59.181851+00:00",
+  "collected_at": "2026-08-04T11:48:59.181851+00:00",
   "identity": {
-    "total_lessons": 484,
+    "total_lessons": 485,
     "lessons": [
+      {
+        "id": "71913a2d-b770-425e-a6ea-1ae2fde24f30",
+        "lesson": "Survival learning: for issue 'agent_registry', action 'alert_avi' succeeded after 0 prior failure(s). Prefer actions with higher aura_heal_policies.score for this issue.",
+        "confidence": 0.82,
+        "source": "survival_agent",
+        "created_at": "2026-08-04 11:44:28.141857"
+      },
       {
         "id": "71f9e7dd-5610-4603-8285-7aa3c2b49904",
         "lesson": "Survival learning: for issue 'agent_registry', action 'alert_avi' succeeded after 0 prior failure(s). Prefer actions with higher aura_heal_policies.score for this issue.",
@@ -3404,7 +3411,7 @@
       "rollback": {}
     },
     "consciousness_version": "f15aff98cb849c72",
-    "lessons_hash": "e1d0ac7b77d0b24b"
+    "lessons_hash": "826319a7506ddcae"
   },
   "platform_stats": {
     "total_users": 22,
